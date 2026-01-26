@@ -151,18 +151,19 @@ void armv8m_mpu_reset(MPU *mpu);
 /**
  * Check memory access against MPU.
  *
- * @param mpu           MPU
- * @param addr          Address to check
- * @param size          Access size in bytes
- * @param is_write      true for write, false for read
- * @param is_fetch      true for instruction fetch
- * @param privileged    true for privileged access
- * @param fault         Filled with fault info if access denied
- * @return              true if access permitted, false if denied
+ * @param mpu               MPU
+ * @param addr              Address to check
+ * @param size              Access size in bytes
+ * @param is_write          true for write, false for read
+ * @param is_fetch          true for instruction fetch
+ * @param privileged        true for privileged access
+ * @param in_hardfault_nmi  true if executing in HardFault or NMI handler
+ * @param fault             Filled with fault info if access denied (may be NULL)
+ * @return                  true if access permitted, false if denied
  */
 bool armv8m_mpu_check(const MPU *mpu, uint32_t addr, uint32_t size,
                       bool is_write, bool is_fetch, bool privileged,
-                      MPUFaultInfo *fault);
+                      bool in_hardfault_nmi, MPUFaultInfo *fault);
 
 /**
  * Configure an MPU region.
