@@ -112,16 +112,26 @@ Here are some test cases to validate your implementation:
 ## Building & Testing
 
 ```bash
-cd src/core/decoder
-make
-make test
+# From project root
+mkdir -p build && cd build
+cmake ..
+make armv8m_decoder
+make test_decoder
+
+# Run tests
+./test_decoder -v
+
+# Or use the validation script
+./scripts/validate_module.sh decoder
 ```
+
+Tests use CppUTest. See `tests/test_decoder.cpp` for the test template.
 
 ## Checklist
 
 - [ ] `decoder.c` - Main entry point
 - [ ] `decode_thumb16.c` - All 16-bit instruction categories
-- [ ] `decode_thumb32.c` - All 32-bit instruction categories  
-- [ ] `tests/test_decoder.c` - Unit tests
+- [ ] `decode_thumb32.c` - All 32-bit instruction categories
+- [ ] `tests/test_decoder.cpp` - CppUTest unit tests
 - [ ] All tests pass
 - [ ] Compiles with `-Wall -Werror -pedantic`

@@ -1,4 +1,4 @@
-# ARMv8-M Emulator Architecture
+# FEMU Architecture
 
 > **For AI Development**: This is the primary reference document. Read relevant sections before implementing any module.
 
@@ -11,16 +11,20 @@
 
 ## Overview
 
-This is a lightweight ARMv8-M (Cortex-M33 class) emulator with:
+FEMU is a lightweight, extensible CPU emulator with:
 - **Python control plane** - CLI, GDB server, configuration, scripting
-- **C/C++ simulation core** - CPU interpreter, memory, NVIC
+- **C/C++ simulation core** - CPU interpreter, memory, peripherals
 - **Multi-language peripherals** - Python (prototyping), C/Rust (performance)
 
 The architecture is specifically designed for **AI-driven development** where each module can be implemented in isolation without requiring the full codebase context.
 
+**Currently supported architectures:**
+
+- ARMv8-M (Cortex-M33 class)
+
 ---
 
-## Part 1: Target Architecture (ARMv8-M Mainline)
+## Part 1: ARMv8-M Target Architecture (Mainline)
 
 ### Cortex-M33 Features We're Implementing
 

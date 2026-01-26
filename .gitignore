@@ -30,6 +30,12 @@ Cargo.lock
 .DS_Store
 Thumbs.db
 
+# Nix
+result
+.direnv/
+.venv-installed
+
 # Test artifacts
 *.log
 test_results/
+*_output.txt
