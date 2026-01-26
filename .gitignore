@@ -1,0 +1,35 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+*.egg
+.venv/
+venv/
+
+# Rust
+peripherals/rust/target/
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+*.log
+test_results/
