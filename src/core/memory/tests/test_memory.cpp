@@ -59,10 +59,10 @@ TEST(RAMOperations, WriteAndReadByte)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x42, 1, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x42, 1, true, false, &fault);
     CHECK_FALSE(fault);
 
-    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 1, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 1, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x42u, value);
 }
@@ -71,10 +71,10 @@ TEST(RAMOperations, WriteAndReadHalfword)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x1234, 2, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x1234, 2, true, false, &fault);
     CHECK_FALSE(fault);
 
-    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 2, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 2, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x1234u, value);
 }
@@ -83,10 +83,10 @@ TEST(RAMOperations, WriteAndReadWord)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
     CHECK_FALSE(fault);
 
-    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 4, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 4, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x12345678u, value);
 }
@@ -96,13 +96,13 @@ TEST(RAMOperations, LittleEndianByteOrder)
     bool fault = false;
 
     // Write a word
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
 
     // Read individual bytes - should be little-endian
-    CHECK_EQUAL(0x78u, armv8m_mem_read(&mem, 0x20000000, 1, &fault));
-    CHECK_EQUAL(0x56u, armv8m_mem_read(&mem, 0x20000001, 1, &fault));
-    CHECK_EQUAL(0x34u, armv8m_mem_read(&mem, 0x20000002, 1, &fault));
-    CHECK_EQUAL(0x12u, armv8m_mem_read(&mem, 0x20000003, 1, &fault));
+    CHECK_EQUAL(0x78u, armv8m_mem_read(&mem, 0x20000000, 1, true, false, &fault));
+    CHECK_EQUAL(0x56u, armv8m_mem_read(&mem, 0x20000001, 1, true, false, &fault));
+    CHECK_EQUAL(0x34u, armv8m_mem_read(&mem, 0x20000002, 1, true, false, &fault));
+    CHECK_EQUAL(0x12u, armv8m_mem_read(&mem, 0x20000003, 1, true, false, &fault));
 }
 
 /*============================================================================
@@ -133,11 +133,11 @@ TEST(ROMOperations, ReadFromROM)
 {
     bool fault = false;
 
-    uint32_t value = armv8m_mem_read(&mem, 0x00000000, 1, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x00000000, 1, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x00u, value);
 
-    value = armv8m_mem_read(&mem, 0x00000042, 1, &fault);
+    value = armv8m_mem_read(&mem, 0x00000042, 1, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x42u, value);
 }
@@ -146,11 +146,11 @@ TEST(ROMOperations, WriteToROMFaults)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x00000000, 0xFF, 1, &fault);
+    armv8m_mem_write(&mem, 0x00000000, 0xFF, 1, true, false, &fault);
     CHECK_TRUE(fault);
 
     // Original value should be unchanged
-    uint32_t value = armv8m_mem_read(&mem, 0x00000000, 1, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x00000000, 1, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x00u, value);
 }
@@ -203,7 +203,7 @@ TEST(MMIOOperations, ReadInvokesCallback)
     bool fault = false;
     mmio_read_return = 0xDEADBEEF;
 
-    uint32_t value = armv8m_mem_read(&mem, 0x40000100, 4, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x40000100, 4, true, false, &fault);
 
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x100u, mmio_last_read_offset);
@@ -214,7 +214,7 @@ TEST(MMIOOperations, WriteInvokesCallback)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x40000200, 0xCAFEBABE, 4, &fault);
+    armv8m_mem_write(&mem, 0x40000200, 0xCAFEBABE, 4, true, false, &fault);
 
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x200u, mmio_last_write_offset);
@@ -243,7 +243,7 @@ TEST(UnmappedMemory, ReadFaults)
 {
     bool fault = false;
 
-    armv8m_mem_read(&mem, 0x12345678, 4, &fault);
+    armv8m_mem_read(&mem, 0x12345678, 4, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -251,7 +251,7 @@ TEST(UnmappedMemory, WriteFaults)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x12345678, 0, 4, &fault);
+    armv8m_mem_write(&mem, 0x12345678, 0, 4, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -284,7 +284,7 @@ TEST(MemoryLoad, LoadData)
     CHECK_EQUAL(ARMV8M_OK, result);
 
     bool fault = false;
-    CHECK_EQUAL(0x04030201u, armv8m_mem_read(&mem, 0x20000100, 4, &fault));
+    CHECK_EQUAL(0x04030201u, armv8m_mem_read(&mem, 0x20000100, 4, true, false, &fault));
 }
 
 /*============================================================================
@@ -395,11 +395,13 @@ static bool mpu_check_called;
 static uint32_t mpu_last_addr;
 static bool mpu_last_is_write;
 
-static bool mock_mpu_check(void *ctx, uint32_t addr, uint32_t size, bool is_write, bool privileged)
+static bool mock_mpu_check(void *ctx, uint32_t addr, uint32_t size,
+                           bool is_write, bool privileged, bool in_hardfault_nmi)
 {
     (void)ctx;
     (void)size;
     (void)privileged;
+    (void)in_hardfault_nmi;
     mpu_check_called = true;
     mpu_last_addr = addr;
     mpu_last_is_write = is_write;
@@ -434,7 +436,7 @@ TEST(MPUCallbacks, MPUAllowsRead)
     bool fault = false;
     mpu_allow_access = true;
 
-    armv8m_mem_read(&mem, 0x20000000, 4, &fault);
+    armv8m_mem_read(&mem, 0x20000000, 4, true, false, &fault);
 
     CHECK_TRUE(mpu_check_called);
     CHECK_FALSE(fault);
@@ -445,7 +447,7 @@ TEST(MPUCallbacks, MPUDeniesRead)
     bool fault = false;
     mpu_allow_access = false;
 
-    armv8m_mem_read(&mem, 0x20000000, 4, &fault);
+    armv8m_mem_read(&mem, 0x20000000, 4, true, false, &fault);
 
     CHECK_TRUE(mpu_check_called);
     CHECK_TRUE(fault);
@@ -456,7 +458,7 @@ TEST(MPUCallbacks, MPUAllowsWrite)
     bool fault = false;
     mpu_allow_access = true;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
 
     CHECK_TRUE(mpu_check_called);
     CHECK_FALSE(fault);
@@ -467,7 +469,7 @@ TEST(MPUCallbacks, MPUDeniesWrite)
     bool fault = false;
     mpu_allow_access = false;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
 
     CHECK_TRUE(mpu_check_called);
     CHECK_TRUE(fault);
@@ -517,7 +519,7 @@ TEST(FaultCallbacks, FaultCallbackOnROMWrite)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x00000010, 0xFF, 1, &fault);
+    armv8m_mem_write(&mem, 0x00000010, 0xFF, 1, true, false, &fault);
 
     CHECK_TRUE(fault);
     CHECK_TRUE(fault_callback_called);
@@ -529,7 +531,7 @@ TEST(FaultCallbacks, FaultCallbackOnUnmappedRead)
 {
     bool fault = false;
 
-    armv8m_mem_read(&mem, 0x80000000, 4, &fault);
+    armv8m_mem_read(&mem, 0x80000000, 4, true, false, &fault);
 
     CHECK_TRUE(fault);
     CHECK_TRUE(fault_callback_called);
@@ -563,7 +565,7 @@ TEST(BoundaryAccess, ReadSpanningBoundaryFaults)
     bool fault = false;
 
     // Try to read 4 bytes starting at last byte of region
-    armv8m_mem_read(&mem, 0x200000FF, 4, &fault);
+    armv8m_mem_read(&mem, 0x200000FF, 4, true, false, &fault);
 
     CHECK_TRUE(fault);
 }
@@ -573,7 +575,7 @@ TEST(BoundaryAccess, WriteSpanningBoundaryFaults)
     bool fault = false;
 
     // Try to write 4 bytes starting at last byte of region
-    armv8m_mem_write(&mem, 0x200000FF, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x200000FF, 0x12345678, 4, true, false, &fault);
 
     CHECK_TRUE(fault);
 }
@@ -602,7 +604,7 @@ TEST(MMIOEdgeCases, ReadWithNullCallbackFaults)
     armv8m_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, NULL, mock_mmio_write);
 
     bool fault = false;
-    armv8m_mem_read(&mem, 0x40000000, 4, &fault);
+    armv8m_mem_read(&mem, 0x40000000, 4, true, false, &fault);
 
     CHECK_TRUE(fault);
 }
@@ -613,7 +615,7 @@ TEST(MMIOEdgeCases, WriteWithNullCallbackFaults)
     armv8m_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, mock_mmio_read, NULL);
 
     bool fault = false;
-    armv8m_mem_write(&mem, 0x40000000, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x40000000, 0x12345678, 4, true, false, &fault);
 
     CHECK_TRUE(fault);
 }
@@ -744,14 +746,14 @@ TEST_GROUP(UnmappedRegionType)
 TEST(UnmappedRegionType, ReadFromUnmappedRegionFaults)
 {
     bool fault = false;
-    armv8m_mem_read(&mem, 0x50000000, 4, &fault);
+    armv8m_mem_read(&mem, 0x50000000, 4, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(UnmappedRegionType, WriteToUnmappedRegionFaults)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x50000000, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x50000000, 0x12345678, 4, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -780,7 +782,7 @@ TEST(InvalidAccessSize, ReadWithInvalidSizeFaults)
 {
     bool fault = false;
     // Size 3 is invalid - should fault
-    armv8m_mem_read(&mem, 0x20000000, 3, &fault);
+    armv8m_mem_read(&mem, 0x20000000, 3, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -788,23 +790,23 @@ TEST(InvalidAccessSize, WriteWithInvalidSizeFaults)
 {
     bool fault = false;
     // Size 3 is invalid - should fault
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 3, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 3, true, false, &fault);
     CHECK_TRUE(fault);
     // Memory should be unchanged (still 0xAA pattern)
-    CHECK_EQUAL(0xAAu, armv8m_mem_read(&mem, 0x20000000, 1, &fault));
+    CHECK_EQUAL(0xAAu, armv8m_mem_read(&mem, 0x20000000, 1, true, false, &fault));
 }
 
 TEST(InvalidAccessSize, ReadWithZeroSizeFaults)
 {
     bool fault = false;
-    armv8m_mem_read(&mem, 0x20000000, 0, &fault);
+    armv8m_mem_read(&mem, 0x20000000, 0, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(InvalidAccessSize, WriteWithZeroSizeFaults)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 0, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 0, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -832,9 +834,9 @@ TEST_GROUP(AlignmentChecks)
 TEST(AlignmentChecks, AlignedWordAccessSucceeds)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
     CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 4, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 4, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x12345678u, value);
 }
@@ -842,9 +844,9 @@ TEST(AlignmentChecks, AlignedWordAccessSucceeds)
 TEST(AlignmentChecks, AlignedHalfwordAccessSucceeds)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x20000002, 0x1234, 2, &fault);
+    armv8m_mem_write(&mem, 0x20000002, 0x1234, 2, true, false, &fault);
     CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x20000002, 2, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x20000002, 2, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x1234u, value);
 }
@@ -853,9 +855,9 @@ TEST(AlignmentChecks, UnalignedWordAccessOnNormalMemorySucceeds)
 {
     bool fault = false;
     // Normal memory (RAM) allows unaligned access
-    armv8m_mem_write(&mem, 0x20000001, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x20000001, 0x12345678, 4, true, false, &fault);
     CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x20000001, 4, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x20000001, 4, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x12345678u, value);
 }
@@ -864,9 +866,9 @@ TEST(AlignmentChecks, UnalignedHalfwordAccessOnNormalMemorySucceeds)
 {
     bool fault = false;
     // Normal memory (RAM) allows unaligned access
-    armv8m_mem_write(&mem, 0x20000001, 0x1234, 2, &fault);
+    armv8m_mem_write(&mem, 0x20000001, 0x1234, 2, true, false, &fault);
     CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x20000001, 2, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x20000001, 2, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x1234u, value);
 }
@@ -911,9 +913,9 @@ TEST_GROUP(DeviceMemoryAlignment)
 TEST(DeviceMemoryAlignment, AlignedAccessToDeviceMemorySucceeds)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x40000000, 0xDEADBEEF, 4, &fault);
+    armv8m_mem_write(&mem, 0x40000000, 0xDEADBEEF, 4, true, false, &fault);
     CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x40000000, 4, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x40000000, 4, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0xDEADBEEFu, value);
 }
@@ -921,28 +923,28 @@ TEST(DeviceMemoryAlignment, AlignedAccessToDeviceMemorySucceeds)
 TEST(DeviceMemoryAlignment, UnalignedWordReadFromDeviceMemoryFaults)
 {
     bool fault = false;
-    armv8m_mem_read(&mem, 0x40000001, 4, &fault);
+    armv8m_mem_read(&mem, 0x40000001, 4, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(DeviceMemoryAlignment, UnalignedWordWriteToDeviceMemoryFaults)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x40000001, 0x12345678, 4, &fault);
+    armv8m_mem_write(&mem, 0x40000001, 0x12345678, 4, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(DeviceMemoryAlignment, UnalignedHalfwordReadFromDeviceMemoryFaults)
 {
     bool fault = false;
-    armv8m_mem_read(&mem, 0x40000001, 2, &fault);
+    armv8m_mem_read(&mem, 0x40000001, 2, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(DeviceMemoryAlignment, UnalignedHalfwordWriteToDeviceMemoryFaults)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x40000001, 0x1234, 2, &fault);
+    armv8m_mem_write(&mem, 0x40000001, 0x1234, 2, true, false, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -950,9 +952,9 @@ TEST(DeviceMemoryAlignment, ByteAccessAlwaysSucceeds)
 {
     bool fault = false;
     // Byte access is always aligned
-    armv8m_mem_write(&mem, 0x40000001, 0x42, 1, &fault);
+    armv8m_mem_write(&mem, 0x40000001, 0x42, 1, true, false, &fault);
     CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x40000001, 1, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0x40000001, 1, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x42u, value);
 }
@@ -982,7 +984,7 @@ TEST_GROUP(HighAddressRegion)
 TEST(HighAddressRegion, ReadFromHighRegion)
 {
     bool fault = false;
-    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFF00, 1, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFF00, 1, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x55u, value);
 }
@@ -990,10 +992,10 @@ TEST(HighAddressRegion, ReadFromHighRegion)
 TEST(HighAddressRegion, WriteToHighRegion)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0xFFFFFF00, 0xAA, 1, &fault);
+    armv8m_mem_write(&mem, 0xFFFFFF00, 0xAA, 1, true, false, &fault);
     CHECK_FALSE(fault);
 
-    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFF00, 1, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFF00, 1, true, false, &fault);
     CHECK_EQUAL(0xAAu, value);
 }
 
@@ -1001,7 +1003,7 @@ TEST(HighAddressRegion, AccessAtEndOfHighRegion)
 {
     bool fault = false;
     // Last valid byte in region (0xFFFFFF00 + 255 = 0xFFFFFFFF)
-    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFFFF, 1, &fault);
+    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFFFF, 1, true, false, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x55u, value);
 }
@@ -1027,7 +1029,7 @@ TEST(HighAddressRegion, LoadToHighRegion)
     CHECK_EQUAL(ARMV8M_OK, result);
 
     bool fault = false;
-    CHECK_EQUAL(0x44332211u, armv8m_mem_read(&mem, 0xFFFFFF00, 4, &fault));
+    CHECK_EQUAL(0x44332211u, armv8m_mem_read(&mem, 0xFFFFFF00, 4, true, false, &fault));
 }
 
 /*============================================================================

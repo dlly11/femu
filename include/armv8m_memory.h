@@ -72,7 +72,8 @@ typedef struct {
 
     /* MPU callbacks (optional, NULL if no MPU) */
     void *mpu_ctx;
-    bool (*mpu_check)(void *ctx, uint32_t addr, uint32_t size, bool is_write, bool privileged);
+    bool (*mpu_check)(void *ctx, uint32_t addr, uint32_t size,
+                      bool is_write, bool privileged, bool in_hardfault_nmi);
 
     /* Fault callback (called on access faults) */
     void *fault_ctx;
@@ -140,24 +141,30 @@ int armv8m_mem_add_mmio(MemorySystem *mem, uint32_t base, uint32_t size,
 /**
  * Read from memory.
  *
- * @param mem       Memory system
- * @param addr      Address to read from
- * @param size      Access size (1, 2, or 4 bytes)
- * @param fault     Set to true if fault occurred
- * @return          Value read (undefined if fault)
+ * @param mem               Memory system
+ * @param addr              Address to read from
+ * @param size              Access size (1, 2, or 4 bytes)
+ * @param privileged        True if privileged access
+ * @param in_hardfault_nmi  True if executing in HardFault or NMI handler
+ * @param fault             Set to true if fault occurred
+ * @return                  Value read (undefined if fault)
  */
-uint32_t armv8m_mem_read(MemorySystem *mem, uint32_t addr, uint8_t size, bool *fault);
+uint32_t armv8m_mem_read(MemorySystem *mem, uint32_t addr, uint8_t size,
+                         bool privileged, bool in_hardfault_nmi, bool *fault);
 
 /**
  * Write to memory.
  *
- * @param mem       Memory system
- * @param addr      Address to write to
- * @param value     Value to write
- * @param size      Access size (1, 2, or 4 bytes)
- * @param fault     Set to true if fault occurred
+ * @param mem               Memory system
+ * @param addr              Address to write to
+ * @param value             Value to write
+ * @param size              Access size (1, 2, or 4 bytes)
+ * @param privileged        True if privileged access
+ * @param in_hardfault_nmi  True if executing in HardFault or NMI handler
+ * @param fault             Set to true if fault occurred
  */
-void armv8m_mem_write(MemorySystem *mem, uint32_t addr, uint32_t value, uint8_t size, bool *fault);
+void armv8m_mem_write(MemorySystem *mem, uint32_t addr, uint32_t value, uint8_t size,
+                      bool privileged, bool in_hardfault_nmi, bool *fault);
 
 /**
  * Get direct pointer to memory (for instruction fetch).

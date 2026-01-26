@@ -1120,8 +1120,8 @@ TEST(ARMCompliance, SHCSRReadMasksInternalBits)
 
     uint32_t value = armv8m_scb_read(&nvic, SCB_SHCSR, 4);
 
-    /* Bits 27-31 (internal tracking) should be masked out */
-    CHECK_EQUAL(0x0FFFFFFFu, value);
+    /* Bits 27-31 (internal tracking: HardFault pending, PendSV, SysTick, DebugMon, NMI) should be masked out */
+    CHECK_EQUAL(0x07FFFFFFu, value);
 }
 
 TEST(ARMCompliance, SHCSRReadPreservesVisibleBits)

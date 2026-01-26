@@ -823,8 +823,8 @@ uint32_t armv8m_scb_read(NVIC *nvic, uint32_t offset, uint8_t size)
         break;
 
     case SCB_SHCSR:
-        /* Mask out internal tracking bits (28=PendSV, 29=SysTick, 30=DebugMon, 31=NMI pending) */
-        value = nvic->shcsr & 0x0FFFFFFFu;
+        /* Mask out internal tracking bits (27=HardFault pending, 28=PendSV, 29=SysTick, 30=DebugMon, 31=NMI pending) */
+        value = nvic->shcsr & 0x07FFFFFFu;
         break;
 
     default:

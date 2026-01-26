@@ -187,7 +187,8 @@ int armv8m_mem_add_mmio(MemorySystem *mem, uint32_t base, uint32_t size,
     return armv8m_mem_add_region(mem, &region);
 }
 
-uint32_t armv8m_mem_read(MemorySystem *mem, uint32_t addr, uint8_t size, bool *fault)
+uint32_t armv8m_mem_read(MemorySystem *mem, uint32_t addr, uint8_t size,
+                         bool privileged, bool in_hardfault_nmi, bool *fault)
 {
     *fault = false;
 
@@ -200,7 +201,7 @@ uint32_t armv8m_mem_read(MemorySystem *mem, uint32_t addr, uint8_t size, bool *f
 
     /* Check MPU if configured */
     if (mem->mpu_check) {
-        if (!mem->mpu_check(mem->mpu_ctx, addr, size, false, true)) {
+        if (!mem->mpu_check(mem->mpu_ctx, addr, size, false, privileged, in_hardfault_nmi)) {
             *fault = true;
             report_fault(mem, addr, false, ARMV8M_ERR_MEM_FAULT);
             return 0;
@@ -254,7 +255,8 @@ uint32_t armv8m_mem_read(MemorySystem *mem, uint32_t addr, uint8_t size, bool *f
     }
 }
 
-void armv8m_mem_write(MemorySystem *mem, uint32_t addr, uint32_t value, uint8_t size, bool *fault)
+void armv8m_mem_write(MemorySystem *mem, uint32_t addr, uint32_t value, uint8_t size,
+                      bool privileged, bool in_hardfault_nmi, bool *fault)
 {
     *fault = false;
 
@@ -267,7 +269,7 @@ void armv8m_mem_write(MemorySystem *mem, uint32_t addr, uint32_t value, uint8_t 
 
     /* Check MPU if configured */
     if (mem->mpu_check) {
-        if (!mem->mpu_check(mem->mpu_ctx, addr, size, true, true)) {
+        if (!mem->mpu_check(mem->mpu_ctx, addr, size, true, privileged, in_hardfault_nmi)) {
             *fault = true;
             report_fault(mem, addr, true, ARMV8M_ERR_MEM_FAULT);
             return;

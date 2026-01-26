@@ -119,6 +119,50 @@ bool check_condition(uint32_t xpsr, ConditionCode cond) {
 3. **IT blocks**: Execute only if ITSTATE condition passes
 4. **Unaligned access**: May fault depending on CCR.UNALIGN_TRP
 
+## NVIC/MPU Integration
+
+The executor integrates with the NVIC and MPU modules through specific patterns:
+
+### Exception State Tracking
+
+The executor tracks the currently executing exception in `CPUState.current_exception`:
+- 0 = Thread mode (no exception)
+- 2 = NMI
+- 3 = HardFault
+- 4-15 = System exceptions
+- 16+ = External interrupts
+
+### NVIC Integration Pattern
+
+On **exception entry**, the executor must:
+1. Call `armv8m_nvic_acknowledge(nvic, exception_num)` to set the active bit
+2. Update `cpu->current_exception` to track which exception is executing
+3. Push context and load PC from vector table
+
+On **exception return** (EXC_RETURN in PC):
+1. Call `armv8m_nvic_deactivate(nvic, cpu->current_exception)`
+2. Pop context and restore execution
+
+**VECTACTIVE Note:** The NVIC's IPSR/VECTACTIVE field returns the lowest active exception number (from tracking active bits). The executor's `current_exception` field is the authoritative source for "which exception is currently executing" since multiple exceptions can be active simultaneously due to nesting.
+
+### MPU Integration Pattern
+
+Memory access checking requires the executor to pass context to the memory module:
+
+```c
+// Determine access context
+bool privileged = !(cpu->control & CONTROL_NPRIV);  // or in handler mode
+bool in_hardfault_nmi = (cpu->current_exception == 2 || cpu->current_exception == 3);
+
+// Data access (read/write use same pattern)
+uint32_t value = armv8m_mem_read(mem, addr, size, privileged, in_hardfault_nmi, &fault);
+armv8m_mem_write(mem, addr, value, size, privileged, in_hardfault_nmi, &fault);
+```
+
+**Instruction fetch** uses `armv8m_mem_get_ptr()` which bypasses MPU. The executor should check MPU directly for instruction fetch access if XN (execute-never) enforcement is required.
+
+**HardFault/NMI context:** When `in_hardfault_nmi` is true, the MPU may use different region configurations or bypass protection entirely (implementation-defined per ARMv8-M spec).
+
 ## Building & Testing
 
 ```bash
