@@ -1,0 +1,49 @@
+
+test_bitfield.elf:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+0800003c <_reset>:
+ 800003c:	f04f 5700 	mov.w	r7, #536870912	@ 0x20000000
+ 8000040:	f44f 3080 	mov.w	r0, #65536	@ 0x10000
+ 8000044:	fab0 f080 	clz	r0, r0
+ 8000048:	6038      	str	r0, [r7, #0]
+ 800004a:	2000      	movs	r0, #0
+ 800004c:	fab0 f080 	clz	r0, r0
+ 8000050:	6078      	str	r0, [r7, #4]
+ 8000052:	4813      	ldr	r0, [pc, #76]	@ (80000a0 <_fault+0x4>)
+ 8000054:	fa90 f0a0 	rbit	r0, r0
+ 8000058:	60b8      	str	r0, [r7, #8]
+ 800005a:	4812      	ldr	r0, [pc, #72]	@ (80000a4 <_fault+0x8>)
+ 800005c:	ba00      	rev	r0, r0
+ 800005e:	60f8      	str	r0, [r7, #12]
+ 8000060:	4810      	ldr	r0, [pc, #64]	@ (80000a4 <_fault+0x8>)
+ 8000062:	ba40      	rev16	r0, r0
+ 8000064:	6138      	str	r0, [r7, #16]
+ 8000066:	2080      	movs	r0, #128	@ 0x80
+ 8000068:	bac0      	revsh	r0, r0
+ 800006a:	6178      	str	r0, [r7, #20]
+ 800006c:	f04f 30ff 	mov.w	r0, #4294967295	@ 0xffffffff
+ 8000070:	f36f 200f 	bfc	r0, #8, #8
+ 8000074:	61b8      	str	r0, [r7, #24]
+ 8000076:	f04f 0000 	mov.w	r0, #0
+ 800007a:	f04f 01ab 	mov.w	r1, #171	@ 0xab
+ 800007e:	f361 4017 	bfi	r0, r1, #16, #8
+ 8000082:	61f8      	str	r0, [r7, #28]
+ 8000084:	f44f 407f 	mov.w	r0, #65280	@ 0xff00
+ 8000088:	f3c0 2007 	ubfx	r0, r0, #8, #8
+ 800008c:	6238      	str	r0, [r7, #32]
+ 800008e:	20f0      	movs	r0, #240	@ 0xf0
+ 8000090:	f340 1003 	sbfx	r0, r0, #4, #4
+ 8000094:	6278      	str	r0, [r7, #36]	@ 0x24
+ 8000096:	4804      	ldr	r0, [pc, #16]	@ (80000a8 <_fault+0xc>)
+ 8000098:	62b8      	str	r0, [r7, #40]	@ 0x28
+ 800009a:	be00      	bkpt	0x0000
+
+0800009c <_fault>:
+ 800009c:	e7fe      	b.n	800009c <_fault>
+ 800009e:	0000      	.short	0x0000
+ 80000a0:	80000001 	.word	0x80000001
+ 80000a4:	12345678 	.word	0x12345678
+ 80000a8:	beefcafe 	.word	0xbeefcafe

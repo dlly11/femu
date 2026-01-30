@@ -4,6 +4,8 @@ build/
 *.a
 *.so
 *.dylib
+*.bin
+*.elf
 
 # Python
 __pycache__/
@@ -22,6 +24,8 @@ Cargo.lock
 # IDE
 .vscode/
 .idea/
+.clangd/
+.cache/
 *.swp
 *.swo
 *~

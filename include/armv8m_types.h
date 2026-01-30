@@ -354,7 +354,23 @@ typedef enum {
     ARMV8M_ERR_BREAKPOINT = -7,
     ARMV8M_ERR_HALTED = -8,
     ARMV8M_ERR_SECURE_FAULT = -9,    /* TrustZone security violation */
+    ARMV8M_ERR_INVALID_PARAM = -10,  /* Invalid parameter */
 } ARMv8MError;
+
+/*============================================================================
+ * Special Register IDs (for MRS/MSR and debug access)
+ *============================================================================*/
+
+typedef enum {
+    ARMV8M_SYSREG_PRIMASK = 0,
+    ARMV8M_SYSREG_BASEPRI,
+    ARMV8M_SYSREG_FAULTMASK,
+    ARMV8M_SYSREG_CONTROL,
+    ARMV8M_SYSREG_MSP,
+    ARMV8M_SYSREG_PSP,
+    ARMV8M_SYSREG_MSPLIM,
+    ARMV8M_SYSREG_PSPLIM,
+} SystemRegister;
 
 /*============================================================================
  * Callback Types

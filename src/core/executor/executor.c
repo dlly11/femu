@@ -220,6 +220,14 @@ bool armv8m_check_stack_limit(const CPUState *cpu, uint32_t sp_value)
 
 /**
  * Check if currently in IT block and get condition for current instruction.
+ *
+ * ARM ITSTATE encoding:
+ * - Bits 7:5 = cond[3:1] (upper 3 bits of base condition)
+ * - Bits 4:0 = cond[0]:mask[3:0] (shifts left after each instruction)
+ *
+ * The effective condition is cond[3:1] : ITSTATE[4].
+ * Initially ITSTATE[4] = cond[0], giving the base condition.
+ * After shift, ITSTATE[4] becomes mask[3], which encodes T/E for next instruction.
  */
 static ConditionCode get_it_condition(const CPUState *cpu)
 {
@@ -227,20 +235,16 @@ static ConditionCode get_it_condition(const CPUState *cpu)
         return COND_AL;
     }
 
-    /* Extract condition from IT state */
-    uint8_t cond_base = (cpu->it_state >> 4) & 0xF;
-    uint8_t mask = cpu->it_state & 0xF;
-
-    /* The first bit of mask determines if condition is inverted */
-    if (mask & 0x8) {
-        return (ConditionCode)cond_base;
-    } else {
-        return (ConditionCode)(cond_base ^ 1);
-    }
+    /* Extract condition: cond[3:1] from bits 7:5, cond[0] from bit 4 */
+    uint8_t cond = (uint8_t)(((cpu->it_state >> 4) & 0xE) | ((cpu->it_state >> 4) & 0x1));
+    return (ConditionCode)cond;
 }
 
 /**
  * Advance IT state after executing an instruction.
+ *
+ * Shifts ITSTATE[4:0] left by 1. When the remaining mask bits are all 0,
+ * the IT block is complete.
  */
 static void advance_it_state(CPUState *cpu)
 {
@@ -248,13 +252,15 @@ static void advance_it_state(CPUState *cpu)
         return;
     }
 
-    uint8_t mask = cpu->it_state & 0xF;
-    if ((mask & 0x7) == 0) {
-        /* Last instruction in IT block */
+    /* Check if this was the last instruction (mask bits 3:0 are 0 after current) */
+    if ((cpu->it_state & 0x0F) == 0x08) {
+        /* Only one instruction remaining (mask = 1000), now done */
         cpu->it_state = 0;
     } else {
-        /* Shift mask left */
-        cpu->it_state = (cpu->it_state & 0xE0) | ((mask << 1) & 0x1F);
+        /* Shift bits 4:0 left, preserving bits 7:5 */
+        uint8_t upper = cpu->it_state & 0xE0;  /* cond[3:1] */
+        uint8_t lower = cpu->it_state & 0x1F;  /* cond[0]:mask */
+        cpu->it_state = upper | ((lower << 1) & 0x1F);
     }
 }
 
@@ -566,8 +572,10 @@ int armv8m_exec_step(Executor *exec)
         cpu->r[ARMV8M_REG_PC] += insn.size;
     }
 
-    /* Advance IT state */
-    advance_it_state(cpu);
+    /* Advance IT state (but not after IT instruction itself - it sets up the block) */
+    if (insn.type != INSN_IT) {
+        advance_it_state(cpu);
+    }
 
     /* Update cycle counter */
     cpu->cycles++;

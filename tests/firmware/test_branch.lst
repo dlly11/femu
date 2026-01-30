@@ -1,0 +1,78 @@
+
+test_branch.elf:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+0800003c <_reset>:
+ 800003c:	f04f 5700 	mov.w	r7, #536870912	@ 0x20000000
+ 8000040:	e000      	b.n	8000044 <test1_target>
+
+08000042 <test1_fail>:
+ 8000042:	e02b      	b.n	800009c <_fault>
+
+08000044 <test1_target>:
+ 8000044:	2001      	movs	r0, #1
+ 8000046:	6038      	str	r0, [r7, #0]
+ 8000048:	f000 f827 	bl	800009a <subroutine>
+ 800004c:	2002      	movs	r0, #2
+ 800004e:	6078      	str	r0, [r7, #4]
+ 8000050:	2005      	movs	r0, #5
+ 8000052:	2805      	cmp	r0, #5
+ 8000054:	d000      	beq.n	8000058 <test3_pass>
+ 8000056:	e021      	b.n	800009c <_fault>
+
+08000058 <test3_pass>:
+ 8000058:	2003      	movs	r0, #3
+ 800005a:	60b8      	str	r0, [r7, #8]
+ 800005c:	2005      	movs	r0, #5
+ 800005e:	2806      	cmp	r0, #6
+ 8000060:	d100      	bne.n	8000064 <test4_pass>
+ 8000062:	e01b      	b.n	800009c <_fault>
+
+08000064 <test4_pass>:
+ 8000064:	2004      	movs	r0, #4
+ 8000066:	60f8      	str	r0, [r7, #12]
+ 8000068:	200a      	movs	r0, #10
+ 800006a:	2805      	cmp	r0, #5
+ 800006c:	dc00      	bgt.n	8000070 <test5_pass>
+ 800006e:	e015      	b.n	800009c <_fault>
+
+08000070 <test5_pass>:
+ 8000070:	2005      	movs	r0, #5
+ 8000072:	6138      	str	r0, [r7, #16]
+ 8000074:	2003      	movs	r0, #3
+ 8000076:	2807      	cmp	r0, #7
+ 8000078:	db00      	blt.n	800007c <test6_pass>
+ 800007a:	e00f      	b.n	800009c <_fault>
+
+0800007c <test6_pass>:
+ 800007c:	2006      	movs	r0, #6
+ 800007e:	6178      	str	r0, [r7, #20]
+ 8000080:	2000      	movs	r0, #0
+ 8000082:	b100      	cbz	r0, 8000086 <test7_pass>
+ 8000084:	e00a      	b.n	800009c <_fault>
+
+08000086 <test7_pass>:
+ 8000086:	2007      	movs	r0, #7
+ 8000088:	61b8      	str	r0, [r7, #24]
+ 800008a:	2001      	movs	r0, #1
+ 800008c:	b900      	cbnz	r0, 8000090 <test8_pass>
+ 800008e:	e005      	b.n	800009c <_fault>
+
+08000090 <test8_pass>:
+ 8000090:	2008      	movs	r0, #8
+ 8000092:	61f8      	str	r0, [r7, #28]
+ 8000094:	4804      	ldr	r0, [pc, #16]	@ (80000a8 <_fault+0xc>)
+ 8000096:	6238      	str	r0, [r7, #32]
+ 8000098:	be00      	bkpt	0x0000
+
+0800009a <subroutine>:
+ 800009a:	4770      	bx	lr
+
+0800009c <_fault>:
+ 800009c:	f04f 30ff 	mov.w	r0, #4294967295	@ 0xffffffff
+ 80000a0:	f04f 5700 	mov.w	r7, #536870912	@ 0x20000000
+ 80000a4:	6238      	str	r0, [r7, #32]
+ 80000a6:	be01      	bkpt	0x0001
+ 80000a8:	b4a2c4ed 	.word	0xb4a2c4ed

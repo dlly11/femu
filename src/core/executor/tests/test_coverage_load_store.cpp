@@ -350,16 +350,18 @@ TEST(LoadStoreCoverage, LdrshRegSubtract)
 /* Load literal with subtract */
 TEST(LoadStoreCoverage, LdrLiteralSubtract)
 {
-    mock_memory[0xFC] = 0x12;
-    mock_memory[0xFD] = 0x34;
-    mock_memory[0xFE] = 0x56;
-    mock_memory[0xFF] = 0x78;
+    /* LDR literal uses PC+4 in Thumb mode:
+     * PC = 0x104, PC+4 = 0x108, Align(PC+4,4) = 0x108, address = 0x108 - 8 = 0x100 */
+    mock_memory[0x100] = 0x12;
+    mock_memory[0x101] = 0x34;
+    mock_memory[0x102] = 0x56;
+    mock_memory[0x103] = 0x78;
     exec.cpu.r[15] = 0x104;  /* PC */
     insn.type = INSN_LOAD_LITERAL;
     insn.rt = 0;
     insn.imm = 8;  /* Offset */
     insn.access_size = ACCESS_WORD;
-    insn.add = false;  /* Subtract: Align(0x104,4) - 8 = 0x104 - 8 = 0xFC */
+    insn.add = false;  /* Subtract: Align(PC+4,4) - 8 = 0x108 - 8 = 0x100 */
 
     CHECK_EQUAL(ARMV8M_OK, armv8m_exec_insn(&exec, &insn));
     CHECK_EQUAL(0x78563412u, exec.cpu.r[0]);
@@ -368,7 +370,9 @@ TEST(LoadStoreCoverage, LdrLiteralSubtract)
 /* Load literal with signed extend */
 TEST(LoadStoreCoverage, LdrsbLiteral)
 {
-    mock_memory[0x100] = 0x80;  /* -128 as signed byte */
+    /* LDR literal uses PC+4 in Thumb mode:
+     * PC = 0x100, PC+4 = 0x104, Align(PC+4,4) = 0x104, address = 0x104 + 0 = 0x104 */
+    mock_memory[0x104] = 0x80;  /* -128 as signed byte */
     exec.cpu.r[15] = 0x100;  /* PC */
     insn.type = INSN_LOAD_LITERAL;
     insn.rt = 0;

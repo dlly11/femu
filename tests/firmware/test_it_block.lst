@@ -1,0 +1,65 @@
+
+test_it_block.elf:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+0800003c <_reset>:
+ 800003c:	f04f 5700 	mov.w	r7, #536870912	@ 0x20000000
+ 8000040:	2000      	movs	r0, #0
+ 8000042:	2105      	movs	r1, #5
+ 8000044:	2905      	cmp	r1, #5
+ 8000046:	bf08      	it	eq
+ 8000048:	2001      	moveq	r0, #1
+ 800004a:	6038      	str	r0, [r7, #0]
+ 800004c:	2000      	movs	r0, #0
+ 800004e:	2105      	movs	r1, #5
+ 8000050:	2906      	cmp	r1, #6
+ 8000052:	bf08      	it	eq
+ 8000054:	2001      	moveq	r0, #1
+ 8000056:	6078      	str	r0, [r7, #4]
+ 8000058:	2000      	movs	r0, #0
+ 800005a:	2103      	movs	r1, #3
+ 800005c:	2905      	cmp	r1, #5
+ 800005e:	bf14      	ite	ne
+ 8000060:	200a      	movne	r0, #10
+ 8000062:	2014      	moveq	r0, #20
+ 8000064:	60b8      	str	r0, [r7, #8]
+ 8000066:	2000      	movs	r0, #0
+ 8000068:	2105      	movs	r1, #5
+ 800006a:	2905      	cmp	r1, #5
+ 800006c:	bf14      	ite	ne
+ 800006e:	200a      	movne	r0, #10
+ 8000070:	2014      	moveq	r0, #20
+ 8000072:	60f8      	str	r0, [r7, #12]
+ 8000074:	2000      	movs	r0, #0
+ 8000076:	2100      	movs	r1, #0
+ 8000078:	220a      	movs	r2, #10
+ 800007a:	2a05      	cmp	r2, #5
+ 800007c:	bfc4      	itt	gt
+ 800007e:	2001      	movgt	r0, #1
+ 8000080:	2102      	movgt	r1, #2
+ 8000082:	6138      	str	r0, [r7, #16]
+ 8000084:	6179      	str	r1, [r7, #20]
+ 8000086:	2000      	movs	r0, #0
+ 8000088:	2103      	movs	r1, #3
+ 800008a:	290a      	cmp	r1, #10
+ 800008c:	bfb2      	itee	lt
+ 800008e:	2001      	movlt	r0, #1
+ 8000090:	2002      	movge	r0, #2
+ 8000092:	2003      	movge	r0, #3
+ 8000094:	61b8      	str	r0, [r7, #24]
+ 8000096:	2000      	movs	r0, #0
+ 8000098:	2164      	movs	r1, #100	@ 0x64
+ 800009a:	2232      	movs	r2, #50	@ 0x32
+ 800009c:	4291      	cmp	r1, r2
+ 800009e:	bfc8      	it	gt
+ 80000a0:	1888      	addgt	r0, r1, r2
+ 80000a2:	61f8      	str	r0, [r7, #28]
+ 80000a4:	4801      	ldr	r0, [pc, #4]	@ (80000ac <_fault+0x2>)
+ 80000a6:	6238      	str	r0, [r7, #32]
+ 80000a8:	be00      	bkpt	0x0000
+
+080000aa <_fault>:
+ 80000aa:	e7fe      	b.n	80000aa <_fault>
+ 80000ac:	c0ffee42 	.word	0xc0ffee42

@@ -213,8 +213,9 @@ int exec_load_reg(Executor *exec, const DecodedInsn *insn)
 
 int exec_load_literal(Executor *exec, const DecodedInsn *insn)
 {
-    /* PC-relative load: address = Align(PC, 4) + imm */
-    uint32_t pc = exec->cpu.r[ARMV8M_REG_PC];
+    /* PC-relative load: address = Align(PC + 4, 4) + imm
+     * ARM architecture: PC reads as current instruction address + 4 in Thumb mode */
+    uint32_t pc = exec->cpu.r[ARMV8M_REG_PC] + 4;
     uint32_t base = pc & ~3u;  /* Align to word */
     uint32_t addr;
     bool fault = false;

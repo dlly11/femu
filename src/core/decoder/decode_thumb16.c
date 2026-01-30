@@ -310,23 +310,17 @@ static int decode_data_proc(uint16_t insn, DecodedInsn *out)
     case 0x1: /* EORS */
         out->op = DP_EOR;
         break;
-    case 0x2: /* LSLS */
+    case 0x2: /* LSLS Rdn, Rs - shift Rdn by amount in Rs */
         out->op = DP_LSL;
-        out->type = INSN_DATA_PROC_SHIFTED;
-        out->rs = rm;  /* Shift amount in register */
-        out->rm = rdn;
+        /* Keep INSN_DATA_PROC_REG: rn = value to shift, rm = shift count reg */
         break;
-    case 0x3: /* LSRS */
+    case 0x3: /* LSRS Rdn, Rs - shift Rdn by amount in Rs */
         out->op = DP_LSR;
-        out->type = INSN_DATA_PROC_SHIFTED;
-        out->rs = rm;
-        out->rm = rdn;
+        /* Keep INSN_DATA_PROC_REG: rn = value to shift, rm = shift count reg */
         break;
-    case 0x4: /* ASRS */
+    case 0x4: /* ASRS Rdn, Rs - shift Rdn by amount in Rs */
         out->op = DP_ASR;
-        out->type = INSN_DATA_PROC_SHIFTED;
-        out->rs = rm;
-        out->rm = rdn;
+        /* Keep INSN_DATA_PROC_REG: rn = value to shift, rm = shift count reg */
         break;
     case 0x5: /* ADCS */
         out->op = DP_ADC;
@@ -334,11 +328,9 @@ static int decode_data_proc(uint16_t insn, DecodedInsn *out)
     case 0x6: /* SBCS */
         out->op = DP_SBC;
         break;
-    case 0x7: /* RORS */
+    case 0x7: /* RORS Rdn, Rs - rotate Rdn by amount in Rs */
         out->op = DP_ROR;
-        out->type = INSN_DATA_PROC_SHIFTED;
-        out->rs = rm;
-        out->rm = rdn;
+        /* Keep INSN_DATA_PROC_REG: rn = value to rotate, rm = rotate count reg */
         break;
     case 0x8: /* TST */
         out->op = DP_TST;

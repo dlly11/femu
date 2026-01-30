@@ -192,12 +192,83 @@ def dev_list() -> None:
 @main.command("run")
 @click.argument("firmware", type=click.Path(exists=True))
 @click.option("--gdb-port", type=int, default=None, help="Start GDB server on port.")
-def run_emulator(firmware: str, gdb_port: int | None) -> None:
+@click.option("--max-cycles", type=int, default=0, help="Max cycles to execute (0=unlimited).")
+@click.option("-v", "--verbose", is_flag=True, help="Verbose output.")
+def run_emulator(firmware: str, gdb_port: int | None, max_cycles: int, verbose: bool) -> None:
     """Run the emulator with a firmware file."""
-    console.print("[yellow]Emulator not yet implemented.[/yellow]")
-    console.print(f"Would run: {firmware}")
-    if gdb_port:
-        console.print(f"GDB server would listen on port {gdb_port}")
+    try:
+        from .emulator import Emulator, EmulatorState
+        from .gdb_server import GDBServer
+    except OSError as e:
+        console.print(f"[red]Error loading emulator library:[/red] {e}")
+        console.print("[yellow]Build the project first with:[/yellow] femu build all")
+        raise SystemExit(1)
+
+    try:
+        emu = Emulator()
+        elf = emu.load_elf(firmware)
+
+        if verbose:
+            console.print(f"[bold]Loaded:[/bold] {firmware}")
+            console.print(f"  Entry point: {elf.entry_point:#010x}")
+            if elf.initial_sp:
+                console.print(f"  Initial SP:  {elf.initial_sp:#010x}")
+            if elf.reset_vector:
+                console.print(f"  Reset vector: {elf.reset_vector:#010x}")
+            console.print(f"  Segments: {len(elf.segments)}")
+            for seg in elf.segments:
+                flags = ""
+                if seg.is_executable:
+                    flags += "X"
+                if seg.is_writable:
+                    flags += "W"
+                console.print(f"    {seg.vaddr:#010x} - {seg.vaddr + seg.memsz:#010x} [{flags}]")
+
+        if gdb_port:
+            # Start GDB server (blocks until disconnect)
+            console.print(f"\n[bold green]Starting GDB server on port {gdb_port}[/bold green]")
+            server = GDBServer(emu, port=gdb_port)
+            try:
+                server.start()
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Interrupted[/yellow]")
+        else:
+            # Run directly
+            console.print("[bold green]Running...[/bold green]")
+            try:
+                cycles = emu.run(max_cycles)
+                state = emu.state
+
+                console.print(f"\n[bold]Execution stopped[/bold]")
+                console.print(f"  State:  {state.name}")
+                console.print(f"  Cycles: {cycles:,}")
+                console.print(f"  PC:     {emu.pc:#010x}")
+
+                if verbose:
+                    console.print("\n[bold]Final registers:[/bold]")
+                    regs = emu.dump_regs()
+                    # Print in rows of 4
+                    reg_names = list(regs.keys())
+                    for i in range(0, len(reg_names), 4):
+                        row = "  "
+                        for name in reg_names[i : i + 4]:
+                            row += f"{name:4s}={regs[name]:#010x}  "
+                        console.print(row)
+
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Interrupted[/yellow]")
+                console.print(f"  Cycles: {emu.cycles:,}")
+                console.print(f"  PC:     {emu.pc:#010x}")
+
+    except FileNotFoundError as e:
+        console.print(f"[red]File not found:[/red] {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

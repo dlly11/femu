@@ -147,22 +147,29 @@ int decode_thumb32(uint16_t hw1, uint16_t hw2, uint32_t pc, DecodedInsn *out)
 
     case 0x2:  /* 0b10 */
         if (op == 0) {
-            /* Check for Data processing (plain binary immediate) first */
-            /* bits[9:8] of hw1 = 10 indicates MOVW, MOVT, ADDW, SUBW */
-            if ((op2 & 0x30) == 0x20) {
-                return decode_data_proc_plain_imm(hw1, hw2, out);
-            }
-            /* Then check for branches/misc or modified immediate */
+            /* Dispatch based on bit 9 of hw1:
+             * bit 9 = 0: Data-processing (modified immediate) - AND, ORR, MOV, etc.
+             * bit 9 = 1: Data-processing (plain binary immediate) - ADDW, MOVW, BFI, SBFX, etc.
+             */
             if (BIT(hw1, 9)) {
-                /* Branches and miscellaneous control */
-                return decode_branch_misc(hw1, hw2, pc, out);
+                return decode_data_proc_plain_imm(hw1, hw2, out);
             }
             return decode_data_proc_modified_imm(hw1, hw2, out);
         }
-        /* Branches and miscellaneous control */
+        /* op == 1: Branches and miscellaneous control */
         return decode_branch_misc(hw1, hw2, pc, out);
 
     case 0x3:  /* 0b11 */
+        /* Check multiply instructions first - they don't depend on op (bit 15 of hw2) */
+        if ((op2 & 0x78) == 0x30) {
+            /* Multiply, multiply accumulate - op2 = 0110xxx */
+            return decode_multiply(hw1, hw2, out);
+        }
+        if ((op2 & 0x78) == 0x38) {
+            /* Long multiply, long multiply accumulate, divide - op2 = 0111xxx */
+            return decode_long_multiply(hw1, hw2, out);
+        }
+
         if (op == 0) {
             /* Load/store single (multiple patterns) */
             if ((op2 & 0x71) == 0x00 || (op2 & 0x67) == 0x01 ||
@@ -196,14 +203,6 @@ int decode_thumb32(uint16_t hw1, uint16_t hw2, uint32_t pc, DecodedInsn *out)
                     return decode_misc_ops(hw1, hw2, out);
                 }
                 return decode_data_proc_shifted_reg(hw1, hw2, out);
-            }
-            if ((op2 & 0x78) == 0x30) {
-                /* Multiply, multiply accumulate - op2 = 0110xxx */
-                return decode_multiply(hw1, hw2, out);
-            }
-            if ((op2 & 0x78) == 0x38) {
-                /* Long multiply, long multiply accumulate, divide - op2 = 0111xxx */
-                return decode_long_multiply(hw1, hw2, out);
             }
         }
         break;
@@ -597,7 +596,18 @@ static int decode_data_proc_plain_imm(uint16_t hw1, uint16_t hw2, DecodedInsn *o
     case 0x1C: /* UBFX */
     {
         uint8_t lsb = (uint8_t)(((EXTRACT(hw2, 12, 3) << 2) | EXTRACT(hw2, 6, 2)));
-        uint8_t width = (uint8_t)(EXTRACT(hw2, 0, 5) + 1);
+        uint8_t width;
+
+        /* Encoding differs:
+         * - BFI/BFC (op=0x16): bits 4-0 = msb, width = msb - lsb + 1
+         * - SBFX/UBFX: bits 4-0 = widthm1, width = widthm1 + 1
+         */
+        if (op == 0x16) {
+            uint8_t msb = (uint8_t)EXTRACT(hw2, 0, 5);
+            width = (uint8_t)(msb - lsb + 1);
+        } else {
+            width = (uint8_t)(EXTRACT(hw2, 0, 5) + 1);
+        }
 
         out->type = INSN_BITFIELD;
         out->rn = rn;

@@ -1,0 +1,56 @@
+
+test_multiply.elf:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+0800003c <_reset>:
+ 800003c:	f04f 5700 	mov.w	r7, #536870912	@ 0x20000000
+ 8000040:	2003      	movs	r0, #3
+ 8000042:	2104      	movs	r1, #4
+ 8000044:	2205      	movs	r2, #5
+ 8000046:	fb00 2301 	mla	r3, r0, r1, r2
+ 800004a:	603b      	str	r3, [r7, #0]
+ 800004c:	2003      	movs	r0, #3
+ 800004e:	2102      	movs	r1, #2
+ 8000050:	220a      	movs	r2, #10
+ 8000052:	fb00 2311 	mls	r3, r0, r1, r2
+ 8000056:	607b      	str	r3, [r7, #4]
+ 8000058:	f44f 1080 	mov.w	r0, #1048576	@ 0x100000
+ 800005c:	f44f 7180 	mov.w	r1, #256	@ 0x100
+ 8000060:	fba0 2301 	umull	r2, r3, r0, r1
+ 8000064:	60ba      	str	r2, [r7, #8]
+ 8000066:	60fb      	str	r3, [r7, #12]
+ 8000068:	f06f 0063 	mvn.w	r0, #99	@ 0x63
+ 800006c:	4912      	ldr	r1, [pc, #72]	@ (80000b8 <_fault+0x4>)
+ 800006e:	fb80 2301 	smull	r2, r3, r0, r1
+ 8000072:	613a      	str	r2, [r7, #16]
+ 8000074:	617b      	str	r3, [r7, #20]
+ 8000076:	2064      	movs	r0, #100	@ 0x64
+ 8000078:	2107      	movs	r1, #7
+ 800007a:	fbb0 f2f1 	udiv	r2, r0, r1
+ 800007e:	61ba      	str	r2, [r7, #24]
+ 8000080:	f06f 0063 	mvn.w	r0, #99	@ 0x63
+ 8000084:	2107      	movs	r1, #7
+ 8000086:	fb90 f2f1 	sdiv	r2, r0, r1
+ 800008a:	61fa      	str	r2, [r7, #28]
+ 800008c:	2064      	movs	r0, #100	@ 0x64
+ 800008e:	f06f 0106 	mvn.w	r1, #6
+ 8000092:	fb90 f2f1 	sdiv	r2, r0, r1
+ 8000096:	623a      	str	r2, [r7, #32]
+ 8000098:	f44f 7280 	mov.w	r2, #256	@ 0x100
+ 800009c:	2300      	movs	r3, #0
+ 800009e:	f44f 5080 	mov.w	r0, #4096	@ 0x1000
+ 80000a2:	f44f 5180 	mov.w	r1, #4096	@ 0x1000
+ 80000a6:	fbe0 2301 	umlal	r2, r3, r0, r1
+ 80000aa:	627a      	str	r2, [r7, #36]	@ 0x24
+ 80000ac:	62bb      	str	r3, [r7, #40]	@ 0x28
+ 80000ae:	4803      	ldr	r0, [pc, #12]	@ (80000bc <_fault+0x8>)
+ 80000b0:	62f8      	str	r0, [r7, #44]	@ 0x2c
+ 80000b2:	be00      	bkpt	0x0000
+
+080000b4 <_fault>:
+ 80000b4:	e7fe      	b.n	80000b4 <_fault>
+ 80000b6:	0000      	.short	0x0000
+ 80000b8:	000f4240 	.word	0x000f4240
+ 80000bc:	cafed00d 	.word	0xcafed00d

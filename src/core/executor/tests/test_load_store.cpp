@@ -147,10 +147,12 @@ TEST(LoadStore, LdrRegister)
 
 TEST(LoadStore, LdrLiteral)
 {
-    mock_memory[0x104] = 0x11;
-    mock_memory[0x105] = 0x22;
-    mock_memory[0x106] = 0x33;
-    mock_memory[0x107] = 0x44;
+    /* LDR literal uses PC+4 in Thumb mode:
+     * PC = 0x100, PC+4 = 0x104, Align(PC+4,4) = 0x104, address = 0x104 + 4 = 0x108 */
+    mock_memory[0x108] = 0x11;
+    mock_memory[0x109] = 0x22;
+    mock_memory[0x10A] = 0x33;
+    mock_memory[0x10B] = 0x44;
 
     exec.cpu.r[ARMV8M_REG_PC] = 0x100;
     insn.type = INSN_LOAD_LITERAL;

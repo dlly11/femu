@@ -178,6 +178,7 @@ option(BUILD_EXECUTOR "Build executor module" ON)
 option(BUILD_MEMORY "Build memory module" ON)
 option(BUILD_NVIC "Build NVIC module" ON)
 option(BUILD_MPU "Build MPU module" ON)
+option(BUILD_EMULATOR "Build emulator glue layer" ON)
 
 # =============================================================================
 # Core Modules
@@ -202,6 +203,10 @@ endif()
 
 if(BUILD_MPU AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/mpu/mpu.c)
     add_subdirectory(src/core/mpu)
+endif()
+
+if(BUILD_EMULATOR AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/emulator/emulator.c)
+    add_subdirectory(src/core/emulator)
 endif()
 
 # =============================================================================

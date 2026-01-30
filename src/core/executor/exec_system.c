@@ -50,6 +50,7 @@
 #define HINT_WFI    3
 #define HINT_SEV    4
 #define HINT_SEVL   5
+#define HINT_BKPT   0xBE    /* BKPT instruction - triggers debug halt */
 
 /* Barrier opcodes */
 #define BARRIER_DSB 4
@@ -541,6 +542,10 @@ int exec_hint(Executor *exec, const DecodedInsn *insn)
             cpu->event_registered = true;
             break;
 
+        case HINT_BKPT:
+            /* Breakpoint instruction - halt execution for debugger */
+            return ARMV8M_ERR_BREAKPOINT;
+
         default:
             /* Unknown hints are NOPs */
             break;
@@ -555,9 +560,19 @@ int exec_hint(Executor *exec, const DecodedInsn *insn)
 
 int exec_it(Executor *exec, const DecodedInsn *insn)
 {
-    /* IT instruction sets up conditional execution block */
-    /* it_state = firstcond[3:0] : mask[3:0] */
-    exec->cpu.it_state = (insn->it_cond << 4) | (insn->it_mask & 0xF);
+    /* IT instruction sets up conditional execution block.
+     *
+     * ARM ITSTATE encoding:
+     * - Bits 7:5 = cond[3:1] (upper 3 bits of base condition)
+     * - Bits 4:0 = cond[0]:mask[3:0] (cond[0] in bit 4, mask in bits 3:0)
+     *
+     * After each instruction, bits 4:0 shift left. Initially bit 4 = cond[0],
+     * giving the base condition. After shift, bit 4 becomes mask[3], which
+     * encodes T (same as cond) or E (inverted) for subsequent instructions.
+     */
+    uint8_t cond = insn->it_cond;
+    uint8_t mask = insn->it_mask & 0xF;
+    exec->cpu.it_state = (uint8_t)(((cond >> 1) << 5) | ((cond & 1) << 4) | mask);
 
     return ARMV8M_OK;
 }

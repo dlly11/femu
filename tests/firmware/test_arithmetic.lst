@@ -1,0 +1,51 @@
+
+test_arithmetic.elf:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+0800003c <_reset>:
+ 800003c:	f04f 5700 	mov.w	r7, #536870912	@ 0x20000000
+ 8000040:	200f      	movs	r0, #15
+ 8000042:	2107      	movs	r1, #7
+ 8000044:	1840      	adds	r0, r0, r1
+ 8000046:	6038      	str	r0, [r7, #0]
+ 8000048:	2064      	movs	r0, #100	@ 0x64
+ 800004a:	2125      	movs	r1, #37	@ 0x25
+ 800004c:	1a40      	subs	r0, r0, r1
+ 800004e:	6078      	str	r0, [r7, #4]
+ 8000050:	2006      	movs	r0, #6
+ 8000052:	2107      	movs	r1, #7
+ 8000054:	4348      	muls	r0, r1
+ 8000056:	60b8      	str	r0, [r7, #8]
+ 8000058:	20ff      	movs	r0, #255	@ 0xff
+ 800005a:	210f      	movs	r1, #15
+ 800005c:	4008      	ands	r0, r1
+ 800005e:	60f8      	str	r0, [r7, #12]
+ 8000060:	20f0      	movs	r0, #240	@ 0xf0
+ 8000062:	210f      	movs	r1, #15
+ 8000064:	4308      	orrs	r0, r1
+ 8000066:	6138      	str	r0, [r7, #16]
+ 8000068:	20aa      	movs	r0, #170	@ 0xaa
+ 800006a:	21ff      	movs	r1, #255	@ 0xff
+ 800006c:	4048      	eors	r0, r1
+ 800006e:	6178      	str	r0, [r7, #20]
+ 8000070:	2001      	movs	r0, #1
+ 8000072:	2104      	movs	r1, #4
+ 8000074:	4088      	lsls	r0, r1
+ 8000076:	61b8      	str	r0, [r7, #24]
+ 8000078:	f44f 7080 	mov.w	r0, #256	@ 0x100
+ 800007c:	2104      	movs	r1, #4
+ 800007e:	40c8      	lsrs	r0, r1
+ 8000080:	61f8      	str	r0, [r7, #28]
+ 8000082:	f06f 0007 	mvn.w	r0, #7
+ 8000086:	2102      	movs	r1, #2
+ 8000088:	4108      	asrs	r0, r1
+ 800008a:	6238      	str	r0, [r7, #32]
+ 800008c:	4801      	ldr	r0, [pc, #4]	@ (8000094 <_fault+0x2>)
+ 800008e:	6278      	str	r0, [r7, #36]	@ 0x24
+ 8000090:	be00      	bkpt	0x0000
+
+08000092 <_fault>:
+ 8000092:	e7fe      	b.n	8000092 <_fault>
+ 8000094:	cafebabe 	.word	0xcafebabe

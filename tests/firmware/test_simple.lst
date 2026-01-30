@@ -1,0 +1,33 @@
+
+test_simple.elf:     file format elf32-littlearm
+
+
+Disassembly of section .text:
+
+08000040 <_reset>:
+ 8000040:	2000      	movs	r0, #0
+ 8000042:	210a      	movs	r1, #10
+ 8000044:	f04f 5200 	mov.w	r2, #536870912	@ 0x20000000
+
+08000048 <loop>:
+ 8000048:	3001      	adds	r0, #1
+ 800004a:	3901      	subs	r1, #1
+ 800004c:	d1fc      	bne.n	8000048 <loop>
+ 800004e:	6010      	str	r0, [r2, #0]
+ 8000050:	4b03      	ldr	r3, [pc, #12]	@ (8000060 <_default+0x4>)
+ 8000052:	6053      	str	r3, [r2, #4]
+ 8000054:	be00      	bkpt	0x0000
+
+08000056 <halt>:
+ 8000056:	e7fe      	b.n	8000056 <halt>
+
+08000058 <_nmi>:
+ 8000058:	e7fe      	b.n	8000058 <_nmi>
+
+0800005a <_hardfault>:
+ 800005a:	e7fe      	b.n	800005a <_hardfault>
+
+0800005c <_default>:
+ 800005c:	e7fe      	b.n	800005c <_default>
+ 800005e:	0000      	.short	0x0000
+ 8000060:	deadbeef 	.word	0xdeadbeef

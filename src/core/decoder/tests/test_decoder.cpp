@@ -1181,6 +1181,7 @@ TEST(Thumb16Coverage, MovsLowReg)
 }
 
 // Data processing register: LSLS register
+// Shift amount in Rm register, value to shift in Rn - uses INSN_DATA_PROC_REG
 TEST(Thumb16Coverage, LslsReg)
 {
     // LSLS R0, R1 - Logical shift left by register
@@ -1190,11 +1191,12 @@ TEST(Thumb16Coverage, LslsReg)
     int result = armv8m_decode(code, TEST_PC, &insn);
 
     CHECK_EQUAL(2, result);
-    CHECK_EQUAL(INSN_DATA_PROC_SHIFTED, insn.type);
+    CHECK_EQUAL(INSN_DATA_PROC_REG, insn.type);
     CHECK_EQUAL(DP_LSL, insn.op);
 }
 
 // Data processing register: LSRS register
+// Shift amount in Rm register, value to shift in Rn - uses INSN_DATA_PROC_REG
 TEST(Thumb16Coverage, LsrsReg)
 {
     // LSRS R0, R1 - Logical shift right by register
@@ -1204,11 +1206,12 @@ TEST(Thumb16Coverage, LsrsReg)
     int result = armv8m_decode(code, TEST_PC, &insn);
 
     CHECK_EQUAL(2, result);
-    CHECK_EQUAL(INSN_DATA_PROC_SHIFTED, insn.type);
+    CHECK_EQUAL(INSN_DATA_PROC_REG, insn.type);
     CHECK_EQUAL(DP_LSR, insn.op);
 }
 
 // Data processing register: ASRS register
+// Shift amount in Rm register, value to shift in Rn - uses INSN_DATA_PROC_REG
 TEST(Thumb16Coverage, AsrsReg)
 {
     // ASRS R0, R1 - Arithmetic shift right by register
@@ -1218,7 +1221,7 @@ TEST(Thumb16Coverage, AsrsReg)
     int result = armv8m_decode(code, TEST_PC, &insn);
 
     CHECK_EQUAL(2, result);
-    CHECK_EQUAL(INSN_DATA_PROC_SHIFTED, insn.type);
+    CHECK_EQUAL(INSN_DATA_PROC_REG, insn.type);
     CHECK_EQUAL(DP_ASR, insn.op);
 }
 
@@ -1251,6 +1254,7 @@ TEST(Thumb16Coverage, Sbcs)
 }
 
 // Data processing register: RORS
+// Rotate amount in Rm register, value to rotate in Rn - uses INSN_DATA_PROC_REG
 TEST(Thumb16Coverage, Rors)
 {
     // RORS R0, R1 - Rotate right by register
@@ -1260,7 +1264,7 @@ TEST(Thumb16Coverage, Rors)
     int result = armv8m_decode(code, TEST_PC, &insn);
 
     CHECK_EQUAL(2, result);
-    CHECK_EQUAL(INSN_DATA_PROC_SHIFTED, insn.type);
+    CHECK_EQUAL(INSN_DATA_PROC_REG, insn.type);
     CHECK_EQUAL(DP_ROR, insn.op);
 }
 

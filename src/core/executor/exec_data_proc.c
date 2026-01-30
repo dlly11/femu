@@ -286,9 +286,45 @@ int exec_data_proc_imm(Executor *exec, const DecodedInsn *insn)
         rn_val = get_reg(exec, insn->rn);
     }
 
+    /* In ARM, 16-bit Thumb instructions inside an IT block do NOT update
+     * condition flags. Only 32-bit instructions with explicit S suffix do.
+     * Check if we're in IT block (it_state != 0) and instruction is 16-bit. */
+    bool set_flags = insn->set_flags;
+    if (exec->cpu.it_state != 0 && insn->size == 2) {
+        set_flags = false;
+    }
+
     return exec_dp_operation(exec, (DataProcOp)insn->op,
                              insn->rd, rn_val, insn->imm,
-                             insn->set_flags, shift_carry);
+                             set_flags, shift_carry);
+}
+
+/**
+ * Reverse the bits in a 32-bit word.
+ */
+static uint32_t reverse_bits(uint32_t val)
+{
+    val = ((val & 0x55555555) << 1) | ((val & 0xAAAAAAAA) >> 1);
+    val = ((val & 0x33333333) << 2) | ((val & 0xCCCCCCCC) >> 2);
+    val = ((val & 0x0F0F0F0F) << 4) | ((val & 0xF0F0F0F0) >> 4);
+    val = ((val & 0x00FF00FF) << 8) | ((val & 0xFF00FF00) >> 8);
+    val = (val << 16) | (val >> 16);
+    return val;
+}
+
+/**
+ * Count leading zeros in a 32-bit word.
+ */
+static uint32_t count_leading_zeros(uint32_t val)
+{
+    if (val == 0) return 32;
+    uint32_t count = 0;
+    if ((val & 0xFFFF0000) == 0) { count += 16; val <<= 16; }
+    if ((val & 0xFF000000) == 0) { count += 8; val <<= 8; }
+    if ((val & 0xF0000000) == 0) { count += 4; val <<= 4; }
+    if ((val & 0xC0000000) == 0) { count += 2; val <<= 2; }
+    if ((val & 0x80000000) == 0) { count += 1; }
+    return count;
 }
 
 int exec_data_proc_reg(Executor *exec, const DecodedInsn *insn)
@@ -305,9 +341,55 @@ int exec_data_proc_reg(Executor *exec, const DecodedInsn *insn)
         rm_val = get_reg(exec, insn->rm);
     }
 
+    /* Check for special byte manipulation instructions encoded with markers */
+    if (insn->op == DP_ROR && insn->shift_amount >= 0x10 && insn->shift_amount <= 0x13) {
+        uint32_t result;
+        switch (insn->shift_amount) {
+        case 0x10: /* REV - byte reverse word */
+            result = ((rm_val & 0xFF) << 24) |
+                     ((rm_val & 0xFF00) << 8) |
+                     ((rm_val & 0xFF0000) >> 8) |
+                     ((rm_val & 0xFF000000) >> 24);
+            break;
+        case 0x11: /* REV16 - byte reverse packed halfwords */
+            result = ((rm_val & 0x00FF) << 8) |
+                     ((rm_val & 0xFF00) >> 8) |
+                     ((rm_val & 0x00FF0000) << 8) |
+                     ((rm_val & 0xFF000000) >> 8);
+            break;
+        case 0x12: /* RBIT - bit reverse */
+            result = reverse_bits(rm_val);
+            break;
+        case 0x13: /* REVSH - byte reverse signed halfword */
+            result = (uint32_t)(int32_t)(int16_t)(
+                ((rm_val & 0xFF) << 8) | ((rm_val & 0xFF00) >> 8)
+            );
+            break;
+        default:
+            result = 0;
+            break;
+        }
+        set_reg(exec, insn->rd, result);
+        return ARMV8M_OK;
+    }
+
+    /* Check for CLZ - encoded with DP_MVN and shift_amount = 0x20 */
+    if (insn->op == DP_MVN && insn->shift_amount == 0x20) {
+        uint32_t result = count_leading_zeros(rm_val);
+        set_reg(exec, insn->rd, result);
+        return ARMV8M_OK;
+    }
+
+    /* In ARM, 16-bit Thumb instructions inside an IT block do NOT update
+     * condition flags. Only 32-bit instructions with explicit S suffix do. */
+    bool set_flags = insn->set_flags;
+    if (exec->cpu.it_state != 0 && insn->size == 2) {
+        set_flags = false;
+    }
+
     return exec_dp_operation(exec, (DataProcOp)insn->op,
                              insn->rd, rn_val, rm_val,
-                             insn->set_flags, shift_carry);
+                             set_flags, shift_carry);
 }
 
 int exec_data_proc_shifted(Executor *exec, const DecodedInsn *insn)
@@ -722,6 +804,35 @@ int exec_extend(Executor *exec, const DecodedInsn *insn)
 {
     uint32_t rm_val = get_reg(exec, insn->rm);
     uint32_t result;
+
+    /* Check for byte swap operations (from Thumb-16 decoder) */
+    /* op: 0=REV, 1=REV16, 2=unused, 3=REVSH */
+    if (insn->op <= 3 && insn->access_size == 0) {
+        switch (insn->op) {
+        case 0: /* REV - byte reverse word */
+            result = ((rm_val & 0xFF) << 24) |
+                     ((rm_val & 0xFF00) << 8) |
+                     ((rm_val & 0xFF0000) >> 8) |
+                     ((rm_val & 0xFF000000) >> 24);
+            break;
+        case 1: /* REV16 - byte reverse packed halfwords */
+            result = ((rm_val & 0x00FF) << 8) |
+                     ((rm_val & 0xFF00) >> 8) |
+                     ((rm_val & 0x00FF0000) << 8) |
+                     ((rm_val & 0xFF000000) >> 8);
+            break;
+        case 3: /* REVSH - byte reverse signed halfword */
+            result = (uint32_t)(int32_t)(int16_t)(
+                ((rm_val & 0xFF) << 8) | ((rm_val & 0xFF00) >> 8)
+            );
+            break;
+        default:
+            result = rm_val;
+            break;
+        }
+        set_reg(exec, insn->rd, result);
+        return ARMV8M_OK;
+    }
 
     /* Apply rotation if specified */
     uint8_t rotation = insn->shift_amount;
