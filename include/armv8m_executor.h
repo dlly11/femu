@@ -38,10 +38,23 @@ typedef struct {
     uint32_t faultmask;         /**< FAULTMASK - fault mask */
     uint32_t basepri;           /**< BASEPRI - base priority mask */
     uint32_t control;           /**< CONTROL - execution control */
-    
+
     /* Banked stack pointers */
     uint32_t sp_main;           /**< Main stack pointer (MSP) */
     uint32_t sp_process;        /**< Process stack pointer (PSP) */
+
+    /* Stack limits (ARMv8-M) */
+    uint32_t msplim;            /**< MSP limit register */
+    uint32_t psplim;            /**< PSP limit register */
+
+    /* System control registers */
+    uint32_t ccr;               /**< Configuration and Control Register */
+
+    /* Fault status registers */
+    uint32_t cfsr;              /**< Configurable Fault Status (MMFSR+BFSR+UFSR) */
+    uint32_t hfsr;              /**< HardFault Status Register */
+    uint32_t mmfar;             /**< MemManage Fault Address Register */
+    uint32_t bfar;              /**< BusFault Address Register */
     
     /* TrustZone banked registers (if enabled) */
     uint32_t sp_main_s;         /**< Secure MSP */
@@ -68,8 +81,65 @@ typedef struct {
     /* Halt state */
     bool halted;                /**< CPU is halted (debug or WFI) */
     bool sleeping;              /**< CPU is in sleep mode */
-    
+
+    /* Exclusive access monitor */
+    uint32_t exclusive_addr;    /**< Address of exclusive access */
+    bool exclusive_valid;       /**< Exclusive monitor is valid */
+
+    /* FPU state (if has_fpu) */
+    uint32_t s[32];             /**< S0-S31 single-precision registers */
+    uint32_t fpscr;             /**< FPU Status and Control Register */
+    uint32_t fpccr;             /**< FPU Context Control Register */
+    uint32_t fpcar;             /**< FPU Context Address Register */
+    uint32_t fpdscr;            /**< FPU Default Status Control Register */
+    bool fp_context_active;     /**< FPCA bit tracking for lazy preservation */
+
 } CPUState;
+
+/*============================================================================
+ * SAU (Security Attribution Unit) - TrustZone
+ *============================================================================*/
+
+/**
+ * SAU region configuration.
+ */
+typedef struct {
+    uint32_t rbar;              /**< Region Base Address Register */
+    uint32_t rlar;              /**< Region Limit Address Register */
+} SAURegion;
+
+/**
+ * SAU state.
+ */
+typedef struct {
+    uint32_t ctrl;              /**< SAU_CTRL */
+    uint32_t type;              /**< SAU_TYPE (read-only, num regions) */
+    uint32_t rnr;               /**< Region Number Register */
+    SAURegion regions[ARMV8M_SAU_REGIONS_MAX];
+} SAUState;
+
+/**
+ * TrustZone banked registers.
+ */
+typedef struct {
+    /* Banked special registers */
+    uint32_t primask_s;         /**< Secure PRIMASK */
+    uint32_t primask_ns;        /**< Non-secure PRIMASK */
+    uint32_t faultmask_s;       /**< Secure FAULTMASK */
+    uint32_t faultmask_ns;      /**< Non-secure FAULTMASK */
+    uint32_t basepri_s;         /**< Secure BASEPRI */
+    uint32_t basepri_ns;        /**< Non-secure BASEPRI */
+    uint32_t control_s;         /**< Secure CONTROL */
+    uint32_t control_ns;        /**< Non-secure CONTROL */
+    uint32_t msplim_s;          /**< Secure MSP limit */
+    uint32_t msplim_ns;         /**< Non-secure MSP limit */
+    uint32_t psplim_s;          /**< Secure PSP limit */
+    uint32_t psplim_ns;         /**< Non-secure PSP limit */
+    uint32_t msp_s;             /**< Secure MSP */
+    uint32_t msp_ns;            /**< Non-secure MSP */
+    uint32_t psp_s;             /**< Secure PSP */
+    uint32_t psp_ns;            /**< Non-secure PSP */
+} TrustZoneBankedRegs;
 
 /*============================================================================
  * Executor Context
@@ -97,18 +167,35 @@ typedef struct {
 } NVICCallbacks;
 
 /**
+ * Security attribute for memory access.
+ */
+typedef enum {
+    SEC_SECURE,                 /**< Secure memory */
+    SEC_NONSECURE,              /**< Non-secure memory */
+    SEC_NSC,                    /**< Non-Secure Callable region */
+} SecurityAttr;
+
+/**
  * Executor context - combines CPU state with system callbacks.
  */
 typedef struct {
     CPUState cpu;               /**< CPU state */
     MemoryCallbacks mem;        /**< Memory access */
     NVICCallbacks nvic;         /**< Interrupt controller */
-    
+
+    /* TrustZone state (if has_trustzone) */
+    SAUState sau;               /**< Security Attribution Unit */
+    TrustZoneBankedRegs tz_regs; /**< Banked registers */
+
     /* Configuration */
     bool has_fpu;               /**< FPU present? */
     bool has_dsp;               /**< DSP extension present? */
     bool has_trustzone;         /**< TrustZone present? */
     uint32_t num_mpu_regions;   /**< Number of MPU regions (0 if no MPU) */
+
+    /* Vector Table Offset Registers */
+    uint32_t vtor;              /**< VTOR - Vector Table Offset Register */
+    uint32_t vtor_ns;           /**< Non-Secure VTOR (TrustZone only) */
 } Executor;
 
 /*============================================================================
@@ -190,6 +277,15 @@ uint32_t armv8m_get_sp(const CPUState *cpu);
  * @param value     New SP value
  */
 void armv8m_set_sp(CPUState *cpu, uint32_t value);
+
+/**
+ * Check if SP value would violate stack limits.
+ *
+ * @param cpu       CPU state
+ * @param sp_value  SP value to check
+ * @return          true if limit would be violated
+ */
+bool armv8m_check_stack_limit(const CPUState *cpu, uint32_t sp_value);
 
 /**
  * Handle exception entry.

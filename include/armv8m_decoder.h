@@ -75,6 +75,15 @@ typedef struct {
     /* Special register (for MRS/MSR) */
     uint8_t sysreg;             /**< Special register number */
     
+    /* FPU fields */
+    uint8_t sd;                 /**< Destination S register (0-31) */
+    uint8_t sn;                 /**< First source S register */
+    uint8_t sm;                 /**< Second source S register */
+    uint8_t dd;                 /**< Destination D register (0-15) */
+    uint8_t dn;                 /**< First source D register */
+    uint8_t dm;                 /**< Second source D register */
+    bool is_double;             /**< true for F64, false for F32 */
+
     /* Debug/diagnostic */
     uint32_t encoding;          /**< Raw instruction encoding */
     uint32_t pc;                /**< PC value of this instruction */

@@ -26,7 +26,7 @@
  *============================================================================*/
 
 /* Extract bit field from instruction */
-#define EXTRACT(val, start, len) (((val) >> (start)) & ((1U << (len)) - 1))
+#define EXTRACT(val, start, len) (((uint32_t)(val) >> (start)) & ((1U << (len)) - 1))
 
 /* Extract single bit */
 #define BIT(val, n) (((val) >> (n)) & 1)
@@ -181,7 +181,7 @@ static int decode_shift_add_sub_mov_cmp(uint16_t insn, DecodedInsn *out)
             out->set_flags = true;
         } else {
             out->type = INSN_DATA_PROC_SHIFTED;
-            out->op = DP_LSL;
+            out->op = DP_MOV;  /* Result is just the shifted value */
             out->rd = rd;
             out->rm = rm;
             out->shift_type = SHIFT_LSL;
@@ -198,7 +198,7 @@ static int decode_shift_add_sub_mov_cmp(uint16_t insn, DecodedInsn *out)
         uint8_t rd = (uint8_t)EXTRACT(insn, 0, 3);
 
         out->type = INSN_DATA_PROC_SHIFTED;
-        out->op = DP_LSR;
+        out->op = DP_MOV;  /* Result is just the shifted value */
         out->rd = rd;
         out->rm = rm;
         out->shift_type = SHIFT_LSR;
@@ -215,7 +215,7 @@ static int decode_shift_add_sub_mov_cmp(uint16_t insn, DecodedInsn *out)
         uint8_t rd = (uint8_t)EXTRACT(insn, 0, 3);
 
         out->type = INSN_DATA_PROC_SHIFTED;
-        out->op = DP_ASR;
+        out->op = DP_MOV;  /* Result is just the shifted value */
         out->rd = rd;
         out->rm = rm;
         out->shift_type = SHIFT_ASR;
@@ -365,7 +365,8 @@ static int decode_data_proc(uint16_t insn, DecodedInsn *out)
         break;
     case 0xD: /* MULS */
         out->type = INSN_MULTIPLY;
-        out->op = DP_MUL;
+        out->op = MUL_MUL;
+        out->set_flags = true;  /* MULS always sets flags in Thumb-16 */
         break;
     case 0xE: /* BICS */
         out->op = DP_BIC;
@@ -391,7 +392,7 @@ static int decode_special_data_branch(uint16_t insn, DecodedInsn *out)
 {
     uint8_t op = EXTRACT(insn, 8, 2);
     uint8_t rm = EXTRACT(insn, 3, 4);  /* 4 bits for high registers */
-    uint8_t rdn = EXTRACT(insn, 0, 3) | (BIT(insn, 7) << 3);
+    uint8_t rdn = (uint8_t)(EXTRACT(insn, 0, 3) | ((uint32_t)BIT(insn, 7) << 3));
 
     switch (op) {
     case 0x0: /* ADD (high registers) */
@@ -451,7 +452,7 @@ static int decode_load_literal(uint16_t insn, uint32_t pc, DecodedInsn *out)
     out->type = INSN_LOAD_LITERAL;
     out->rt = rt;
     /* Word-aligned: imm8 << 2, relative to PC aligned down to 4 bytes */
-    out->imm = imm8 << 2;
+    out->imm = (uint32_t)imm8 << 2;
     out->rn = ARMV8M_REG_PC;
     out->access_size = ACCESS_WORD;
     out->add = true;
@@ -531,9 +532,10 @@ static int decode_load_store_imm_word(uint16_t insn, DecodedInsn *out)
 
     out->rt = rt;
     out->rn = rn;
-    out->imm = imm5 << 2;  /* Word-aligned */
+    out->imm = (uint32_t)imm5 << 2;  /* Word-aligned */
     out->access_size = ACCESS_WORD;
     out->add = true;
+    out->pre_index = true;  /* Always pre-indexed for T1 encoding */
 
     if (is_load) {
         out->type = INSN_LOAD_IMM;
@@ -560,6 +562,7 @@ static int decode_load_store_imm_byte(uint16_t insn, DecodedInsn *out)
     out->imm = imm5;  /* Byte-aligned (no shift) */
     out->access_size = ACCESS_BYTE;
     out->add = true;
+    out->pre_index = true;  /* Always pre-indexed for T1 encoding */
 
     if (is_load) {
         out->type = INSN_LOAD_IMM;
@@ -583,9 +586,10 @@ static int decode_load_store_imm_half(uint16_t insn, DecodedInsn *out)
 
     out->rt = rt;
     out->rn = rn;
-    out->imm = imm5 << 1;  /* Halfword-aligned */
+    out->imm = (uint32_t)imm5 << 1;  /* Halfword-aligned */
     out->access_size = ACCESS_HALF;
     out->add = true;
+    out->pre_index = true;  /* Always pre-indexed for T1 encoding */
 
     if (is_load) {
         out->type = INSN_LOAD_IMM;
@@ -608,9 +612,10 @@ static int decode_load_store_sp_rel(uint16_t insn, DecodedInsn *out)
 
     out->rt = rt;
     out->rn = ARMV8M_REG_SP;
-    out->imm = imm8 << 2;  /* Word-aligned */
+    out->imm = (uint32_t)imm8 << 2;  /* Word-aligned */
     out->access_size = ACCESS_WORD;
     out->add = true;
+    out->pre_index = true;  /* Always pre-indexed for T2 encoding */
 
     if (is_load) {
         out->type = INSN_LOAD_IMM;
@@ -635,7 +640,7 @@ static int decode_adr(uint16_t insn, uint32_t pc, DecodedInsn *out)
     out->op = DP_ADD;
     out->rd = rd;
     out->rn = ARMV8M_REG_PC;
-    out->imm = imm8 << 2;  /* Word-aligned */
+    out->imm = (uint32_t)imm8 << 2;  /* Word-aligned */
     out->set_flags = false;
     (void)pc;
 
@@ -655,7 +660,7 @@ static int decode_add_sp_imm(uint16_t insn, DecodedInsn *out)
     out->op = DP_ADD;
     out->rd = rd;
     out->rn = ARMV8M_REG_SP;
-    out->imm = imm8 << 2;  /* Word-aligned */
+    out->imm = (uint32_t)imm8 << 2;  /* Word-aligned */
     out->set_flags = false;
 
     return 0;
@@ -679,7 +684,7 @@ static int decode_misc(uint16_t insn, DecodedInsn *out)
         out->op = is_sub ? DP_SUB : DP_ADD;
         out->rd = ARMV8M_REG_SP;
         out->rn = ARMV8M_REG_SP;
-        out->imm = imm7 << 2;
+        out->imm = (uint32_t)imm7 << 2;
         out->set_flags = false;
         break;
     }

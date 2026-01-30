@@ -30,6 +30,7 @@
 #define SHCSR_USGFAULTENA   (1u << 18)
 #define SHCSR_MEMFAULTACT   (1u << 0)
 #define SHCSR_BUSFAULTACT   (1u << 1)
+#define SHCSR_HARDFAULTACT  (1u << 2)
 #define SHCSR_USGFAULTACT   (1u << 3)
 #define SHCSR_SVCALLACT     (1u << 7)
 #define SHCSR_MONITORACT    (1u << 8)
@@ -184,6 +185,11 @@ static bool is_exception_pending(const NVIC *nvic, int exc)
  */
 static bool is_exception_active(const NVIC *nvic, int exc)
 {
+    /* Handle HardFault (3) specially */
+    if (exc == ARMV8M_EXC_HARDFAULT) {
+        return (nvic->shcsr & SHCSR_HARDFAULTACT) != 0;
+    }
+
     if (exc >= 4 && exc <= 15) {
         uint32_t mask = 0;
         switch (exc) {
@@ -240,6 +246,16 @@ static bool is_irq_enabled(const NVIC *nvic, int irq)
  */
 static void set_exception_active(NVIC *nvic, int exc, bool active)
 {
+    /* Handle HardFault (3) specially */
+    if (exc == ARMV8M_EXC_HARDFAULT) {
+        if (active) {
+            nvic->shcsr |= SHCSR_HARDFAULTACT;
+        } else {
+            nvic->shcsr &= ~SHCSR_HARDFAULTACT;
+        }
+        return;
+    }
+
     if (exc >= 4 && exc <= 15) {
         uint32_t mask = 0;
         switch (exc) {

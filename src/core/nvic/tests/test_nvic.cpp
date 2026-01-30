@@ -592,16 +592,37 @@ TEST(AcknowledgeDeactivate, DeactivateSysTick)
     CHECK_FALSE(nvic.shcsr & (1u << 11));
 }
 
+TEST(AcknowledgeDeactivate, AcknowledgeHardFault)
+{
+    /* HardFault (exception 3) is valid and should set HARDFAULTACT (bit 2) */
+    armv8m_nvic_acknowledge(&nvic, ARMV8M_EXC_HARDFAULT);
+    CHECK_EQUAL(4u, nvic.shcsr);  /* Bit 2 = HARDFAULTACT */
+}
+
+TEST(AcknowledgeDeactivate, DeactivateHardFault)
+{
+    nvic.shcsr = 0xFFFFFFFF;
+    armv8m_nvic_deactivate(&nvic, ARMV8M_EXC_HARDFAULT);
+    /* Should clear bit 2 (HARDFAULTACT), leaving other bits intact */
+    CHECK_EQUAL(0xFFFFFFFBu, nvic.shcsr);
+}
+
 TEST(AcknowledgeDeactivate, AcknowledgeInvalidException)
 {
-    armv8m_nvic_acknowledge(&nvic, 3);
+    /* Exception 0 (none) and 1 (Reset) should not affect SHCSR */
+    armv8m_nvic_acknowledge(&nvic, 0);
+    CHECK_EQUAL(0u, nvic.shcsr);
+    armv8m_nvic_acknowledge(&nvic, 1);
     CHECK_EQUAL(0u, nvic.shcsr);
 }
 
 TEST(AcknowledgeDeactivate, DeactivateInvalidException)
 {
+    /* Exception 0 and 1 should not affect SHCSR */
     nvic.shcsr = 0xFFFFFFFF;
-    armv8m_nvic_deactivate(&nvic, 3);
+    armv8m_nvic_deactivate(&nvic, 0);
+    CHECK_EQUAL(0xFFFFFFFFu, nvic.shcsr);
+    armv8m_nvic_deactivate(&nvic, 1);
     CHECK_EQUAL(0xFFFFFFFFu, nvic.shcsr);
 }
 

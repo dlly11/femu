@@ -1102,7 +1102,7 @@ TEST(Thumb16Coverage, LsrImmZero)
 
     CHECK_EQUAL(2, result);
     CHECK_EQUAL(INSN_DATA_PROC_SHIFTED, insn.type);
-    CHECK_EQUAL(DP_LSR, insn.op);
+    CHECK_EQUAL(DP_MOV, insn.op);  /* Immediate shift uses MOV with shift applied */
     CHECK_EQUAL(32u, insn.shift_amount);
 }
 
@@ -1117,7 +1117,7 @@ TEST(Thumb16Coverage, AsrImmZero)
 
     CHECK_EQUAL(2, result);
     CHECK_EQUAL(INSN_DATA_PROC_SHIFTED, insn.type);
-    CHECK_EQUAL(DP_ASR, insn.op);
+    CHECK_EQUAL(DP_MOV, insn.op);  /* Immediate shift uses MOV with shift applied */
     CHECK_EQUAL(32u, insn.shift_amount);
 }
 
@@ -3141,8 +3141,8 @@ TEST(Thumb32Coverage, Pkh_PackHalfword)
     int result = armv8m_decode(code, TEST_PC, &insn);
 
     CHECK_EQUAL(4, result);
-    CHECK_EQUAL(INSN_DATA_PROC_SHIFTED, insn.type);
-    CHECK_EQUAL(DP_ORR, insn.op);
+    /* PKH is correctly decoded as INSN_PACK, not INSN_DATA_PROC_SHIFTED */
+    CHECK_EQUAL(INSN_PACK, insn.type);
     CHECK_EQUAL(REG_R0, insn.rd);
     CHECK_EQUAL(REG_R1, insn.rn);
     CHECK_EQUAL(REG_R2, insn.rm);
