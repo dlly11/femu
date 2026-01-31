@@ -403,7 +403,7 @@ TEST(Saturate, UsatNoSaturation)
     insn.type = INSN_SATURATE;
     insn.rd = 0;
     insn.rn = 1;
-    insn.imm = 7;  /* width = 8, max = 255 */
+    insn.imm = 8;  /* sat_imm = 8, range [0, 255] */
     insn.is_signed = false;
     insn.shift_type = SHIFT_LSL;
     insn.shift_amount = 0;
@@ -423,7 +423,7 @@ TEST(Saturate, UsatPositiveSaturation)
     insn.type = INSN_SATURATE;
     insn.rd = 0;
     insn.rn = 1;
-    insn.imm = 7;  /* width = 8, max = 255 */
+    insn.imm = 8;  /* sat_imm = 8, range [0, 255] */
     insn.is_signed = false;
     insn.shift_type = SHIFT_LSL;
     insn.shift_amount = 0;
@@ -443,7 +443,7 @@ TEST(Saturate, UsatNegativeToZero)
     insn.type = INSN_SATURATE;
     insn.rd = 0;
     insn.rn = 1;
-    insn.imm = 7;  /* width = 8 */
+    insn.imm = 8;  /* sat_imm = 8, range [0, 255] */
     insn.is_signed = false;
     insn.shift_type = SHIFT_LSL;
     insn.shift_amount = 0;

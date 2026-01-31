@@ -3181,16 +3181,14 @@ TEST(Thumb32Coverage, DataProcShiftedReg_ViaOp1Equals3)
 TEST(Thumb32Coverage, LdrhW_LoadHalfword)
 {
     /*
-     * LDRH.W R0, [R1, #imm] - Load unsigned halfword
+     * LDRH.W R0, [R1, #0x80] - Load unsigned halfword with 12-bit immediate (T2 encoding)
      *
-     * Encoding:
-     *   hw1 = 0xF8B1: load (L=1), size=1 (halfword), Rn=R1
-     *   hw2 = 0x0C80: Rt=R0, P=1,U=1,W=0, imm8=0x80
-     *
-     * Note: For 8-bit immediate encoding, bits[10:8] of hw2 contain P,U,W flags
+     * Encoding T2 (12-bit imm):
+     *   hw1 = 0xF8B1: 11111 000 1 0 11 0001 = load halfword, Rn=R1, bit7=1 (add)
+     *   hw2 = 0x0080: Rt=R0, imm12=0x80
      */
     const uint16_t hw1 = 0xF8B1;
-    const uint16_t hw2 = 0x0E80; /* Rt=R0, P=1, U=1, W=1, imm8=0x80 */
+    const uint16_t hw2 = 0x0080;
     uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
     int result = armv8m_decode(code, TEST_PC, &insn);
@@ -3201,7 +3199,7 @@ TEST(Thumb32Coverage, LdrhW_LoadHalfword)
     CHECK_EQUAL(REG_R0, insn.rt);
     CHECK_EQUAL(REG_R1, insn.rn);
     CHECK_EQUAL(0x80u, insn.imm);
-    CHECK_TRUE(insn.add);  /* U=1 means add offset */
+    CHECK_TRUE(insn.add);  /* 12-bit imm is always add */
 }
 
 TEST(Thumb32Coverage, LoadStore_ViaOp1Equals3_Op1Path)
@@ -3351,14 +3349,14 @@ TEST(Thumb32Coverage, StrImm12_Store12BitOffset)
 TEST(Thumb32Coverage, StrhW_StoreHalfword)
 {
     /*
-     * STRH.W R0, [R1, #imm] - Store halfword
+     * STRH.W R0, [R1, #0x80] - Store halfword with 12-bit immediate (T3 encoding)
      *
-     * Encoding:
-     *   hw1 = 0xF8A1: store, size=1 (halfword), Rn=R1
-     *   hw2 = 0x0E80: Rt=R0, P=1, U=1, W=1, imm8=0x80
+     * Encoding T3 (12-bit imm):
+     *   hw1 = 0xF8A1: 11111 000 1 0 10 0001 = store halfword, Rn=R1, bit7=1 (add)
+     *   hw2 = 0x0080: Rt=R0, imm12=0x80
      */
     const uint16_t hw1 = 0xF8A1;
-    const uint16_t hw2 = 0x0E80;
+    const uint16_t hw2 = 0x0080;
     uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
     int result = armv8m_decode(code, TEST_PC, &insn);

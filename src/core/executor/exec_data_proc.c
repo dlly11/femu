@@ -205,6 +205,12 @@ static int exec_dp_operation(Executor *exec, DataProcOp op,
             set_flags = true;  /* TST always sets flags */
             break;
 
+        case DP_TEQ:
+            result = rn_val ^ op2;
+            write_result = false;
+            set_flags = true;  /* TEQ always sets flags */
+            break;
+
         case DP_RSB:
             /* Reverse subtract: op2 - rn_val */
             result = sub_with_flags(op2, rn_val, &carry, &overflow);
@@ -280,10 +286,28 @@ int exec_data_proc_imm(Executor *exec, const DecodedInsn *insn)
 {
     uint32_t rn_val = 0;
     bool shift_carry = (exec->cpu.xpsr >> 29) & 1;
+    uint32_t imm = insn->imm;
 
     /* For most operations, Rn is a source. For MOV/MVN, it's not used. */
     if (insn->rn != ARMV8M_REG_NONE) {
         rn_val = get_reg(exec, insn->rn);
+
+        /* For ADR (ADD/SUB with PC), use Align(PC, 4) per ARM spec.
+         * This applies when rn is PC and op is ADD or SUB with immediate. */
+        if (insn->rn == ARMV8M_REG_PC &&
+            (insn->op == DP_ADD || insn->op == DP_SUB)) {
+            rn_val &= ~3u;  /* Align to 4-byte boundary */
+        }
+    }
+
+    /* Handle MOVT (move top halfword): DP_MOV with rn != NONE.
+     * MOVT preserves the bottom 16 bits of the destination and
+     * replaces the top 16 bits with the immediate. */
+    if (insn->op == DP_MOV && insn->rn != ARMV8M_REG_NONE) {
+        /* MOVT: result = (Rd & 0xFFFF) | (imm16 << 16)
+         * Note: decoder sets imm = imm16 << 16, rn = rd */
+        imm = (rn_val & 0xFFFF) | (insn->imm & 0xFFFF0000);
+        rn_val = 0;  /* Don't use rn_val in exec_dp_operation */
     }
 
     /* In ARM, 16-bit Thumb instructions inside an IT block do NOT update
@@ -295,7 +319,7 @@ int exec_data_proc_imm(Executor *exec, const DecodedInsn *insn)
     }
 
     return exec_dp_operation(exec, (DataProcOp)insn->op,
-                             insn->rd, rn_val, insn->imm,
+                             insn->rd, rn_val, imm,
                              set_flags, shift_carry);
 }
 
@@ -939,8 +963,13 @@ int exec_saturate(Executor *exec, const DecodedInsn *insn)
         }
     }
 
-    /* Saturation bit width: imm encodes width-1, so width is imm+1 */
-    uint8_t sat_width = (insn->imm & 0x1F) + 1;
+    /* Saturation bit width:
+     * - SSAT: imm encodes width-1, so width is imm+1 (range 1-32)
+     * - USAT: imm is the width directly (range 0-31) */
+    uint8_t sat_width = (insn->imm & 0x1F);
+    if (insn->is_signed) {
+        sat_width += 1;  /* SSAT encodes width-1 */
+    }
     uint32_t result;
     bool saturated = false;
 

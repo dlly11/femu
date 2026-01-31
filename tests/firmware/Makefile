@@ -13,7 +13,10 @@ LDFLAGS = -T link.ld
 
 # Test programs
 TESTS = test_simple test_arithmetic test_memory test_branch \
-        test_bitfield test_multiply test_stack test_it_block
+        test_bitfield test_multiply test_stack test_it_block \
+        test_compare test_extend test_load_store_misc test_move \
+        test_shift_rotate test_saturate test_exclusive test_table_branch \
+        test_adr test_system test_exception test_misc_alu
 
 all: $(addsuffix .elf,$(TESTS)) $(addsuffix .bin,$(TESTS))
 

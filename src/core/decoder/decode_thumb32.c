@@ -108,8 +108,9 @@ int decode_thumb32(uint16_t hw1, uint16_t hw2, uint32_t pc, DecodedInsn *out)
         return 0;
     }
 
-    /* Check for TT/TTT/TTA/TTAT (Test Target) - hw1[15:4] = 0xE84 */
-    if ((hw1 & 0xFFF0) == 0xE840) {
+    /* Check for TT/TTT/TTA/TTAT (Test Target) - hw1[15:4] = 0xE84, hw2[5:0] = 0x3F
+     * This distinguishes TT from STREX which shares the same hw1[15:4] pattern */
+    if ((hw1 & 0xFFF0) == 0xE840 && (hw2 & 0x3F) == 0x3F) {
         out->type = INSN_TT;
         out->rn = (uint8_t)(hw1 & 0xF);
         out->rd = (uint8_t)EXTRACT(hw2, 8, 4);
@@ -171,9 +172,16 @@ int decode_thumb32(uint16_t hw1, uint16_t hw2, uint32_t pc, DecodedInsn *out)
         }
 
         if (op == 0) {
-            /* Load/store single (multiple patterns) */
+            /* Load/store single (multiple patterns)
+             * op2 bits: [6]=hw1[10], [5]=hw1[9], [4]=hw1[8], [3]=hw1[7],
+             *           [2:1]=size (00=byte,01=half,10=word), [0]=L (load)
+             * Store: L=0, op2[0]=0 -> (op2 & 0x71) == 0x00
+             * Load byte: L=1, size=00 -> (op2 & 0x67) == 0x01
+             * Load half: L=1, size=01 -> (op2 & 0x67) == 0x03
+             * Load word: L=1, size=10 -> (op2 & 0x67) == 0x05 */
             if ((op2 & 0x71) == 0x00 || (op2 & 0x67) == 0x01 ||
-                (op2 & 0x67) == 0x03 || (op2 & 0x71) == 0x20) {
+                (op2 & 0x67) == 0x03 || (op2 & 0x67) == 0x05 ||
+                (op2 & 0x71) == 0x20) {
                 return decode_load_store_single(hw1, hw2, out);
             }
             if ((op2 & 0x71) == 0x10) {
@@ -192,8 +200,93 @@ int decode_thumb32(uint16_t hw1, uint16_t hw2, uint32_t pc, DecodedInsn *out)
             }
             if ((op2 & 0x70) == 0x20) {
                 /* Data processing (register) - op2 = 010xxxx */
-                /* Check for parallel add/sub or misc operations */
                 uint32_t op1_reg = EXTRACT(hw1, 4, 4);
+
+                /* Check for extend instructions: hw2[7:6] = 10 (value 2) AND op1_reg <= 5 */
+                if (EXTRACT(hw2, 6, 2) == 2 && op1_reg <= 5) {
+                    /* Signed/unsigned extend (and add) instructions:
+                     * SXTH/SXTAH (op1_reg=0), UXTH/UXTAH (op1_reg=1),
+                     * SXTB16/SXTAB16 (op1_reg=2), UXTB16/UXTAB16 (op1_reg=3),
+                     * SXTB/SXTAB (op1_reg=4), UXTB/UXTAB (op1_reg=5) */
+                    uint8_t rn = (uint8_t)EXTRACT(hw1, 0, 4);
+                    uint8_t rd = (uint8_t)EXTRACT(hw2, 8, 4);
+                    uint8_t rm = (uint8_t)EXTRACT(hw2, 0, 4);
+                    uint8_t rotate = (uint8_t)EXTRACT(hw2, 4, 2);
+
+                    out->type = INSN_EXTEND;
+                    out->rd = rd;
+                    out->rm = rm;
+                    out->rn = (rn == 0xF) ? ARMV8M_REG_NONE : rn;  /* Simple extend vs add */
+                    out->shift_amount = rotate * 8;  /* Rotation: 0, 8, 16, or 24 */
+
+                    /* Determine signed/unsigned and size from op1_reg */
+                    switch (op1_reg) {
+                    case 0:  /* SXTH/SXTAH */
+                        out->is_signed = true;
+                        out->access_size = ACCESS_HALF;
+                        break;
+                    case 1:  /* UXTH/UXTAH */
+                        out->is_signed = false;
+                        out->access_size = ACCESS_HALF;
+                        break;
+                    case 2:  /* SXTB16/SXTAB16 - dual byte to halfword */
+                        out->is_signed = true;
+                        out->access_size = ACCESS_BYTE;
+                        out->op = 1;  /* Mark as B16 variant */
+                        break;
+                    case 3:  /* UXTB16/UXTAB16 */
+                        out->is_signed = false;
+                        out->access_size = ACCESS_BYTE;
+                        out->op = 1;  /* Mark as B16 variant */
+                        break;
+                    case 4:  /* SXTB/SXTAB */
+                        out->is_signed = true;
+                        out->access_size = ACCESS_BYTE;
+                        break;
+                    default:  /* case 5: UXTB/UXTAB */
+                        out->is_signed = false;
+                        out->access_size = ACCESS_BYTE;
+                        break;
+                    }
+                    return 0;
+                }
+
+                /* Check for register-controlled shifts: hw2[15:12]=0xF, hw2[7:4]=0000 */
+                if (EXTRACT(hw2, 12, 4) == 0xF && EXTRACT(hw2, 4, 4) == 0) {
+                    /* LSL.W, LSR.W, ASR.W, ROR.W by register amount
+                     * hw1[7:5] = shift type: 000=LSL, 001=LSR, 010=ASR, 011=ROR
+                     * hw1[4] = S bit
+                     * hw1[3:0] = Rm (source register - value to shift)
+                     * hw2[11:8] = Rd
+                     * hw2[3:0] = Rs (shift amount register)
+                     *
+                     * exec_dp_operation expects: shift(rn_val, shift_type, op2)
+                     * So rn = Rm (value), rm = Rs (amount) */
+                    uint8_t shift_type = (uint8_t)EXTRACT(hw1, 5, 3);
+                    uint8_t S = (uint8_t)BIT(hw1, 4);
+                    uint8_t rn = (uint8_t)EXTRACT(hw1, 0, 4);  /* Rm: value to shift */
+                    uint8_t rd = (uint8_t)EXTRACT(hw2, 8, 4);
+                    uint8_t rs = (uint8_t)EXTRACT(hw2, 0, 4);  /* Rs: shift amount */
+
+                    out->type = INSN_DATA_PROC_REG;
+                    out->rd = rd;
+                    out->rn = rn;  /* Value to shift (Rm in encoding) */
+                    out->rm = rs;  /* Shift amount register (Rs) */
+                    out->set_flags = (S != 0);
+
+                    /* Map shift type to DataProcOp */
+                    switch (shift_type) {
+                    case 0: out->op = DP_LSL; break;
+                    case 1: out->op = DP_LSR; break;
+                    case 2: out->op = DP_ASR; break;
+                    case 3: out->op = DP_ROR; break;
+                    default:
+                        return ARMV8M_ERR_UNDEFINED_INSN;
+                    }
+                    return 0;
+                }
+
+                /* Check for parallel add/sub or misc operations */
                 if (op1_reg >= 0x4 && op1_reg <= 0x7) {
                     /* Parallel add/sub: op1 = 01xx */
                     return decode_parallel_add_sub(hw1, hw2, out);
@@ -463,7 +556,8 @@ static int decode_data_proc_modified_imm(uint16_t hw1, uint16_t hw2, DecodedInsn
         break;
     case 0x4:
         if (rd == 0xF && S) {
-            out->op = DP_TST;  /* Actually TEQ - test equivalence */
+            /* TEQ - test equivalence (XOR without writing result) */
+            out->op = DP_TEQ;
             out->rd = ARMV8M_REG_NONE;
         } else {
             out->op = DP_EOR;
@@ -694,7 +788,7 @@ static int decode_data_proc_shifted_reg(uint16_t hw1, uint16_t hw2, DecodedInsn 
         break;
     case 0x4:
         if (rd == 0xF && S) {
-            out->op = DP_TST;  /* TEQ */
+            out->op = DP_TEQ;  /* TEQ - test equivalence (XOR) */
             out->rd = ARMV8M_REG_NONE;
         } else {
             out->op = DP_EOR;
@@ -744,7 +838,6 @@ static int decode_data_proc_shifted_reg(uint16_t hw1, uint16_t hw2, DecodedInsn 
 
 static int decode_load_store_single(uint16_t hw1, uint16_t hw2, DecodedInsn *out)
 {
-    uint32_t op2 = EXTRACT(hw2, 6, 6);
     uint8_t rn = (uint8_t)EXTRACT(hw1, 0, 4);
     uint8_t rt = (uint8_t)EXTRACT(hw2, 12, 4);
 
@@ -768,38 +861,39 @@ static int decode_load_store_single(uint16_t hw1, uint16_t hw2, DecodedInsn *out
     out->is_signed = BIT(hw1, 8) != 0;
 
     if (rn == 0xF) {
-        /* PC-relative (literal) */
+        /* PC-relative (literal) - always pre-indexed, no writeback */
         uint32_t imm12 = EXTRACT(hw2, 0, 12);
         out->type = is_load ? INSN_LOAD_LITERAL : INSN_STORE_IMM;
         out->imm = imm12;
-        out->add = BIT(hw1, 7) == 0;  /* U bit */
+        out->add = BIT(hw1, 7) != 0;  /* U bit: 1 = add, 0 = subtract */
+        out->index = true;
+        out->pre_index = true;
+        out->writeback = false;
+        out->wback = false;
         return 0;
     }
 
-    if (op2 == 0) {
-        /* Register offset */
-        uint8_t rm = (uint8_t)EXTRACT(hw2, 0, 4);
-        uint8_t shift = (uint8_t)EXTRACT(hw2, 4, 2);
-
-        out->type = is_load ? INSN_LOAD_REG : INSN_STORE_REG;
-        out->rm = rm;
-        out->shift_type = SHIFT_LSL;
-        out->shift_amount = shift;
-        return 0;
-    }
-
-    /* Immediate offset variants */
-    if ((op2 & 0x24) == 0x24) {
-        /* Immediate 12-bit unsigned (positive offset) */
+    /* Check hw1[7] (U bit) to distinguish encoding types:
+     * - U=1 (bit7=1): 12-bit unsigned immediate (T1 encoding for signed loads)
+     * - U=0 (bit7=0): Register offset or 8-bit immediate modes */
+    if (BIT(hw1, 7) != 0) {
+        /* 12-bit positive immediate offset - always pre-indexed, no writeback */
         uint32_t imm12 = EXTRACT(hw2, 0, 12);
         out->type = is_load ? INSN_LOAD_IMM : INSN_STORE_IMM;
         out->imm = imm12;
         out->add = true;
+        out->index = true;       /* Indexed addressing */
+        out->pre_index = true;   /* Offset added before access */
+        out->writeback = false;  /* No writeback for this encoding */
+        out->wback = false;
         return 0;
     }
 
-    /* 8-bit immediate with various modes */
-    {
+    /* U=0: Distinguish between different encoding forms using hw2[11]:
+     * - hw2[11]=1: T4 encoding - 8-bit immediate with P/U/W bits
+     * - hw2[11]=0: T2 encoding - register offset or unprivileged access */
+    if (BIT(hw2, 11) != 0) {
+        /* T4 encoding: 8-bit immediate with P/U/W mode bits */
         uint8_t imm8 = (uint8_t)EXTRACT(hw2, 0, 8);
         uint8_t P = (uint8_t)BIT(hw2, 10);
         uint8_t U = (uint8_t)BIT(hw2, 9);
@@ -812,6 +906,31 @@ static int decode_load_store_single(uint16_t hw1, uint16_t hw2, DecodedInsn *out
         out->writeback = (W != 0);
         out->wback = (W != 0);
         out->pre_index = (P != 0);
+        return 0;
+    }
+
+    /* T2 encoding (hw2[11]=0): Check hw2[11:6] for register vs unprivileged
+     * Register offset: hw2[11:6] = 000000
+     * Unprivileged (LDRT, etc.): hw2[11:6] = 1110xx */
+    if (EXTRACT(hw2, 6, 6) == 0) {
+        /* Register offset: STR/LDR Rt, [Rn, Rm, LSL #imm2] */
+        uint8_t rm = (uint8_t)EXTRACT(hw2, 0, 4);
+        uint8_t shift = (uint8_t)EXTRACT(hw2, 4, 2);
+
+        out->type = is_load ? INSN_LOAD_REG : INSN_STORE_REG;
+        out->rm = rm;
+        out->shift_type = SHIFT_LSL;
+        out->shift_amount = shift;
+        return 0;
+    }
+
+    /* Unprivileged access (LDRT, STRT, etc.) - 8-bit immediate, no pre/post */
+    {
+        uint8_t imm8 = (uint8_t)EXTRACT(hw2, 0, 8);
+        out->type = is_load ? INSN_LOAD_IMM : INSN_STORE_IMM;
+        out->imm = imm8;
+        out->add = true;
+        /* Note: Unprivileged access should set a flag, but we treat as normal for now */
     }
 
     return 0;
@@ -834,8 +953,11 @@ static int decode_load_store_dual(uint16_t hw1, uint16_t hw2, DecodedInsn *out)
     out->rn = rn;
     out->access_size = ACCESS_WORD;
 
-    /* Table branch */
-    if (op1 == 0x0 && op2 == 0x1) {
+    /* Table branch: TBB/TBH
+     * Encoding: hw1 = 0xE8D0 | Rn, hw2 = 0xF000 | (H << 4) | Rm
+     * op1 (bits[8:7]) = 01, op2 (bits[5:4]) = 01
+     * Key: hw2[15:12] = 0xF distinguishes TBB/TBH from LDREXB/LDREXH */
+    if (op1 == 0x1 && op2 == 0x1 && rt == 0xF) {
         uint8_t rm = (uint8_t)EXTRACT(hw2, 0, 4);
         bool is_tbh = BIT(hw2, 4) != 0;
 
@@ -846,35 +968,41 @@ static int decode_load_store_dual(uint16_t hw1, uint16_t hw2, DecodedInsn *out)
     }
 
     /* Load/store exclusive (word, byte, halfword)
-     * LDREX/STREX:   op1[0]=L (load), op2[1:0] pattern varies
-     * LDREXB/STREXB: hw2[5:4]=00, hw2[7:6]=01 (byte)
-     * LDREXH/STREXH: hw2[5:4]=01, hw2[7:6]=01 (halfword)
-     * LDREX/STREX:   hw2[5:4]=1x (word) or standard pattern */
+     * Encoding distinction is based on hw1[7] (U bit in op1):
+     * - hw1[7]=0: LDREX/STREX (word) with imm8 offset, Rd at hw2[11:8]
+     * - hw1[7]=1: LDREXB/STREXB or LDREXH/STREXH, Rd at hw2[3:0] */
     if ((op1 & 0x2) == 0x0 && (op2 & 0x2) == 0x0) {
-        bool is_load = BIT(op1, 0) != 0;
+        bool is_load = BIT(hw1, 4) != 0;
         uint8_t imm8 = (uint8_t)EXTRACT(hw2, 0, 8);
-        uint8_t hw2_bits = (uint8_t)EXTRACT(hw2, 4, 4);  /* bits [7:4] */
 
         if (is_load) {
             out->type = INSN_LOAD_EXCLUSIVE;
         } else {
             out->type = INSN_STORE_EXCLUSIVE;
-            out->rd = (uint8_t)EXTRACT(hw2, 0, 4);  /* Status register */
         }
 
-        /* Determine access size from hw2[5:4]:
-         * 00 = byte (LDREXB/STREXB), 01 = halfword (LDREXH/STREXH),
-         * 1x = word (LDREX/STREX) */
-        uint8_t size_bits = (hw2_bits >> 0) & 0x3;  /* bits [5:4] from hw2 */
-        if (size_bits == 0x0) {
-            out->access_size = ACCESS_BYTE;
-            out->imm = 0;  /* No offset for byte/half exclusive */
-        } else if (size_bits == 0x1) {
-            out->access_size = ACCESS_HALF;
-            out->imm = 0;
-        } else {
+        /* Check hw1[7] to determine encoding variant:
+         * hw1[7]=0: Word exclusive (LDREX/STREX) with scaled imm8 offset
+         * hw1[7]=1: Byte/half exclusive, size from hw2[5:4] (00=byte, 01=half) */
+        if (BIT(hw1, 7) == 0) {
+            /* Word exclusive: LDREX/STREX - Rd at hw2[11:8] */
             out->access_size = ACCESS_WORD;
             out->imm = (uint32_t)imm8 << 2;
+            if (!is_load) {
+                out->rd = rt2;  /* Status register at bits [11:8] for word */
+            }
+        } else {
+            /* Byte or halfword exclusive - Rd at hw2[3:0] */
+            uint8_t size_bits = (uint8_t)EXTRACT(hw2, 4, 2);  /* bits [5:4] */
+            if (size_bits == 0x0) {
+                out->access_size = ACCESS_BYTE;
+            } else {
+                out->access_size = ACCESS_HALF;
+            }
+            out->imm = 0;  /* No offset for byte/half exclusive */
+            if (!is_load) {
+                out->rd = (uint8_t)EXTRACT(hw2, 0, 4);  /* Status register at bits [3:0] */
+            }
         }
         out->add = true;
         return 0;

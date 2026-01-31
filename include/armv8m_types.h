@@ -207,6 +207,7 @@ typedef enum {
     DP_SBC,
     DP_ROR,
     DP_TST,
+    DP_TEQ,
     DP_RSB,
     DP_CMP,
     DP_CMN,

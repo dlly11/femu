@@ -583,7 +583,10 @@ int exec_it(Executor *exec, const DecodedInsn *insn)
 
 int exec_svc(Executor *exec, const DecodedInsn *insn)
 {
-    (void)insn;  /* SVC number is in insn->imm, but not used for entry */
+    /* Advance PC to point to the next instruction before exception entry.
+     * For SVC, the return address saved on the exception frame should be
+     * the instruction following the SVC, not the SVC itself. */
+    exec->cpu.r[ARMV8M_REG_PC] += insn->size;
 
     /* Trigger SVCall exception */
     return armv8m_exception_entry(exec, ARMV8M_EXC_SVCALL);

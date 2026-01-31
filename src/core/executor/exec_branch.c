@@ -29,11 +29,16 @@ static uint32_t mem_read(Executor *exec, uint32_t addr, uint8_t size, bool *faul
 
 /**
  * Get register value.
+ * Note: Reading PC returns current instruction address + 4 per ARM spec.
  */
 static uint32_t get_reg(const Executor *exec, uint8_t reg)
 {
     if (reg == ARMV8M_REG_SP) {
         return armv8m_get_sp(&exec->cpu);
+    }
+    if (reg == ARMV8M_REG_PC) {
+        /* ARM Thumb: reading PC returns current instruction + 4 */
+        return exec->cpu.r[ARMV8M_REG_PC] + 4;
     }
     return exec->cpu.r[reg];
 }
@@ -192,7 +197,8 @@ int exec_table_branch(Executor *exec, const DecodedInsn *insn)
         return ARMV8M_ERR_BUS_FAULT;
     }
 
-    /* Branch target = PC + 4 + offset*2 */
+    /* Branch target = (PC+4) + 2*offset
+     * Per ARM spec, target is always relative to PC+4 */
     uint32_t target = pc + 4 + (offset * 2);
     exec->cpu.r[ARMV8M_REG_PC] = target & ~1u;
 
