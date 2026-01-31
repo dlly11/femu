@@ -231,7 +231,7 @@ TEST(DSP_Parallel, SADD16_Basic)
     exec.cpu.r[0] = 0x00100020;  /* [16, 32] */
     exec.cpu.r[1] = 0x00050010;  /* [5, 16] */
     insn.type = INSN_PARALLEL;
-    insn.op = 0x40;  /* Signed regular 16-bit add */
+    insn.op = 0x80;  /* Signed regular 16-bit add: is_16bit=1, type=0, subop=0 */
     insn.rd = 2;
     insn.rn = 0;
     insn.rm = 1;
@@ -246,7 +246,7 @@ TEST(DSP_Parallel, SSUB16_Basic)
     exec.cpu.r[0] = 0x00200020;  /* [32, 32] */
     exec.cpu.r[1] = 0x00050010;  /* [5, 16] */
     insn.type = INSN_PARALLEL;
-    insn.op = 0x43;  /* Signed regular 16-bit sub */
+    insn.op = 0x82;  /* Signed regular 16-bit sub: is_16bit=1, type=0, subop=2 */
     insn.rd = 2;
     insn.rn = 0;
     insn.rm = 1;
@@ -261,7 +261,7 @@ TEST(DSP_Parallel, SADD8_Basic)
     exec.cpu.r[0] = 0x10203040;  /* [16, 32, 48, 64] */
     exec.cpu.r[1] = 0x01020304;  /* [1, 2, 3, 4] */
     insn.type = INSN_PARALLEL;
-    insn.op = 0x44;  /* Signed regular 8-bit add */
+    insn.op = 0x00;  /* Signed regular 8-bit add: is_16bit=0, type=0, subop=0 */
     insn.rd = 2;
     insn.rn = 0;
     insn.rm = 1;
@@ -276,7 +276,7 @@ TEST(DSP_Parallel, UADD16_Basic)
     exec.cpu.r[0] = 0xFF000100;  /* [255<<8, 256] */
     exec.cpu.r[1] = 0x01000100;  /* [256, 256] */
     insn.type = INSN_PARALLEL;
-    insn.op = 0x70;  /* Unsigned regular 16-bit add */
+    insn.op = 0xC0;  /* Unsigned regular 16-bit add: is_16bit=1, type=4, subop=0 */
     insn.rd = 2;
     insn.rn = 0;
     insn.rm = 1;
@@ -375,7 +375,7 @@ TEST_GROUP(DSP_Pack)
 
 TEST(DSP_Pack, PKHBT_NoShift)
 {
-    /* PKHBT: Rd[15:0] = Rn[15:0], Rd[31:16] = Rm[31:16] */
+    /* PKHBT: Rd[15:0] = Rn[15:0], Rd[31:16] = (Rm << 0)[15:0] */
     exec.cpu.r[0] = 0xAABBCCDD;  /* Rn */
     exec.cpu.r[1] = 0x11223344;  /* Rm */
     insn.type = INSN_PACK;
@@ -387,12 +387,13 @@ TEST(DSP_Pack, PKHBT_NoShift)
     insn.shift_amount = 0;
 
     CHECK_EQUAL(ARMV8M_OK, armv8m_exec_insn(&exec, &insn));
-    CHECK_EQUAL(0x1122CCDDu, exec.cpu.r[2]);
+    /* Rd[15:0] = 0xCCDD, Rd[31:16] = Rm[15:0] = 0x3344 */
+    CHECK_EQUAL(0x3344CCDDu, exec.cpu.r[2]);
 }
 
 TEST(DSP_Pack, PKHBT_WithShift)
 {
-    /* PKHBT: Rd[15:0] = Rn[15:0], Rd[31:16] = (Rm << shift)[31:16] */
+    /* PKHBT: Rd[15:0] = Rn[15:0], Rd[31:16] = (Rm << shift)[15:0] */
     exec.cpu.r[0] = 0xAABBCCDD;  /* Rn */
     exec.cpu.r[1] = 0x00112233;  /* Rm */
     insn.type = INSN_PACK;
@@ -404,8 +405,8 @@ TEST(DSP_Pack, PKHBT_WithShift)
     insn.shift_amount = 8;
 
     CHECK_EQUAL(ARMV8M_OK, armv8m_exec_insn(&exec, &insn));
-    /* Rm << 8 = 0x11223300, take top half = 0x1122 */
-    CHECK_EQUAL(0x1122CCDDu, exec.cpu.r[2]);
+    /* Rm << 8 = 0x11223300, take LOW half = 0x3300 */
+    CHECK_EQUAL(0x3300CCDDu, exec.cpu.r[2]);
 }
 
 TEST(DSP_Pack, PKHTB_NoShift)
@@ -482,7 +483,7 @@ TEST(DSP_GEFlags, SADD16_SetsGEFlags)
     exec.cpu.r[0] = 0x00010001;  /* [1, 1] */
     exec.cpu.r[1] = 0x00010001;  /* [1, 1] */
     insn.type = INSN_PARALLEL;
-    insn.op = 0x40;  /* Signed regular 16-bit add */
+    insn.op = 0x80;  /* Signed regular 16-bit add: is_16bit=1, type=0, subop=0 */
     insn.rd = 2;
     insn.rn = 0;
     insn.rm = 1;
@@ -497,7 +498,7 @@ TEST(DSP_GEFlags, SSUB16_ClearsGEFlags)
     exec.cpu.r[0] = 0x00010001;  /* [1, 1] */
     exec.cpu.r[1] = 0x00020002;  /* [2, 2] */
     insn.type = INSN_PARALLEL;
-    insn.op = 0x43;  /* Signed regular 16-bit sub */
+    insn.op = 0x82;  /* Signed regular 16-bit sub: is_16bit=1, type=0, subop=2 */
     insn.rd = 2;
     insn.rn = 0;
     insn.rm = 1;
@@ -512,7 +513,7 @@ TEST(DSP_GEFlags, SADD8_SetsGEFlagsPerByte)
     exec.cpu.r[0] = 0x01010101;  /* [1, 1, 1, 1] */
     exec.cpu.r[1] = 0x01010101;  /* [1, 1, 1, 1] */
     insn.type = INSN_PARALLEL;
-    insn.op = 0x44;  /* Signed regular 8-bit add */
+    insn.op = 0x00;  /* Signed regular 8-bit add: is_16bit=0, type=0, subop=0 */
     insn.rd = 2;
     insn.rn = 0;
     insn.rm = 1;
@@ -527,7 +528,7 @@ TEST(DSP_GEFlags, SADD8_MixedResults)
     exec.cpu.r[0] = 0x7F0101FF;  /* [127, 1, 1, -1] */
     exec.cpu.r[1] = 0x01010101;  /* [1, 1, 1, 1] */
     insn.type = INSN_PARALLEL;
-    insn.op = 0x44;  /* Signed regular 8-bit add */
+    insn.op = 0x00;  /* Signed regular 8-bit add: is_16bit=0, type=0, subop=0 */
     insn.rd = 2;
     insn.rn = 0;
     insn.rm = 1;

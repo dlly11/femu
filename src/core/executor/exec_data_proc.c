@@ -124,12 +124,17 @@ static uint32_t apply_shift(uint32_t value, ShiftType type, uint8_t amount,
 }
 
 /**
- * Get register value, handling SP specially for R13.
+ * Get register value, handling SP and PC specially.
+ * Note: Reading PC returns current instruction address + 4 per ARM spec.
  */
 static uint32_t get_reg(const Executor *exec, uint8_t reg)
 {
     if (reg == ARMV8M_REG_SP) {
         return armv8m_get_sp(&exec->cpu);
+    }
+    if (reg == ARMV8M_REG_PC) {
+        /* ARM Thumb: reading PC returns current instruction + 4 */
+        return exec->cpu.r[ARMV8M_REG_PC] + 4;
     }
     return exec->cpu.r[reg];
 }
@@ -1187,23 +1192,30 @@ int exec_parallel(Executor *exec, const DecodedInsn *insn)
     }
 
     /* Decode operation type from insn->op:
-     * bits[7:4] = type from hw1[7:4]
-     * bits[3:2] = width (0=16-bit, 1=8-bit)
-     * bits[1:0] = operation (add, sub, asx, sax)
+     * bit[7] = is_16bit (1=16-bit, 0=8-bit)
+     * bits[6:4] = type (TTT from ARM encoding)
+     *   000 = S (signed regular)
+     *   001 = Q (signed saturating)
+     *   010 = SH (signed halving)
+     *   100 = U (unsigned regular)
+     *   101 = UQ (unsigned saturating)
+     *   110 = UH (unsigned halving)
+     * bits[1:0] = sub-operation (add=0, asx=1, sax=2, sub=3)
      */
-    uint8_t type = (insn->op >> 4) & 0xF;
-    uint8_t width = (insn->op >> 2) & 0x3;
+    bool is_16bit = (insn->op >> 7) & 0x1;
+    uint8_t type = (insn->op >> 4) & 0x7;  /* TTT field */
     uint8_t subop = insn->op & 0x3;
 
-    /* Determine operation characteristics:
-     * type & 0x1 = 0 for signed, 1 for unsigned (in some encodings)
-     * But actual encoding from ARM is more complex
+    /* Determine operation characteristics from TTT:
+     * bit 2 (0x4) = unsigned
+     * bit 1 (0x2) = halving
+     * bit 0 (0x1) = saturating (when not halving)
      */
-    bool is_unsigned = (type >= 0x7);
-    bool is_halving = ((type & 0x2) != 0);
+    bool is_unsigned = (type & 0x4) != 0;
+    bool is_halving = (type & 0x2) != 0;
     bool is_saturating = ((type & 0x1) != 0) && !is_halving;
 
-    if (width == 0) {
+    if (is_16bit) {
         /* 16-bit parallel operations */
         int32_t lo_n = (int16_t)(rn_val & 0xFFFF);
         int32_t hi_n = (int16_t)((rn_val >> 16) & 0xFFFF);
@@ -1228,13 +1240,13 @@ int exec_parallel(Executor *exec, const DecodedInsn *insn)
             res_lo = lo_n - hi_m;
             res_hi = hi_n + lo_m;
             break;
-        case 2: /* SAX (Subtract/Add Exchange) */
-            res_lo = lo_n + hi_m;
-            res_hi = hi_n - lo_m;
-            break;
-        case 3: /* SUB16 */
+        case 2: /* SUB16 */
             res_lo = lo_n - lo_m;
             res_hi = hi_n - hi_m;
+            break;
+        case 3: /* SAX (Subtract/Add Exchange) */
+            res_lo = lo_n + hi_m;
+            res_hi = hi_n - lo_m;
             break;
         default:
             return ARMV8M_ERR_UNDEFINED_INSN;
@@ -1365,12 +1377,12 @@ int exec_pack(Executor *exec, const DecodedInsn *insn)
 
     if (insn->op == 0) {
         /* PKHBT: Pack halfword bottom-top
-         * Rd[15:0] = Rn[15:0], Rd[31:16] = Rm[31:16] (after shift) */
-        result = (rn_val & 0xFFFF) | (shifted_rm & 0xFFFF0000);
+         * Rd[15:0] = Rn[15:0], Rd[31:16] = (Rm << shift)[15:0] */
+        result = (rn_val & 0xFFFF) | ((shifted_rm & 0xFFFF) << 16);
     } else {
         /* PKHTB: Pack halfword top-bottom
-         * Rd[15:0] = Rm[15:0] (after shift), Rd[31:16] = Rn[31:16] */
-        result = (shifted_rm & 0xFFFF) | (rn_val & 0xFFFF0000);
+         * Rd[31:16] = Rn[31:16], Rd[15:0] = (Rm >> shift)[15:0] */
+        result = (rn_val & 0xFFFF0000) | (shifted_rm & 0xFFFF);
     }
 
     set_reg(exec, insn->rd, result);

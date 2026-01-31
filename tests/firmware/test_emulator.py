@@ -15,7 +15,7 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "python"))
 
-from femu.emulator import Emulator, EmulatorState
+from femu.emulator import Emulator, EmulatorConfig, EmulatorState
 
 
 def build_firmware():
@@ -33,7 +33,8 @@ def build_firmware():
     return True
 
 
-def run_test(name: str, elf_path: Path, expected: dict, max_cycles: int = 100000) -> bool:
+def run_test(name: str, elf_path: Path, expected: dict, max_cycles: int = 100000,
+              config: EmulatorConfig | None = None) -> bool:
     """
     Run a test firmware and verify results.
 
@@ -42,6 +43,7 @@ def run_test(name: str, elf_path: Path, expected: dict, max_cycles: int = 100000
         elf_path: Path to ELF file
         expected: Dictionary of {address: expected_value}
         max_cycles: Maximum cycles to execute
+        config: Optional emulator configuration
 
     Returns:
         True if test passed, False otherwise
@@ -51,7 +53,7 @@ def run_test(name: str, elf_path: Path, expected: dict, max_cycles: int = 100000
     print(f"{'='*60}")
 
     try:
-        emu = Emulator()
+        emu = Emulator(config=config)
         elf = emu.load_elf(elf_path)
 
         print(f"  Entry: 0x{elf.entry_point:08x}")
@@ -97,7 +99,7 @@ def run_test(name: str, elf_path: Path, expected: dict, max_cycles: int = 100000
 
 def test_simple():
     """Test simple counter loop."""
-    return run_test(
+    assert run_test(
         "Simple Counter",
         SCRIPT_DIR / "test_simple.elf",
         {
@@ -109,7 +111,7 @@ def test_simple():
 
 def test_arithmetic():
     """Test arithmetic operations."""
-    return run_test(
+    assert run_test(
         "Arithmetic Operations",
         SCRIPT_DIR / "test_arithmetic.elf",
         {
@@ -129,7 +131,7 @@ def test_arithmetic():
 
 def test_memory():
     """Test memory operations."""
-    return run_test(
+    assert run_test(
         "Memory Operations",
         SCRIPT_DIR / "test_memory.elf",
         {
@@ -149,7 +151,7 @@ def test_memory():
 
 def test_branch():
     """Test branch operations."""
-    return run_test(
+    assert run_test(
         "Branch Operations",
         SCRIPT_DIR / "test_branch.elf",
         {
@@ -168,7 +170,7 @@ def test_branch():
 
 def test_bitfield():
     """Test bit manipulation operations."""
-    return run_test(
+    assert run_test(
         "Bit Field Operations",
         SCRIPT_DIR / "test_bitfield.elf",
         {
@@ -189,7 +191,7 @@ def test_bitfield():
 
 def test_multiply():
     """Test extended multiply operations."""
-    return run_test(
+    assert run_test(
         "Multiply Operations",
         SCRIPT_DIR / "test_multiply.elf",
         {
@@ -211,7 +213,7 @@ def test_multiply():
 
 def test_stack():
     """Test stack operations (PUSH/POP)."""
-    return run_test(
+    assert run_test(
         "Stack Operations",
         SCRIPT_DIR / "test_stack.elf",
         {
@@ -228,7 +230,7 @@ def test_stack():
 
 def test_it_block():
     """Test IT block conditional execution."""
-    return run_test(
+    assert run_test(
         "IT Block Operations",
         SCRIPT_DIR / "test_it_block.elf",
         {
@@ -247,7 +249,7 @@ def test_it_block():
 
 def test_compare():
     """Test comparison and test instructions."""
-    return run_test(
+    assert run_test(
         "Compare Operations",
         SCRIPT_DIR / "test_compare.elf",
         {
@@ -272,7 +274,7 @@ def test_compare():
 
 def test_extend():
     """Test sign/zero extension instructions."""
-    return run_test(
+    assert run_test(
         "Extension Operations",
         SCRIPT_DIR / "test_extend.elf",
         {
@@ -296,7 +298,7 @@ def test_extend():
 
 def test_load_store_misc():
     """Test load/store variations."""
-    return run_test(
+    assert run_test(
         "Load/Store Misc Operations",
         SCRIPT_DIR / "test_load_store_misc.elf",
         {
@@ -321,7 +323,7 @@ def test_load_store_misc():
 
 def test_move():
     """Test move instructions."""
-    return run_test(
+    assert run_test(
         "Move Operations",
         SCRIPT_DIR / "test_move.elf",
         {
@@ -345,7 +347,7 @@ def test_move():
 
 def test_shift_rotate():
     """Test shift and rotate edge cases."""
-    return run_test(
+    assert run_test(
         "Shift/Rotate Operations",
         SCRIPT_DIR / "test_shift_rotate.elf",
         {
@@ -372,7 +374,7 @@ def test_shift_rotate():
 
 def test_saturate():
     """Test saturating arithmetic instructions."""
-    return run_test(
+    assert run_test(
         "Saturating Operations",
         SCRIPT_DIR / "test_saturate.elf",
         {
@@ -394,7 +396,7 @@ def test_saturate():
 
 def test_exclusive():
     """Test exclusive access instructions."""
-    return run_test(
+    assert run_test(
         "Exclusive Access Operations",
         SCRIPT_DIR / "test_exclusive.elf",
         {
@@ -414,7 +416,7 @@ def test_exclusive():
 
 def test_table_branch():
     """Test table branch instructions."""
-    return run_test(
+    assert run_test(
         "Table Branch Operations",
         SCRIPT_DIR / "test_table_branch.elf",
         {
@@ -432,7 +434,7 @@ def test_table_branch():
 
 def test_adr():
     """Test PC-relative addressing instructions."""
-    return run_test(
+    assert run_test(
         "ADR Operations",
         SCRIPT_DIR / "test_adr.elf",
         {
@@ -445,7 +447,7 @@ def test_adr():
 
 def test_system():
     """Test system instructions."""
-    return run_test(
+    assert run_test(
         "System Operations",
         SCRIPT_DIR / "test_system.elf",
         {
@@ -466,7 +468,7 @@ def test_system():
 
 def test_exception():
     """Test exception handling."""
-    return run_test(
+    assert run_test(
         "Exception Handling",
         SCRIPT_DIR / "test_exception.elf",
         {
@@ -487,7 +489,7 @@ def test_exception():
 
 def test_misc_alu():
     """Test miscellaneous ALU instructions."""
-    return run_test(
+    assert run_test(
         "Misc ALU Operations",
         SCRIPT_DIR / "test_misc_alu.elf",
         {
@@ -507,6 +509,241 @@ def test_misc_alu():
             0x20000034: 0xFFFFFF00,   # BIC immediate
             0x20000038: 0xC0FFEE42,   # Done marker
         },
+    )
+
+
+def test_dsp():
+    """Test DSP parallel add/subtract instructions."""
+    assert run_test(
+        "DSP Parallel Operations",
+        SCRIPT_DIR / "test_dsp.elf",
+        {
+            0x20000000: 0x00700030,   # SADD16
+            0x20000004: 0x44332211,   # SADD8
+            0x20000008: 0x00200040,   # SSUB16
+            0x2000000C: 0x10203040,   # SSUB8
+            0x20000010: 0x00700030,   # UADD16
+            0x20000014: 0x44332211,   # UADD8
+            0x20000018: 0x00200040,   # USUB16
+            0x2000001C: 0x10203040,   # USUB8
+            0x20000020: 0x00380018,   # SHADD16
+            0x20000024: 0xE0483018,   # SHADD8 (signed: 0x80=-128, -128+64=-64, -64/2=-32=0xE0)
+            0x20000028: 0x00380018,   # UHADD16
+            0x2000002C: 0x60483018,   # UHADD8
+            0x20000030: 0x00200030,   # QADD16
+            0x20000034: 0x11223344,   # QADD8
+            0x20000038: 0x00300030,   # QSUB16
+            0x2000003C: 0x40302010,   # QSUB8
+            0x20000040: 0x000000FF,   # UQADD8 saturated
+            0x20000044: 0x00000000,   # UQSUB8 saturated
+            0x20000048: 0x80000000,   # SADD16 with negative
+            0x2000004C: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_pack():
+    """Test pack halfword instructions."""
+    assert run_test(
+        "Pack Halfword Operations",
+        SCRIPT_DIR / "test_pack.elf",
+        {
+            0x20000000: 0xBBBBAAAA,   # PKHBT basic
+            0x20000004: 0xBB00AAAA,   # PKHBT with LSL #8
+            0x20000008: 0xAAAABBBB,   # PKHTB with ASR #16
+            0x2000000C: 0xAAAABB22,   # PKHTB with ASR #8
+            0x20000010: 0xEF015678,   # PKHBT no shift
+            0x20000014: 0x0000AAAA,   # PKHBT LSL #16
+            0x20000018: 0xAAAABBBB,   # PKHTB ASR #16
+            0x2000001C: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_fpu():
+    """Test FPU (VFP) instructions."""
+    # FPU tests require FPU to be enabled
+    config = EmulatorConfig(has_fpu=True)
+    assert run_test(
+        "FPU Operations",
+        SCRIPT_DIR / "test_fpu.elf",
+        {
+            0x20000000: 0x3FC00000,   # VLDR (1.5)
+            0x20000004: 0x40800000,   # VADD (4.0)
+            0x20000008: 0x40200000,   # VSUB (2.5)
+            0x2000000C: 0x40C00000,   # VMUL (6.0)
+            0x20000010: 0x40800000,   # VDIV (4.0)
+            0x20000014: 1,            # VCMP equal
+            0x20000018: 0x42280000,   # VCVT int to float (42.0)
+            0x2000001C: 3,            # VCVT float to int (3)
+            0x20000020: 0xDEADBEEF,   # VMOV round trip
+            0x20000024: 0x40600000,   # VABS (3.5)
+            0x20000028: 0xC0200000,   # VNEG (-2.5)
+            0x2000002C: 0x40800000,   # VSQRT (4.0)
+            0x20000030: 1,            # VCMP less than
+            0x20000034: 1,            # VCMP greater than
+            0x20000038: 0xC0FFEE42,   # Done marker
+        },
+        config=config,
+    )
+
+
+def test_acquire_release():
+    """Test load-acquire/store-release instructions."""
+    assert run_test(
+        "Acquire/Release Operations",
+        SCRIPT_DIR / "test_acquire_release.elf",
+        {
+            0x20000000: 0x12345678,   # LDA result
+            0x20000004: 0x87654321,   # STL stored value
+            0x20000008: 0x000000AB,   # LDAB result
+            0x2000000C: 0x000000CD,   # STLB stored value
+            0x20000010: 0x0000CDEF,   # LDAH result
+            0x20000014: 0x0000ABCD,   # STLH stored value
+            0x20000018: 0xDEADBEEF,   # LDAEX result
+            0x2000001C: 0,            # STLEX success
+            0x20000020: 0xCAFEBABE,   # Value after STLEX
+            0x20000024: 0x00000042,   # LDAEXB result
+            0x20000028: 0,            # STLEXB success
+            0x2000002C: 0x00001234,   # LDAEXH result
+            0x20000030: 0,            # STLEXH success
+            0x20000034: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_sat_add():
+    """Test 32-bit saturating arithmetic instructions."""
+    assert run_test(
+        "Saturating Add/Sub Operations",
+        SCRIPT_DIR / "test_sat_add.elf",
+        {
+            0x20000000: 150,          # QADD no saturation
+            0x20000004: 0x7FFFFFFF,   # QADD positive overflow
+            0x20000008: 0x80000000,   # QADD negative overflow
+            0x2000000C: 70,           # QSUB no saturation
+            0x20000010: 0x7FFFFFFF,   # QSUB positive overflow
+            0x20000014: 0x80000000,   # QSUB negative overflow
+            0x20000018: 50,           # QDADD no saturation
+            0x2000001C: 0x7FFFFFFF,   # QDADD overflow
+            0x20000020: 60,           # QDSUB no saturation
+            0x20000024: 0x80000000,   # QDSUB overflow
+            0x20000028: 1,            # Q flag set
+            0x2000002C: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_fpu_mac():
+    """Test FPU multiply-accumulate instructions."""
+    config = EmulatorConfig(has_fpu=True)
+    assert run_test(
+        "FPU Multiply-Accumulate Operations",
+        SCRIPT_DIR / "test_fpu_mac.elf",
+        {
+            0x20000000: 0x40E00000,   # VMLA (7.0)
+            0x20000004: 0x40800000,   # VMLS (4.0)
+            0x20000008: 0xC0E00000,   # VNMLA (-7.0)
+            0x2000000C: 0x40A00000,   # VNMLS (5.0)
+            0x20000010: 0xC0C00000,   # VNMUL (-6.0)
+            0x20000014: 0x40E00000,   # VFMA (7.0)
+            0x20000018: 0xC0A00000,   # VFMS (-5.0)
+            0x2000001C: 0xC0E00000,   # VFNMA (-7.0)
+            0x20000020: 0x40A00000,   # VFNMS (5.0)
+            0x20000024: 0x41D80000,   # Chained VMLA (27.0)
+            0x20000028: 0x40A00000,   # VMLA with negative (-1.0 + 6.0 = 5.0)
+            0x2000002C: 0xC0FFEE42,   # Done marker
+        },
+        config=config,
+    )
+
+
+def test_dsp_exchange():
+    """Test DSP exchange add/subtract instructions."""
+    assert run_test(
+        "DSP Exchange Operations",
+        SCRIPT_DIR / "test_dsp_exchange.elf",
+        {
+            0x20000000: 0x0028000B,   # SASX
+            0x20000004: 0x00180015,   # SSAX
+            0x20000008: 0x0028000B,   # UASX
+            0x2000000C: 0x00180015,   # USAX
+            0x20000010: 0x00280008,   # SHASX
+            0x20000014: 0x00180018,   # SHSAX
+            0x20000018: 0x00280008,   # UHASX
+            0x2000001C: 0x00180018,   # UHSAX
+            0x20000020: 0x0028000B,   # QASX
+            0x20000024: 0x00180015,   # QSAX
+            0x20000028: 0x00300000,   # UQASX (lo saturated)
+            0x2000002C: 0x00000030,   # UQSAX (hi saturated)
+            0x20000030: 0x0020FFF0,   # SASX with negative
+            0x20000034: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_multiply_halfword():
+    """Test halfword/DSP multiply instructions."""
+    assert run_test(
+        "Halfword Multiply Operations",
+        SCRIPT_DIR / "test_multiply_halfword.elf",
+        {
+            0x20000000: 12,           # SMULBB (3*4)
+            0x20000004: 18,           # SMULBT (3*6)
+            0x20000008: 20,           # SMULTB (5*4)
+            0x2000000C: 30,           # SMULTT (5*6)
+            0x20000010: 112,          # SMLABB (3*4+100)
+            0x20000014: 2,            # SMULWB
+            0x20000018: 42,           # SMUAD (3*4 + 5*6)
+            0x2000001C: 0xFFFFFFEE,   # SMUSD (3*4 - 5*6 = -18)
+            0x20000020: 1,            # SMMUL
+            0x20000024: 11,           # SMMLA (10+1)
+            0x20000028: 4,            # USAD8
+            0x2000002C: 104,          # USADA8 (100+4)
+            0x20000030: 0xFFFFFFCE,   # SMULBB negative (-50)
+            0x20000034: 38,           # SMUADX (3*6 + 5*4)
+            0x20000038: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_system_hints():
+    """Test system hint instructions."""
+    assert run_test(
+        "System Hint Operations",
+        SCRIPT_DIR / "test_system_hints.elf",
+        {
+            0x20000000: 3,            # Counter after NOP sequence
+            0x20000004: 4,            # Counter after YIELD
+            0x20000008: 5,            # Counter after SEV
+            0x2000000C: 6,            # Counter after ISB
+            0x20000010: 7,            # Counter after DSB
+            0x20000014: 8,            # Counter after DMB
+            0x20000018: 9,            # Counter after NOP.W
+            0x2000001C: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_fpu_loadstore():
+    """Test FPU load/store multiple instructions."""
+    config = EmulatorConfig(has_fpu=True)
+    assert run_test(
+        "FPU Load/Store Multiple Operations",
+        SCRIPT_DIR / "test_fpu_loadstore.elf",
+        {
+            0x20000000: 0x3F800000,   # s0 after VPOP (1.0)
+            0x20000004: 0x40000000,   # s1 after VPOP (2.0)
+            0x20000008: 0x40400000,   # s2 after VPOP (3.0)
+            0x2000000C: 0x40800000,   # s3 after VPOP (4.0)
+            0x20000010: 0x40A00000,   # s4 from VLDM (5.0)
+            0x20000014: 0x40C00000,   # s5 from VLDM (6.0)
+            0x20000018: 0x3F800000,   # VSTM destination (1.0)
+            0x2000001C: 0x40000000,   # VSTM destination (2.0)
+            0x20000020: 0,            # SP unchanged check
+            0x20000024: 0xC0FFEE42,   # Done marker
+        },
+        config=config,
     )
 
 
@@ -542,15 +779,31 @@ def main():
         test_system,
         test_exception,
         test_misc_alu,
+        test_dsp,
+        test_pack,
+        test_fpu,
+        test_acquire_release,
+        test_sat_add,
+        test_fpu_mac,
+        test_dsp_exchange,
+        test_multiply_halfword,
+        test_system_hints,
+        test_fpu_loadstore,
     ]
 
     results = []
     for test_func in tests:
         try:
-            passed = test_func()
-            results.append((test_func.__name__, passed))
+            test_func()
+            # If we get here, assertions passed
+            results.append((test_func.__name__, True))
+        except AssertionError:
+            # Test assertion failed
+            results.append((test_func.__name__, False))
         except Exception as e:
             print(f"\nTest {test_func.__name__} crashed: {e}")
+            import traceback
+            traceback.print_exc()
             results.append((test_func.__name__, False))
 
     # Summary

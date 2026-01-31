@@ -34,6 +34,10 @@
 #define VFP_VABS    0x10
 #define VFP_VNEG    0x11
 #define VFP_VSQRT   0x12
+#define VFP_VFMA    0x13  /* Fused multiply-add: Sd += Sn * Sm */
+#define VFP_VFMS    0x14  /* Fused multiply-subtract: Sd -= Sn * Sm */
+#define VFP_VFNMA   0x15  /* Fused negate multiply-add: Sd = -(Sd + Sn * Sm) */
+#define VFP_VFNMS   0x16  /* Fused negate multiply-subtract: Sd = -Sd + Sn * Sm */
 
 #define VFP_VMOV_IMM    0x00
 #define VFP_VMOV_REG    0x01
@@ -366,7 +370,7 @@ int exec_fpu_multi(Executor *exec, const DecodedInsn *insn)
     uint32_t regs;
     uint32_t bytes;
     bool fault = false;
-    bool is_load = (insn->type == INSN_FPU_MULTI);
+    bool is_load = (insn->op == 1);  /* op: 0=store (VSTM/VPUSH), 1=load (VLDM/VPOP) */
 
     /* Determine actual check based on the instruction format */
     /* For VLDM/VSTM: imm8 is the count of registers * 2 for double */
@@ -601,6 +605,18 @@ int exec_fpu_arith(Executor *exec, const DecodedInsn *insn)
         case VFP_VSQRT:
             result = sqrt(dm);
             break;
+        case VFP_VFMA:
+            result = fma(dn, dm, dd);  /* Fused: dd + (dn * dm) */
+            break;
+        case VFP_VFMS:
+            result = fma(-dn, dm, dd);  /* Fused: dd - (dn * dm) */
+            break;
+        case VFP_VFNMA:
+            result = -fma(dn, dm, dd);  /* Fused: -(dd + (dn * dm)) */
+            break;
+        case VFP_VFNMS:
+            result = fma(dn, dm, -dd);  /* Fused: -dd + (dn * dm) */
+            break;
         default:
             return ARMV8M_ERR_UNDEFINED_INSN;
         }
@@ -649,6 +665,18 @@ int exec_fpu_arith(Executor *exec, const DecodedInsn *insn)
         case VFP_VSQRT:
             result = sqrtf(sm);
             break;
+        case VFP_VFMA:
+            result = fmaf(sn, sm, sd);  /* Fused: sd + (sn * sm) */
+            break;
+        case VFP_VFMS:
+            result = fmaf(-sn, sm, sd);  /* Fused: sd - (sn * sm) */
+            break;
+        case VFP_VFNMA:
+            result = -fmaf(sn, sm, sd);  /* Fused: -(sd + (sn * sm)) */
+            break;
+        case VFP_VFNMS:
+            result = fmaf(sn, sm, -sd);  /* Fused: -sd + (sn * sm) */
+            break;
         default:
             return ARMV8M_ERR_UNDEFINED_INSN;
         }
@@ -686,27 +714,29 @@ int exec_fpu_cmp(Executor *exec, const DecodedInsn *insn)
     int cmp_result = 0;
 
     if (insn->is_double) {
-        double dn = get_d(cpu, insn->dn);
+        /* VCMP compares Dd with Dm (not Dn) */
+        double dd = get_d(cpu, insn->dd);
         double dm = (insn->dm == ARMV8M_REG_NONE) ? 0.0 : get_d(cpu, insn->dm);
 
-        if (isnan(dn) || isnan(dm)) {
+        if (isnan(dd) || isnan(dm)) {
             is_nan = true;
-        } else if (dn < dm) {
+        } else if (dd < dm) {
             cmp_result = -1;
-        } else if (dn > dm) {
+        } else if (dd > dm) {
             cmp_result = 1;
         } else {
             cmp_result = 0;
         }
     } else {
-        float sn = get_s(cpu, insn->sn);
+        /* VCMP compares Sd with Sm (not Sn) */
+        float sd = get_s(cpu, insn->sd);
         float sm = (insn->sm == ARMV8M_REG_NONE) ? 0.0f : get_s(cpu, insn->sm);
 
-        if (isnan(sn) || isnan(sm)) {
+        if (isnan(sd) || isnan(sm)) {
             is_nan = true;
-        } else if (sn < sm) {
+        } else if (sd < sm) {
             cmp_result = -1;
-        } else if (sn > sm) {
+        } else if (sd > sm) {
             cmp_result = 1;
         } else {
             cmp_result = 0;
@@ -752,19 +782,28 @@ int exec_fpu_cvt(Executor *exec, const DecodedInsn *insn)
         }
         break;
 
-    case 2: /* VCVT.S32.F32/F64: Float to signed int */
-    case 3: /* VCVT.U32.F32/F64: Float to unsigned int */
+    case 2:  /* VCVTR.S32.F32/F64: Float to signed int (FPSCR rounding) */
+    case 3:  /* VCVTR.U32.F32/F64: Float to unsigned int (FPSCR rounding) */
+    case 10: /* VCVT.S32.F32/F64: Float to signed int (truncate) */
+    case 11: /* VCVT.U32.F32/F64: Float to unsigned int (truncate) */
     {
         bool to_signed = ((insn->op & 0x1) == 0);
+        bool truncate = ((insn->op & 0x8) != 0);
         int32_t result;
 
-        /* Apply FPSCR rounding mode for float-to-int conversions */
-        set_rounding_mode(cpu->fpscr);
+        if (truncate) {
+            /* VCVT: Round toward zero (truncation) - C cast does this */
+        } else {
+            /* VCVTR: Use FPSCR rounding mode */
+            set_rounding_mode(cpu->fpscr);
+        }
 
         if (insn->is_double) {
             double dm = get_d(cpu, insn->dm);
 #if HAVE_FENV
-            dm = nearbyint(dm);  /* Round according to current mode */
+            if (!truncate) {
+                dm = nearbyint(dm);  /* Round according to FPSCR mode */
+            }
 #endif
             if (to_signed) {
                 result = (int32_t)dm;
@@ -774,7 +813,9 @@ int exec_fpu_cvt(Executor *exec, const DecodedInsn *insn)
         } else {
             float sm = get_s(cpu, insn->sm);
 #if HAVE_FENV
-            sm = nearbyintf(sm);  /* Round according to current mode */
+            if (!truncate) {
+                sm = nearbyintf(sm);  /* Round according to FPSCR mode */
+            }
 #endif
             if (to_signed) {
                 result = (int32_t)sm;
@@ -784,7 +825,9 @@ int exec_fpu_cvt(Executor *exec, const DecodedInsn *insn)
         }
         cpu->s[insn->sd & 31] = (uint32_t)result;
 
-        restore_rounding_mode();
+        if (!truncate) {
+            restore_rounding_mode();
+        }
         break;
     }
 

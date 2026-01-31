@@ -276,6 +276,7 @@ TEST(FPU_Multi, VPOP_SingleRegisters)
     insn.writeback = true;
     insn.pre_index = false;
     insn.is_double = false;
+    insn.op = 1;  /* op=1 for load (VPOP) */
 
     CHECK_EQUAL(ARMV8M_OK, armv8m_exec_insn(&exec, &insn));
 

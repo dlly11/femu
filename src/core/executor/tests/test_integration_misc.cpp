@@ -61,8 +61,9 @@ TEST(IntegrationITBlock, ConditionFalse)
 /* IT block with inverted condition (NE from EQ base) */
 TEST(IntegrationITBlock, ConditionInverted)
 {
-    /* IT state with base EQ (0x0), but mask bit 3 clear means invert -> NE */
-    exec.cpu.it_state = 0x04;  /* Condition base 0 (EQ), mask 0100 = inverted = NE */
+    /* NE condition requires bit 4 = 1.
+     * it_state = 0x18: bits 7:4 = 0001 (NE), bits 3:0 = 1000 (last instruction) */
+    exec.cpu.it_state = 0x18;  /* Condition NE, last in block */
     exec.cpu.xpsr = 0;  /* Z clear = NE true */
     exec.cpu.r[0] = 0x5678;
 

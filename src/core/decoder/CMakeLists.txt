@@ -40,7 +40,15 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/decode_thumb16.c)
 endif()
 
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/decode_thumb32.c)
-    list(APPEND DECODER_SOURCES decode_thumb32.c)
+    list(APPEND DECODER_SOURCES
+        decode_thumb32.c
+        decode_thumb32_branch.c
+        decode_thumb32_data.c
+        decode_thumb32_loadstore.c
+        decode_thumb32_multiply.c
+        decode_thumb32_dsp.c
+        decode_thumb32_vfp.c
+    )
 endif()
 
 # Build decoder as a static library
