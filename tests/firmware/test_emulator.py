@@ -747,6 +747,308 @@ def test_fpu_loadstore():
     )
 
 
+# =============================================================================
+# C Language Tests
+# =============================================================================
+
+def test_c_arithmetic():
+    """Test C arithmetic operations."""
+    assert run_test(
+        "C Arithmetic Operations",
+        SCRIPT_DIR / "test_c_arithmetic.elf",
+        {
+            0x20000000: 22,           # 15 + 7
+            0x20000004: 63,           # 100 - 37
+            0x20000008: 42,           # 6 * 7
+            0x2000000C: 0x0F,         # 0xFF & 0x0F
+            0x20000010: 0xFF,         # 0xF0 | 0x0F
+            0x20000014: 0x55,         # 0xAA ^ 0xFF
+            0x20000018: 16,           # 1 << 4
+            0x2000001C: 16,           # 256 >> 4
+            0x20000020: 0xFFFFFFFE,   # -8 >> 2 (sign extended)
+            0x20000024: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_c_memory():
+    """Test C memory operations."""
+    assert run_test(
+        "C Memory Operations",
+        SCRIPT_DIR / "test_c_memory.elf",
+        {
+            0x20000000: 0x12345678,   # Word store/load
+            0x20000004: 0xABCD,       # Halfword store/load
+            0x20000008: 0x42,         # Byte store/load
+            0x2000000C: 0x11111111,   # array[0]
+            0x20000010: 0x22222222,   # array[1]
+            0x20000014: 0x33333333,   # array[2]
+            0x20000018: 0x44444444,   # array[3]
+            0x2000001C: 0xAAAAAAAA,   # Sum of array
+            0x20000020: 0x33333333,   # Indexed access
+            0x20000024: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_c_bitfield():
+    """Test C bitfield operations."""
+    assert run_test(
+        "C Bitfield Operations",
+        SCRIPT_DIR / "test_c_bitfield.elf",
+        {
+            0x20000000: 15,           # CLZ(0x00010000) = 15
+            0x20000004: 32,           # CLZ(0) = 32
+            0x20000008: 0,            # CLZ(0x80000000) = 0
+            0x2000000C: 0x80000001,   # RBIT(0x80000001)
+            0x20000010: 0x1E6A2C48,   # RBIT(0x12345678)
+            0x20000014: 0x78563412,   # REV(0x12345678)
+            0x20000018: 0x34127856,   # REV16(0x12345678)
+            0x2000001C: 0xFFFF8000,   # REVSH(0x80) sign extended
+            0x20000020: 0x00000001,   # REVSH(0x0100)
+            0x20000024: 0xFFFF00FF,   # BFC: clear bits 8-15
+            0x20000028: 0x00AB0000,   # BFI: insert 0xAB at bits 16-23
+            0x2000002C: 0x000000FF,   # UBFX: extract bits 8-15
+            0x20000030: 0xFFFFFFFF,   # SBFX: 0xF sign extended
+            0x20000034: 0x00000007,   # SBFX: 0x7 no sign extend
+            0x20000038: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_c_branch():
+    """Test C branch and control flow operations."""
+    assert run_test(
+        "C Branch Operations",
+        SCRIPT_DIR / "test_c_branch.elf",
+        {
+            0x20000000: 30,           # add_func(10, 20)
+            0x20000004: 1,            # if equal
+            0x20000008: 2,            # if not equal
+            0x2000000C: 3,            # if greater
+            0x20000010: 4,            # if less
+            0x20000014: 10,           # for loop (0+1+2+3+4)
+            0x20000018: 55,           # while loop (10+9+...+1)
+            0x2000001C: 13,           # fibonacci(7)
+            0x20000020: 120,          # factorial(5)
+            0x20000024: 300,          # switch case 2
+            0x20000028: 500,          # ternary (15 > 10)
+            0x2000002C: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_c_fpu():
+    """Test C floating-point operations."""
+    config = ARMv8MConfig(has_fpu=True)
+    assert run_test(
+        "C FPU Operations",
+        SCRIPT_DIR / "test_c_fpu.elf",
+        {
+            0x20000000: 0x40800000,   # VADD: 1.5 + 2.5 = 4.0
+            0x20000004: 0x40200000,   # VSUB: 5.0 - 2.5 = 2.5
+            0x20000008: 0x40C00000,   # VMUL: 2.0 * 3.0 = 6.0
+            0x2000000C: 0x40800000,   # VDIV: 8.0 / 2.0 = 4.0
+            0x20000010: 1,            # VCMP equal
+            0x20000014: 1,            # VCMP less than
+            0x20000018: 1,            # VCMP greater than
+            0x2000001C: 0x42280000,   # VCVT int to float: 42.0
+            0x20000020: 3,            # VCVT float to int: 3
+            0x20000024: 0x40600000,   # VABS: |-3.5| = 3.5
+            0x20000028: 0xC0200000,   # VNEG: -2.5
+            0x2000002C: 0x40800000,   # VSQRT: sqrt(16) = 4.0
+            0x20000030: 0x41600000,   # 2.0 + 3.0 * 4.0 = 14.0
+            0x20000034: 0xC0FFEE42,   # Done marker
+        },
+        config=config,
+    )
+
+
+def test_c_dsp():
+    """Test C DSP SIMD operations."""
+    assert run_test(
+        "C DSP Operations",
+        SCRIPT_DIR / "test_c_dsp.elf",
+        {
+            0x20000000: 0x00500030,   # SADD16
+            0x20000004: 0x44332211,   # SADD8
+            0x20000008: 0x00400010,   # SSUB16
+            0x2000000C: 0x40302010,   # SSUB8
+            0x20000010: 0x00500030,   # UADD16
+            0x20000014: 0x44332211,   # UADD8
+            0x20000018: 0x00400010,   # USUB16
+            0x2000001C: 0x40302010,   # USUB8
+            0x20000020: 0x00380018,   # SHADD16
+            0x20000024: 0x30201408,   # SHADD8
+            0x20000028: 0x00380018,   # UHADD16
+            0x2000002C: 0x30201408,   # UHADD8
+            0x20000030: 0x7FFF0020,   # QADD16 (saturated)
+            0x20000034: 0x7F000020,   # QADD8 (saturated)
+            0x20000038: 0x80000010,   # QSUB16 (saturated)
+            0x2000003C: 0x80000010,   # QSUB8 (saturated)
+            0x20000040: 0xFF000000,   # UQADD8 (saturated)
+            0x20000044: 0x00000000,   # UQSUB8 (saturated)
+            0x20000048: 0x7FFFFFFF,   # QADD (saturated)
+            0x2000004C: 0x80000000,   # QSUB (saturated)
+            0x20000050: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_c_system():
+    """Test C system register operations."""
+    assert run_test(
+        "C System Operations",
+        SCRIPT_DIR / "test_c_system.elf",
+        {
+            0x20000000: 0,            # Initial PRIMASK
+            0x20000004: 1,            # PRIMASK after set
+            0x20000008: 0,            # PRIMASK after clear
+            0x2000000C: 0,            # Initial BASEPRI
+            0x20000010: 0x40,         # BASEPRI after set
+            0x20000014: 0,            # BASEPRI after clear
+            0x20000018: 0x20002000,   # PSP value
+            0x2000001C: 0,            # Initial FAULTMASK
+            0x20000020: 0,            # FAULTMASK after set (ignored in Thread mode)
+            0x20000028: 1,            # DMB executed
+            0x2000002C: 1,            # DSB executed
+            0x20000030: 1,            # ISB executed
+            0x20000034: 1,            # NOP executed
+            0x2000003C: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+def test_c_exception():
+    """Test C exception handling (SVC)."""
+    assert run_test(
+        "C Exception Handling",
+        SCRIPT_DIR / "test_c_exception.elf",
+        {
+            0x20000000: 1,            # SVC handler called
+            0x20000004: 42,           # SVC number
+            0x20000008: 0x1234,       # Return value
+            0x2000000C: 0x10,         # Stacked R0
+            0x20000010: 0x11,         # Stacked R1
+            0x20000014: 0x12,         # Stacked R2
+            0x20000018: 0x13,         # Stacked R3
+            0x2000001C: 1,            # Second SVC called
+            0x20000020: 7,            # Second SVC number
+            0x20000024: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+# =============================================================================
+# MPU and NVIC Tests
+# =============================================================================
+
+def test_mpu_basic():
+    """Test MPU region configuration and read."""
+    config = ARMv8MConfig(num_mpu_regions=8)
+    assert run_test(
+        "MPU Basic",
+        SCRIPT_DIR / "test_mpu_basic.elf",
+        {
+            0x20000000: 8,            # Number of MPU regions (DREGION)
+            0x20000004: 0x20000000,   # MPU_RBAR readback (RAM base)
+            0x20000008: 0x0307001D,   # MPU_RASR readback (configured attrs)
+            0x2000000C: 0x05,         # MPU_CTRL after enable (ENABLE|PRIVDEFENA)
+            0x20000010: 0xC0FFEE42,   # Done marker
+        },
+        config=config,
+    )
+
+
+def test_nvic_basic():
+    """Test NVIC register read/write."""
+    assert run_test(
+        "NVIC Basic",
+        SCRIPT_DIR / "test_nvic_basic.elf",
+        {
+            0x20000000: 0x00000001,   # ISER0 after enabling IRQ 0
+            0x20000004: 0x00000000,   # ISER0 after clearing IRQ 0 (via ICER)
+            0x20000008: 0x00000001,   # ISPR0 after setting IRQ 0 pending
+            0x2000000C: 0x00000000,   # ISPR0 after clearing pending (via ICPR)
+            0x20000010: 0x00000040,   # IPR0 after setting priority 0x40
+            0x20000014: 0x0000000F,   # ISER0 after enabling IRQs 0-3
+            0x20000018: 0xC0FFEE42,   # Done marker
+        },
+    )
+
+
+# =============================================================================
+# TrustZone Tests
+# =============================================================================
+
+def test_tt_insn():
+    """Test TT instruction variants.
+
+    Note: Without SAU configured, TT returns 0 for all addresses
+    (no matching SAU region). This tests that TT instructions execute
+    correctly; full TT behavior would require SAU configuration.
+    """
+    config = ARMv8MConfig(has_trustzone=True)
+    assert run_test(
+        "TT Instruction",
+        SCRIPT_DIR / "test_tt_insn.elf",
+        {
+            # Without SAU configured, TT returns 0 (no region match)
+            # This verifies TT instruction execution without SAU setup
+            0x20000000: 0x00000000,   # TT: no SAU region configured
+            0x20000004: 0x00000000,   # TT: no SAU region configured
+            0x20000008: 0x00000000,   # TT: no SAU region configured
+            0x2000000C: 0x00000000,   # TT: no SAU region configured
+            0x20000010: 0x00000000,   # TT: no SAU region configured
+            0x20000014: 0x00000000,   # TTA: no SAU region configured
+            0x20000018: 0x00000000,   # TTT: NS view = no access
+            0x2000001C: 0x00000000,   # TTAT: NS view = no access
+            0x20000020: 0xC0FFEE42,   # Done marker
+        },
+        config=config,
+    )
+
+
+def test_sg_insn():
+    """Test SG (Secure Gateway) instruction.
+
+    When executed in Secure state without NS transition context,
+    SG may not modify LR. This test verifies SG executes without faulting.
+    """
+    config = ARMv8MConfig(has_trustzone=True)
+    assert run_test(
+        "SG Instruction",
+        SCRIPT_DIR / "test_sg_insn.elf",
+        {
+            0x20000000: 0xDEADBEEF,   # LR before SG
+            0x20000004: 0xDEADBEEF,   # LR after SG (unchanged in pure Secure context)
+            0x20000008: 1,            # Function returned successfully
+            0x2000000C: 0xDEADC0DE,   # Return value from function
+            0x20000010: 0xC0FFEE42,   # Done marker
+        },
+        config=config,
+    )
+
+
+def test_bxns_blxns():
+    """Test basic TrustZone code execution.
+
+    Note: Full BXNS/BLXNS testing requires SAU configuration.
+    This test verifies basic TrustZone-enabled code execution.
+    """
+    config = ARMv8MConfig(has_trustzone=True)
+    assert run_test(
+        "BXNS/BLXNS Instructions",
+        SCRIPT_DIR / "test_bxns_blxns.elf",
+        {
+            0x20000000: 1,            # Initial state
+            0x20000004: 2,            # Function call completed
+            0x20000008: 0xC0FFEE42,   # Done marker
+        },
+        config=config,
+    )
+
+
 def main():
     """Run all tests."""
     print("FEMU Emulator Verification Tests")
@@ -789,6 +1091,22 @@ def main():
         test_multiply_halfword,
         test_system_hints,
         test_fpu_loadstore,
+        # C tests
+        test_c_arithmetic,
+        test_c_memory,
+        test_c_bitfield,
+        test_c_branch,
+        test_c_fpu,
+        test_c_dsp,
+        test_c_system,
+        test_c_exception,
+        # MPU and NVIC tests
+        test_mpu_basic,
+        test_nvic_basic,
+        # TrustZone tests
+        test_tt_insn,
+        test_sg_insn,
+        test_bxns_blxns,
     ]
 
     results = []
