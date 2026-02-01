@@ -1,12 +1,13 @@
 /**
  * @file memory.c
- * @brief Memory subsystem implementation for ARMv8-M emulator
+ * @brief Generic memory subsystem implementation
  *
  * Manages RAM, ROM, and MMIO regions. Dispatches memory accesses to the
- * appropriate backing store or peripheral.
+ * appropriate backing store or peripheral. Supports both 32-bit and 64-bit
+ * architectures through use of uint64_t addresses.
  */
 
-#include "armv8m_memory.h"
+#include "emu/emu_memory.h"
 #include <string.h>
 
 /*============================================================================
@@ -16,10 +17,10 @@
 /**
  * Find region containing the given address.
  */
-static MemRegion *find_region_internal(MemorySystem *mem, uint32_t addr)
+static EmuMemRegion *find_region_internal(EmuMemorySystem *mem, uint64_t addr)
 {
     for (int i = 0; i < mem->num_regions; i++) {
-        MemRegion *r = &mem->regions[i];
+        EmuMemRegion *r = &mem->regions[i];
         /* Use subtraction to avoid overflow: addr < base + size  =>  addr - base < size */
         if (addr >= r->base && (addr - r->base) < r->size) {
             return r;
@@ -31,22 +32,31 @@ static MemRegion *find_region_internal(MemorySystem *mem, uint32_t addr)
 /**
  * Read from RAM/ROM region (little-endian).
  */
-static uint32_t read_ram(const MemRegion *r, uint32_t addr, uint8_t size)
+static uint64_t read_ram(const EmuMemRegion *r, uint64_t addr, uint8_t size)
 {
-    uint32_t offset = addr - r->base;
+    uint64_t offset = addr - r->base;
     const uint8_t *data = r->data;
 
     switch (size) {
         case 1:
             return data[offset];
         case 2:
-            return (uint32_t)data[offset] |
-                   ((uint32_t)data[offset + 1] << 8);
+            return (uint64_t)data[offset] |
+                   ((uint64_t)data[offset + 1] << 8);
         case 4:
-            return (uint32_t)data[offset] |
-                   ((uint32_t)data[offset + 1] << 8) |
-                   ((uint32_t)data[offset + 2] << 16) |
-                   ((uint32_t)data[offset + 3] << 24);
+            return (uint64_t)data[offset] |
+                   ((uint64_t)data[offset + 1] << 8) |
+                   ((uint64_t)data[offset + 2] << 16) |
+                   ((uint64_t)data[offset + 3] << 24);
+        case 8:
+            return (uint64_t)data[offset] |
+                   ((uint64_t)data[offset + 1] << 8) |
+                   ((uint64_t)data[offset + 2] << 16) |
+                   ((uint64_t)data[offset + 3] << 24) |
+                   ((uint64_t)data[offset + 4] << 32) |
+                   ((uint64_t)data[offset + 5] << 40) |
+                   ((uint64_t)data[offset + 6] << 48) |
+                   ((uint64_t)data[offset + 7] << 56);
         default:
             return 0;
     }
@@ -55,9 +65,9 @@ static uint32_t read_ram(const MemRegion *r, uint32_t addr, uint8_t size)
 /**
  * Write to RAM region (little-endian).
  */
-static void write_ram(const MemRegion *r, uint32_t addr, uint32_t value, uint8_t size)
+static void write_ram(const EmuMemRegion *r, uint64_t addr, uint64_t value, uint8_t size)
 {
-    uint32_t offset = addr - r->base;
+    uint64_t offset = addr - r->base;
     uint8_t *data = r->data;
 
     switch (size) {
@@ -74,6 +84,16 @@ static void write_ram(const MemRegion *r, uint32_t addr, uint32_t value, uint8_t
             data[offset + 2] = (uint8_t)(value >> 16);
             data[offset + 3] = (uint8_t)(value >> 24);
             break;
+        case 8:
+            data[offset] = (uint8_t)value;
+            data[offset + 1] = (uint8_t)(value >> 8);
+            data[offset + 2] = (uint8_t)(value >> 16);
+            data[offset + 3] = (uint8_t)(value >> 24);
+            data[offset + 4] = (uint8_t)(value >> 32);
+            data[offset + 5] = (uint8_t)(value >> 40);
+            data[offset + 6] = (uint8_t)(value >> 48);
+            data[offset + 7] = (uint8_t)(value >> 56);
+            break;
         default:
             break;
     }
@@ -82,7 +102,7 @@ static void write_ram(const MemRegion *r, uint32_t addr, uint32_t value, uint8_t
 /**
  * Report a memory fault.
  */
-static void report_fault(MemorySystem *mem, uint32_t addr, bool is_write, int fault_type)
+static void report_fault(EmuMemorySystem *mem, uint64_t addr, bool is_write, int fault_type)
 {
     if (mem->on_fault) {
         mem->on_fault(mem->fault_ctx, addr, is_write, fault_type);
@@ -90,258 +110,244 @@ static void report_fault(MemorySystem *mem, uint32_t addr, bool is_write, int fa
 }
 
 /**
- * Check if access size is valid (1, 2, or 4 bytes).
+ * Check if access size is valid (1, 2, 4, or 8 bytes).
  */
 static bool is_valid_size(uint8_t size)
 {
-    return size == 1 || size == 2 || size == 4;
+    return size == 1 || size == 2 || size == 4 || size == 8;
 }
 
 /**
  * Check if address is properly aligned for the access size.
  * Returns true if aligned, false if misaligned.
  */
-static bool is_aligned(uint32_t addr, uint8_t size)
+static bool is_aligned(uint64_t addr, uint8_t size)
 {
-    return (addr & (size - 1)) == 0;
-}
-
-/**
- * Check if unaligned access is permitted for the given memory attribute.
- * Normal memory allows unaligned access; Device/Strongly-ordered does not.
- */
-static bool allows_unaligned(MemoryAttribute attr)
-{
-    return attr == MEM_ATTR_NORMAL;
+    return (addr & (uint64_t)(size - 1)) == 0;
 }
 
 /*============================================================================
  * Public API
  *============================================================================*/
 
-void armv8m_mem_init(MemorySystem *mem)
+void emu_mem_init(EmuMemorySystem *mem)
 {
     memset(mem, 0, sizeof(*mem));
 }
 
-int armv8m_mem_add_region(MemorySystem *mem, const MemRegion *region)
+int emu_mem_add_region(EmuMemorySystem *mem, const EmuMemRegion *region)
 {
-    if (mem->num_regions >= MEM_MAX_REGIONS) {
-        return ARMV8M_ERR_MEM_FAULT;
+    if (mem->num_regions >= EMU_MEM_MAX_REGIONS) {
+        return EMU_ERR_MEM_FAULT;
     }
 
     mem->regions[mem->num_regions] = *region;
     mem->num_regions++;
 
-    return ARMV8M_OK;
+    return EMU_OK;
 }
 
-int armv8m_mem_add_ram(MemorySystem *mem, uint32_t base, uint32_t size, uint8_t *data)
+int emu_mem_add_ram(EmuMemorySystem *mem, uint64_t base, uint64_t size, uint8_t *data)
 {
-    MemRegion region = {
+    EmuMemRegion region = {
         .base = base,
         .size = size,
-        .type = MEM_REGION_RAM,
-        .attr = MEM_ATTR_NORMAL,
+        .type = EMU_MEM_REGION_RAM,
         .data = data,
         .mmio_ctx = NULL,
         .mmio_read = NULL,
         .mmio_write = NULL
     };
 
-    return armv8m_mem_add_region(mem, &region);
+    return emu_mem_add_region(mem, &region);
 }
 
-int armv8m_mem_add_rom(MemorySystem *mem, uint32_t base, uint32_t size, const uint8_t *data)
+int emu_mem_add_rom(EmuMemorySystem *mem, uint64_t base, uint64_t size, const uint8_t *data)
 {
-    MemRegion region = {
+    EmuMemRegion region = {
         .base = base,
         .size = size,
-        .type = MEM_REGION_ROM,
-        .attr = MEM_ATTR_NORMAL,
+        .type = EMU_MEM_REGION_ROM,
         .data = (uint8_t *)data,  /* Cast away const - we won't write to it */
         .mmio_ctx = NULL,
         .mmio_read = NULL,
         .mmio_write = NULL
     };
 
-    return armv8m_mem_add_region(mem, &region);
+    return emu_mem_add_region(mem, &region);
 }
 
-int armv8m_mem_add_mmio(MemorySystem *mem, uint32_t base, uint32_t size,
-                        void *ctx,
-                        uint32_t (*read_cb)(void *ctx, uint32_t offset, uint8_t size),
-                        void (*write_cb)(void *ctx, uint32_t offset, uint32_t value, uint8_t size))
+int emu_mem_add_mmio(EmuMemorySystem *mem, uint64_t base, uint64_t size,
+                     void *ctx,
+                     uint64_t (*read_cb)(void *ctx, uint64_t offset, uint8_t size),
+                     void (*write_cb)(void *ctx, uint64_t offset, uint64_t value, uint8_t size))
 {
-    MemRegion region = {
+    EmuMemRegion region = {
         .base = base,
         .size = size,
-        .type = MEM_REGION_MMIO,
-        .attr = MEM_ATTR_DEVICE,
+        .type = EMU_MEM_REGION_MMIO,
         .data = NULL,
         .mmio_ctx = ctx,
         .mmio_read = read_cb,
         .mmio_write = write_cb
     };
 
-    return armv8m_mem_add_region(mem, &region);
+    return emu_mem_add_region(mem, &region);
 }
 
-uint32_t armv8m_mem_read(MemorySystem *mem, uint32_t addr, uint8_t size,
-                         bool privileged, bool in_hardfault_nmi, bool *fault)
+uint64_t emu_mem_read(EmuMemorySystem *mem, uint64_t addr, uint8_t size,
+                      bool privileged, bool *fault)
 {
     *fault = false;
 
-    /* Validate access size (must be 1, 2, or 4) */
+    /* Validate access size (must be 1, 2, 4, or 8) */
     if (!is_valid_size(size)) {
         *fault = true;
-        report_fault(mem, addr, false, ARMV8M_ERR_USAGE_FAULT);
+        report_fault(mem, addr, false, EMU_ERR_USAGE_FAULT);
         return 0;
     }
 
     /* Check MPU if configured */
     if (mem->mpu_check) {
-        if (!mem->mpu_check(mem->mpu_ctx, addr, size, false, privileged, in_hardfault_nmi)) {
+        if (!mem->mpu_check(mem->mpu_ctx, addr, size, false, privileged)) {
             *fault = true;
-            report_fault(mem, addr, false, ARMV8M_ERR_MEM_FAULT);
+            report_fault(mem, addr, false, EMU_ERR_MEM_FAULT);
             return 0;
         }
     }
 
     /* Find the region */
-    MemRegion *r = find_region_internal(mem, addr);
+    EmuMemRegion *r = find_region_internal(mem, addr);
     if (!r) {
         *fault = true;
-        report_fault(mem, addr, false, ARMV8M_ERR_BUS_FAULT);
+        report_fault(mem, addr, false, EMU_ERR_BUS_FAULT);
         return 0;
     }
 
-    /* Check alignment - Device/Strongly-ordered memory requires aligned access */
-    if (!is_aligned(addr, size) && !allows_unaligned(r->attr)) {
+    /* Check alignment for non-RAM/ROM regions */
+    if (!is_aligned(addr, size) && r->type == EMU_MEM_REGION_MMIO) {
         *fault = true;
-        report_fault(mem, addr, false, ARMV8M_ERR_USAGE_FAULT);
+        report_fault(mem, addr, false, EMU_ERR_USAGE_FAULT);
         return 0;
     }
 
     /* Check that the entire access fits within the region */
-    /* offset is valid since find_region guarantees addr >= base and addr - base < size */
-    uint32_t offset = addr - r->base;
-    /* Check: offset + size <= r->size, rearranged to avoid overflow */
+    uint64_t offset = addr - r->base;
     if (r->size - offset < size) {
         *fault = true;
-        report_fault(mem, addr, false, ARMV8M_ERR_BUS_FAULT);
+        report_fault(mem, addr, false, EMU_ERR_BUS_FAULT);
         return 0;
     }
 
     /* Dispatch based on region type */
     switch (r->type) {
-        case MEM_REGION_RAM:
-        case MEM_REGION_ROM:
+        case EMU_MEM_REGION_RAM:
+        case EMU_MEM_REGION_ROM:
             return read_ram(r, addr, size);
 
-        case MEM_REGION_MMIO:
+        case EMU_MEM_REGION_MMIO:
             if (r->mmio_read) {
                 return r->mmio_read(r->mmio_ctx, offset, size);
             }
             *fault = true;
-            report_fault(mem, addr, false, ARMV8M_ERR_BUS_FAULT);
+            report_fault(mem, addr, false, EMU_ERR_BUS_FAULT);
             return 0;
 
-        case MEM_REGION_UNMAPPED:
+        case EMU_MEM_REGION_UNMAPPED:
         default:
             *fault = true;
-            report_fault(mem, addr, false, ARMV8M_ERR_BUS_FAULT);
+            report_fault(mem, addr, false, EMU_ERR_BUS_FAULT);
             return 0;
     }
 }
 
-void armv8m_mem_write(MemorySystem *mem, uint32_t addr, uint32_t value, uint8_t size,
-                      bool privileged, bool in_hardfault_nmi, bool *fault)
+void emu_mem_write(EmuMemorySystem *mem, uint64_t addr, uint64_t value, uint8_t size,
+                   bool privileged, bool *fault)
 {
     *fault = false;
 
-    /* Validate access size (must be 1, 2, or 4) */
+    /* Validate access size (must be 1, 2, 4, or 8) */
     if (!is_valid_size(size)) {
         *fault = true;
-        report_fault(mem, addr, true, ARMV8M_ERR_USAGE_FAULT);
+        report_fault(mem, addr, true, EMU_ERR_USAGE_FAULT);
         return;
     }
 
     /* Check MPU if configured */
     if (mem->mpu_check) {
-        if (!mem->mpu_check(mem->mpu_ctx, addr, size, true, privileged, in_hardfault_nmi)) {
+        if (!mem->mpu_check(mem->mpu_ctx, addr, size, true, privileged)) {
             *fault = true;
-            report_fault(mem, addr, true, ARMV8M_ERR_MEM_FAULT);
+            report_fault(mem, addr, true, EMU_ERR_MEM_FAULT);
             return;
         }
     }
 
     /* Find the region */
-    MemRegion *r = find_region_internal(mem, addr);
+    EmuMemRegion *r = find_region_internal(mem, addr);
     if (!r) {
         *fault = true;
-        report_fault(mem, addr, true, ARMV8M_ERR_BUS_FAULT);
+        report_fault(mem, addr, true, EMU_ERR_BUS_FAULT);
         return;
     }
 
-    /* Check alignment - Device/Strongly-ordered memory requires aligned access */
-    if (!is_aligned(addr, size) && !allows_unaligned(r->attr)) {
+    /* Check alignment for non-RAM regions */
+    if (!is_aligned(addr, size) && r->type == EMU_MEM_REGION_MMIO) {
         *fault = true;
-        report_fault(mem, addr, true, ARMV8M_ERR_USAGE_FAULT);
+        report_fault(mem, addr, true, EMU_ERR_USAGE_FAULT);
         return;
     }
 
     /* Check that the entire access fits within the region */
-    uint32_t offset = addr - r->base;
+    uint64_t offset = addr - r->base;
     if (r->size - offset < size) {
         *fault = true;
-        report_fault(mem, addr, true, ARMV8M_ERR_BUS_FAULT);
+        report_fault(mem, addr, true, EMU_ERR_BUS_FAULT);
         return;
     }
 
     /* Dispatch based on region type */
     switch (r->type) {
-        case MEM_REGION_RAM:
+        case EMU_MEM_REGION_RAM:
             write_ram(r, addr, value, size);
             break;
 
-        case MEM_REGION_ROM:
+        case EMU_MEM_REGION_ROM:
             /* Write to ROM faults */
             *fault = true;
-            report_fault(mem, addr, true, ARMV8M_ERR_MEM_FAULT);
+            report_fault(mem, addr, true, EMU_ERR_MEM_FAULT);
             break;
 
-        case MEM_REGION_MMIO:
+        case EMU_MEM_REGION_MMIO:
             if (r->mmio_write) {
                 r->mmio_write(r->mmio_ctx, offset, value, size);
             } else {
                 *fault = true;
-                report_fault(mem, addr, true, ARMV8M_ERR_BUS_FAULT);
+                report_fault(mem, addr, true, EMU_ERR_BUS_FAULT);
             }
             break;
 
-        case MEM_REGION_UNMAPPED:
+        case EMU_MEM_REGION_UNMAPPED:
         default:
             *fault = true;
-            report_fault(mem, addr, true, ARMV8M_ERR_BUS_FAULT);
+            report_fault(mem, addr, true, EMU_ERR_BUS_FAULT);
             break;
     }
 }
 
-const uint8_t *armv8m_mem_get_ptr(MemorySystem *mem, uint32_t addr, uint32_t size)
+const uint8_t *emu_mem_get_ptr(EmuMemorySystem *mem, uint64_t addr, uint64_t size)
 {
-    MemRegion *r = find_region_internal(mem, addr);
+    EmuMemRegion *r = find_region_internal(mem, addr);
     if (!r) {
         return NULL;
     }
 
     /* Only RAM and ROM have direct backing storage */
-    if (r->type != MEM_REGION_RAM && r->type != MEM_REGION_ROM) {
+    if (r->type != EMU_MEM_REGION_RAM && r->type != EMU_MEM_REGION_ROM) {
         return NULL;
     }
 
     /* Check that requested size fits in region */
-    uint32_t offset = addr - r->base;
+    uint64_t offset = addr - r->base;
     if (r->size - offset < size) {
         return NULL;
     }
@@ -349,37 +355,53 @@ const uint8_t *armv8m_mem_get_ptr(MemorySystem *mem, uint32_t addr, uint32_t siz
     return &r->data[offset];
 }
 
-int armv8m_mem_load(MemorySystem *mem, uint32_t addr, const uint8_t *data, uint32_t size)
+int emu_mem_load(EmuMemorySystem *mem, uint64_t addr, const uint8_t *data, uint64_t size)
 {
-    MemRegion *r = find_region_internal(mem, addr);
+    EmuMemRegion *r = find_region_internal(mem, addr);
     if (!r) {
-        return ARMV8M_ERR_BUS_FAULT;
+        return EMU_ERR_BUS_FAULT;
     }
 
     /* Only RAM is writable for load */
-    if (r->type != MEM_REGION_RAM) {
-        return ARMV8M_ERR_MEM_FAULT;
+    if (r->type != EMU_MEM_REGION_RAM) {
+        return EMU_ERR_MEM_FAULT;
     }
 
     /* Check that the entire load fits within the region */
-    uint32_t offset = addr - r->base;
+    uint64_t offset = addr - r->base;
     if (r->size - offset < size) {
-        return ARMV8M_ERR_BUS_FAULT;
+        return EMU_ERR_BUS_FAULT;
     }
 
-    memcpy(&r->data[offset], data, size);
+    memcpy(&r->data[offset], data, (size_t)size);
 
-    return ARMV8M_OK;
+    return EMU_OK;
 }
 
-const MemRegion *armv8m_mem_find_region(const MemorySystem *mem, uint32_t addr)
+const EmuMemRegion *emu_mem_find_region(const EmuMemorySystem *mem, uint64_t addr)
 {
     for (int i = 0; i < mem->num_regions; i++) {
-        const MemRegion *r = &mem->regions[i];
+        const EmuMemRegion *r = &mem->regions[i];
         /* Use subtraction to avoid overflow */
         if (addr >= r->base && (addr - r->base) < r->size) {
             return r;
         }
     }
     return NULL;
+}
+
+void emu_mem_set_mpu(EmuMemorySystem *mem, void *ctx,
+                     bool (*check_cb)(void *ctx, uint64_t addr, uint64_t size,
+                                      bool is_write, bool privileged))
+{
+    mem->mpu_ctx = ctx;
+    mem->mpu_check = check_cb;
+}
+
+void emu_mem_set_fault_callback(EmuMemorySystem *mem, void *ctx,
+                                void (*fault_cb)(void *ctx, uint64_t addr,
+                                                 bool is_write, int fault_type))
+{
+    mem->fault_ctx = ctx;
+    mem->on_fault = fault_cb;
 }

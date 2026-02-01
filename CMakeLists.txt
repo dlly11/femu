@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(femu
     VERSION 0.1.0
     LANGUAGES C CXX
-    DESCRIPTION "FEMU - Fast EMUlator"
+    DESCRIPTION "FEMU - Fast EMUlator (Multi-Architecture)"
 )
 
 # =============================================================================
@@ -121,6 +121,8 @@ if(CLANG_TIDY)
             -p ${CMAKE_BINARY_DIR}
             --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy
             ${CMAKE_SOURCE_DIR}/src/core/*/*.c
+            ${CMAKE_SOURCE_DIR}/src/arch/*/*.c
+            ${CMAKE_SOURCE_DIR}/src/arch/*/*/*.c
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running clang-tidy static analysis"
     )
@@ -170,43 +172,50 @@ include_directories(
 enable_testing()
 
 # =============================================================================
-# Module Options
+# Architecture Selection
 # =============================================================================
 
-option(BUILD_DECODER "Build decoder module" ON)
-option(BUILD_EXECUTOR "Build executor module" ON)
+option(BUILD_ARCH_ARMV8M "Build ARMv8-M architecture support" ON)
+option(BUILD_PYTHON_BINDINGS "Build shared libraries for Python bindings" ON)
+
+# Enable position-independent code for all libraries (required for shared library)
+if(BUILD_PYTHON_BINDINGS)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
+# =============================================================================
+# Core (Shared) Modules
+# =============================================================================
+
 option(BUILD_MEMORY "Build memory module" ON)
-option(BUILD_NVIC "Build NVIC module" ON)
-option(BUILD_MPU "Build MPU module" ON)
-option(BUILD_EMULATOR "Build emulator glue layer" ON)
 
-# =============================================================================
-# Core Modules
-# =============================================================================
-
-# Only add modules if their main implementation file exists
-if(BUILD_DECODER AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/decoder/decoder.c)
-    add_subdirectory(src/core/decoder)
-endif()
-
-if(BUILD_EXECUTOR AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/executor/executor.c)
-    add_subdirectory(src/core/executor)
-endif()
-
+# Memory is shared across all architectures
 if(BUILD_MEMORY AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/memory/memory.c)
     add_subdirectory(src/core/memory)
 endif()
 
-if(BUILD_NVIC AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/nvic/nvic.c)
-    add_subdirectory(src/core/nvic)
-endif()
+# Emulator base (factory and common infrastructure)
+option(BUILD_EMU_CORE "Build emulator core" ON)
 
-if(BUILD_MPU AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/mpu/mpu.c)
-    add_subdirectory(src/core/mpu)
-endif()
-
-if(BUILD_EMULATOR AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/emulator/emulator.c)
+if(BUILD_EMU_CORE AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/emulator/emulator_base.c)
     add_subdirectory(src/core/emulator)
+endif()
+
+# =============================================================================
+# ARMv8-M Architecture Modules
+# =============================================================================
+
+if(BUILD_ARCH_ARMV8M)
+    option(BUILD_DECODER "Build decoder module" ON)
+    option(BUILD_EXECUTOR "Build executor module" ON)
+    option(BUILD_NVIC "Build NVIC module" ON)
+    option(BUILD_MPU "Build MPU module" ON)
+    option(BUILD_EMULATOR "Build emulator glue layer" ON)
+
+    # Add ARMv8-M architecture subdirectory
+    if(EXISTS ${CMAKE_SOURCE_DIR}/src/arch/armv8m)
+        add_subdirectory(src/arch/armv8m)
+    endif()
 endif()
 
 # =============================================================================
@@ -223,6 +232,14 @@ message(STATUS "║  C Compiler:     ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_V
 message(STATUS "║  C++ Compiler:   ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "║  Sanitizers:     ${ENABLE_SANITIZERS}")
 message(STATUS "║  Coverage:       ${ENABLE_COVERAGE}")
+message(STATUS "╠══════════════════════════════════════════════════════════════╣")
+message(STATUS "║  Python bindings: ${BUILD_PYTHON_BINDINGS}")
+message(STATUS "║  Architectures:")
+if(BUILD_ARCH_ARMV8M)
+    message(STATUS "║    ARMv8-M:      Enabled")
+else()
+    message(STATUS "║    ARMv8-M:      Disabled")
+endif()
 message(STATUS "╠══════════════════════════════════════════════════════════════╣")
 message(STATUS "║  Static Analysis Tools:")
 if(CPPCHECK)

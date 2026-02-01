@@ -1,12 +1,12 @@
 # Memory module CMakeLists.txt
 #
-# This builds the memory module and its tests.
+# This builds the generic memory module shared across all architectures.
 # Can be built standalone or as part of the full project.
 
 # Standalone build support
 if(NOT CMAKE_PROJECT_NAME)
     cmake_minimum_required(VERSION 3.16)
-    project(armv8m-memory C CXX)
+    project(emu-memory C CXX)
 
     set(CMAKE_C_STANDARD 11)
     set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -35,18 +35,21 @@ set(MEMORY_SOURCES
 )
 
 # Build memory as a static library
-add_library(armv8m_memory STATIC ${MEMORY_SOURCES})
+add_library(emu_memory STATIC ${MEMORY_SOURCES})
 
-target_include_directories(armv8m_memory PUBLIC
+target_include_directories(emu_memory PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     $<$<BOOL:${STANDALONE_BUILD}>:${CMAKE_SOURCE_DIR}/../../../include>
 )
+
+# Provide backward-compatible alias for ARMv8-M code
+add_library(armv8m_memory ALIAS emu_memory)
 
 # Tests
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_memory.cpp)
     add_executable(test_memory tests/test_memory.cpp)
     target_link_libraries(test_memory
-        armv8m_memory
+        emu_memory
         CppUTest
         CppUTestExt
     )

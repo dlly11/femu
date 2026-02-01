@@ -15,7 +15,7 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "python"))
 
-from femu.emulator import Emulator, EmulatorConfig, EmulatorState
+from femu.emulator import ARMv8MEmulator, ARMv8MConfig, EmulatorState
 
 
 def build_firmware():
@@ -34,7 +34,7 @@ def build_firmware():
 
 
 def run_test(name: str, elf_path: Path, expected: dict, max_cycles: int = 100000,
-              config: EmulatorConfig | None = None) -> bool:
+              config: ARMv8MConfig | None = None) -> bool:
     """
     Run a test firmware and verify results.
 
@@ -53,7 +53,7 @@ def run_test(name: str, elf_path: Path, expected: dict, max_cycles: int = 100000
     print(f"{'='*60}")
 
     try:
-        emu = Emulator(config=config)
+        emu = ARMv8MEmulator(config=config)
         elf = emu.load_elf(elf_path)
 
         print(f"  Entry: 0x{elf.entry_point:08x}")
@@ -563,7 +563,7 @@ def test_pack():
 def test_fpu():
     """Test FPU (VFP) instructions."""
     # FPU tests require FPU to be enabled
-    config = EmulatorConfig(has_fpu=True)
+    config = ARMv8MConfig(has_fpu=True)
     assert run_test(
         "FPU Operations",
         SCRIPT_DIR / "test_fpu.elf",
@@ -636,7 +636,7 @@ def test_sat_add():
 
 def test_fpu_mac():
     """Test FPU multiply-accumulate instructions."""
-    config = EmulatorConfig(has_fpu=True)
+    config = ARMv8MConfig(has_fpu=True)
     assert run_test(
         "FPU Multiply-Accumulate Operations",
         SCRIPT_DIR / "test_fpu_mac.elf",
@@ -727,7 +727,7 @@ def test_system_hints():
 
 def test_fpu_loadstore():
     """Test FPU load/store multiple instructions."""
-    config = EmulatorConfig(has_fpu=True)
+    config = ARMv8MConfig(has_fpu=True)
     assert run_test(
         "FPU Load/Store Multiple Operations",
         SCRIPT_DIR / "test_fpu_loadstore.elf",

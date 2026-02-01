@@ -17,6 +17,24 @@ from pathlib import Path
 
 __version__ = "0.1.0"
 
+# Re-export emulator classes and types for convenience
+from .emulator import (
+    # Factory and types
+    create_emulator,
+    get_supported_architectures,
+    ArchType,
+    BaseEmulator,
+    BaseEmulatorConfig,
+    # Errors
+    EmulatorError,
+    EmulatorState,
+    ExecutionError,
+    MemoryFaultError,
+    # ARMv8-M specific
+    ARMv8MConfig,
+    ARMv8MEmulator,
+)
+
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
@@ -36,3 +54,32 @@ def get_version() -> str:
 def get_project_root() -> Path:
     """Return the project root directory."""
     return PROJECT_ROOT
+
+
+__all__ = [
+    # Version info
+    "__version__",
+    "get_version",
+    "get_project_root",
+    # Paths
+    "PROJECT_ROOT",
+    "INCLUDE_DIR",
+    "SRC_DIR",
+    "BUILD_DIR",
+    "LIB_DIR",
+    "CPPUTEST_DIR",
+    # Factory and types
+    "create_emulator",
+    "get_supported_architectures",
+    "ArchType",
+    "BaseEmulator",
+    "BaseEmulatorConfig",
+    # Errors
+    "EmulatorError",
+    "EmulatorState",
+    "ExecutionError",
+    "MemoryFaultError",
+    # ARMv8-M specific
+    "ARMv8MConfig",
+    "ARMv8MEmulator",
+]

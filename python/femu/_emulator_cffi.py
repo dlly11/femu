@@ -137,16 +137,16 @@ def _find_library() -> Path:
     # Get project root (femu/python/femu -> femu)
     project_root = Path(__file__).parent.parent.parent
 
-    # Possible library locations
+    # Possible library locations (new architecture-specific locations first)
     search_paths = [
-        # Standard CMake build directory
-        project_root / "build" / "src" / "core" / "emulator" / "libarmv8m_emulator.so",
+        # New arch-specific location (after restructuring)
+        project_root / "build" / "src" / "arch" / "armv8m" / "libarmv8m_emulator.so",
         # Debug build
-        project_root / "build" / "Debug" / "src" / "core" / "emulator" / "libarmv8m_emulator.so",
+        project_root / "build" / "Debug" / "src" / "arch" / "armv8m" / "libarmv8m_emulator.so",
         # Release build
-        project_root / "build" / "Release" / "src" / "core" / "emulator" / "libarmv8m_emulator.so",
-        # In case of different naming
-        project_root / "build" / "src" / "core" / "emulator" / "libarmv8m_emulator_shared.so",
+        project_root / "build" / "Release" / "src" / "arch" / "armv8m" / "libarmv8m_emulator.so",
+        # Legacy locations (for backward compatibility)
+        project_root / "build" / "src" / "core" / "emulator" / "libarmv8m_emulator.so",
         # System path (if installed)
         Path("/usr/local/lib/libarmv8m_emulator.so"),
     ]
@@ -156,7 +156,7 @@ def _find_library() -> Path:
             return path
 
     # If not found, return the most likely path for error message
-    return project_root / "build" / "src" / "core" / "emulator" / "libarmv8m_emulator.so"
+    return project_root / "build" / "src" / "arch" / "armv8m" / "libarmv8m_emulator.so"
 
 
 def get_ffi() -> FFI_Type:

@@ -4,7 +4,7 @@
  */
 
 #include "CppUTest/TestHarness.h"
-#include "armv8m_emulator.h"
+#include "arch/armv8m/armv8m_emulator.h"
 #include <cstring>
 
 TEST_GROUP(EmulatorTests)

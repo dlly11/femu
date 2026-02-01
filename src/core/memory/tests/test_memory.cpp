@@ -1,14 +1,15 @@
 /**
  * @file test_memory.cpp
- * @brief CppUTest tests for the ARMv8-M memory subsystem
+ * @brief CppUTest tests for the generic memory subsystem
  */
 
 #include "CppUTest/TestHarness.h"
 #include "CppUTest/CommandLineTestRunner.h"
+#include <cstring>
 
 extern "C" {
-#include "armv8m_memory.h"
-#include "armv8m_types.h"
+#include "emu/emu_memory.h"
+#include "emu/emu_types.h"
 }
 
 /*============================================================================
@@ -17,11 +18,11 @@ extern "C" {
 
 TEST_GROUP(MemoryInit)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
 
     void setup()
     {
-        armv8m_mem_init(&mem);
+        emu_mem_init(&mem);
     }
 
     void teardown()
@@ -40,14 +41,14 @@ TEST(MemoryInit, InitSetsDefaults)
 
 TEST_GROUP(RAMOperations)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[1024];
 
     void setup()
     {
         memset(ram, 0, sizeof(ram));
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
+        emu_mem_init(&mem);
+        emu_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
     }
 
     void teardown()
@@ -59,10 +60,10 @@ TEST(RAMOperations, WriteAndReadByte)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x42, 1, true, false, &fault);
+    emu_mem_write(&mem, 0x20000000, 0x42, 1, true, &fault);
     CHECK_FALSE(fault);
 
-    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 1, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0x20000000, 1, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x42u, value);
 }
@@ -71,10 +72,10 @@ TEST(RAMOperations, WriteAndReadHalfword)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x1234, 2, true, false, &fault);
+    emu_mem_write(&mem, 0x20000000, 0x1234, 2, true, &fault);
     CHECK_FALSE(fault);
 
-    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 2, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0x20000000, 2, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x1234u, value);
 }
@@ -83,10 +84,10 @@ TEST(RAMOperations, WriteAndReadWord)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x20000000, 0x12345678, 4, true, &fault);
     CHECK_FALSE(fault);
 
-    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 4, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0x20000000, 4, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x12345678u, value);
 }
@@ -96,13 +97,13 @@ TEST(RAMOperations, LittleEndianByteOrder)
     bool fault = false;
 
     // Write a word
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x20000000, 0x12345678, 4, true, &fault);
 
     // Read individual bytes - should be little-endian
-    CHECK_EQUAL(0x78u, armv8m_mem_read(&mem, 0x20000000, 1, true, false, &fault));
-    CHECK_EQUAL(0x56u, armv8m_mem_read(&mem, 0x20000001, 1, true, false, &fault));
-    CHECK_EQUAL(0x34u, armv8m_mem_read(&mem, 0x20000002, 1, true, false, &fault));
-    CHECK_EQUAL(0x12u, armv8m_mem_read(&mem, 0x20000003, 1, true, false, &fault));
+    CHECK_EQUAL(0x78u, emu_mem_read(&mem, 0x20000000, 1, true, &fault));
+    CHECK_EQUAL(0x56u, emu_mem_read(&mem, 0x20000001, 1, true, &fault));
+    CHECK_EQUAL(0x34u, emu_mem_read(&mem, 0x20000002, 1, true, &fault));
+    CHECK_EQUAL(0x12u, emu_mem_read(&mem, 0x20000003, 1, true, &fault));
 }
 
 /*============================================================================
@@ -111,7 +112,7 @@ TEST(RAMOperations, LittleEndianByteOrder)
 
 TEST_GROUP(ROMOperations)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t rom[256];
 
     void setup()
@@ -120,8 +121,8 @@ TEST_GROUP(ROMOperations)
         for (int i = 0; i < 256; i++) {
             rom[i] = (uint8_t)i;
         }
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
+        emu_mem_init(&mem);
+        emu_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
     }
 
     void teardown()
@@ -133,11 +134,11 @@ TEST(ROMOperations, ReadFromROM)
 {
     bool fault = false;
 
-    uint32_t value = armv8m_mem_read(&mem, 0x00000000, 1, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0x00000000, 1, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x00u, value);
 
-    value = armv8m_mem_read(&mem, 0x00000042, 1, true, false, &fault);
+    value = emu_mem_read(&mem, 0x00000042, 1, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x42u, value);
 }
@@ -146,11 +147,11 @@ TEST(ROMOperations, WriteToROMFaults)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x00000000, 0xFF, 1, true, false, &fault);
+    emu_mem_write(&mem, 0x00000000, 0xFF, 1, true, &fault);
     CHECK_TRUE(fault);
 
     // Original value should be unchanged
-    uint32_t value = armv8m_mem_read(&mem, 0x00000000, 1, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0x00000000, 1, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x00u, value);
 }
@@ -159,19 +160,19 @@ TEST(ROMOperations, WriteToROMFaults)
  * Test Group: MMIO Operations
  *============================================================================*/
 
-static uint32_t mmio_last_read_offset;
-static uint32_t mmio_last_write_offset;
-static uint32_t mmio_last_write_value;
-static uint32_t mmio_read_return;
+static uint64_t mmio_last_read_offset;
+static uint64_t mmio_last_write_offset;
+static uint64_t mmio_last_write_value;
+static uint64_t mmio_read_return;
 
-static uint32_t mock_mmio_read(void *ctx, uint32_t offset, uint8_t size) {
+static uint64_t mock_mmio_read(void *ctx, uint64_t offset, uint8_t size) {
     (void)ctx;
     (void)size;
     mmio_last_read_offset = offset;
     return mmio_read_return;
 }
 
-static void mock_mmio_write(void *ctx, uint32_t offset, uint32_t value, uint8_t size) {
+static void mock_mmio_write(void *ctx, uint64_t offset, uint64_t value, uint8_t size) {
     (void)ctx;
     (void)size;
     mmio_last_write_offset = offset;
@@ -180,15 +181,15 @@ static void mock_mmio_write(void *ctx, uint32_t offset, uint32_t value, uint8_t 
 
 TEST_GROUP(MMIOOperations)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
 
     void setup()
     {
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_mmio(&mem, 0x40000000, 0x1000,
-                           NULL, mock_mmio_read, mock_mmio_write);
-        mmio_last_read_offset = 0xFFFFFFFF;
-        mmio_last_write_offset = 0xFFFFFFFF;
+        emu_mem_init(&mem);
+        emu_mem_add_mmio(&mem, 0x40000000, 0x1000,
+                         NULL, mock_mmio_read, mock_mmio_write);
+        mmio_last_read_offset = 0xFFFFFFFFFFFFFFFF;
+        mmio_last_write_offset = 0xFFFFFFFFFFFFFFFF;
         mmio_last_write_value = 0;
         mmio_read_return = 0;
     }
@@ -203,7 +204,7 @@ TEST(MMIOOperations, ReadInvokesCallback)
     bool fault = false;
     mmio_read_return = 0xDEADBEEF;
 
-    uint32_t value = armv8m_mem_read(&mem, 0x40000100, 4, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0x40000100, 4, true, &fault);
 
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x100u, mmio_last_read_offset);
@@ -214,7 +215,7 @@ TEST(MMIOOperations, WriteInvokesCallback)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x40000200, 0xCAFEBABE, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x40000200, 0xCAFEBABE, 4, true, &fault);
 
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x200u, mmio_last_write_offset);
@@ -227,11 +228,11 @@ TEST(MMIOOperations, WriteInvokesCallback)
 
 TEST_GROUP(UnmappedMemory)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
 
     void setup()
     {
-        armv8m_mem_init(&mem);
+        emu_mem_init(&mem);
     }
 
     void teardown()
@@ -243,7 +244,7 @@ TEST(UnmappedMemory, ReadFaults)
 {
     bool fault = false;
 
-    armv8m_mem_read(&mem, 0x12345678, 4, true, false, &fault);
+    emu_mem_read(&mem, 0x12345678, 4, true, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -251,7 +252,7 @@ TEST(UnmappedMemory, WriteFaults)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x12345678, 0, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x12345678, 0, 4, true, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -261,14 +262,14 @@ TEST(UnmappedMemory, WriteFaults)
 
 TEST_GROUP(MemoryLoad)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[1024];
 
     void setup()
     {
         memset(ram, 0, sizeof(ram));
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
+        emu_mem_init(&mem);
+        emu_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
     }
 
     void teardown()
@@ -280,11 +281,11 @@ TEST(MemoryLoad, LoadData)
 {
     uint8_t data[] = {0x01, 0x02, 0x03, 0x04};
 
-    int result = armv8m_mem_load(&mem, 0x20000100, data, sizeof(data));
-    CHECK_EQUAL(ARMV8M_OK, result);
+    int result = emu_mem_load(&mem, 0x20000100, data, sizeof(data));
+    CHECK_EQUAL(EMU_OK, result);
 
     bool fault = false;
-    CHECK_EQUAL(0x04030201u, armv8m_mem_read(&mem, 0x20000100, 4, true, false, &fault));
+    CHECK_EQUAL(0x04030201u, emu_mem_read(&mem, 0x20000100, 4, true, &fault));
 }
 
 /*============================================================================
@@ -293,7 +294,7 @@ TEST(MemoryLoad, LoadData)
 
 TEST_GROUP(MemoryPointer)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[256];
     uint8_t rom[256];
 
@@ -301,9 +302,9 @@ TEST_GROUP(MemoryPointer)
     {
         memset(ram, 0xAA, sizeof(ram));
         memset(rom, 0xBB, sizeof(rom));
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
-        armv8m_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
+        emu_mem_init(&mem);
+        emu_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
+        emu_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
     }
 
     void teardown()
@@ -313,35 +314,35 @@ TEST_GROUP(MemoryPointer)
 
 TEST(MemoryPointer, GetPtrFromRAM)
 {
-    const uint8_t *ptr = armv8m_mem_get_ptr(&mem, 0x20000000, 16);
+    const uint8_t *ptr = emu_mem_get_ptr(&mem, 0x20000000, 16);
     CHECK(ptr != NULL);
     CHECK_EQUAL(0xAAu, ptr[0]);
 }
 
 TEST(MemoryPointer, GetPtrFromROM)
 {
-    const uint8_t *ptr = armv8m_mem_get_ptr(&mem, 0x00000000, 16);
+    const uint8_t *ptr = emu_mem_get_ptr(&mem, 0x00000000, 16);
     CHECK(ptr != NULL);
     CHECK_EQUAL(0xBBu, ptr[0]);
 }
 
 TEST(MemoryPointer, GetPtrUnmappedReturnsNull)
 {
-    const uint8_t *ptr = armv8m_mem_get_ptr(&mem, 0x80000000, 16);
+    const uint8_t *ptr = emu_mem_get_ptr(&mem, 0x80000000, 16);
     CHECK(ptr == NULL);
 }
 
 TEST(MemoryPointer, GetPtrBeyondRegionReturnsNull)
 {
     // Request size that extends beyond region
-    const uint8_t *ptr = armv8m_mem_get_ptr(&mem, 0x20000000, 512);
+    const uint8_t *ptr = emu_mem_get_ptr(&mem, 0x20000000, 512);
     CHECK(ptr == NULL);
 }
 
 TEST(MemoryPointer, GetPtrFromMMIOReturnsNull)
 {
-    armv8m_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, NULL, NULL);
-    const uint8_t *ptr = armv8m_mem_get_ptr(&mem, 0x40000000, 16);
+    emu_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, NULL, NULL);
+    const uint8_t *ptr = emu_mem_get_ptr(&mem, 0x40000000, 16);
     CHECK(ptr == NULL);
 }
 
@@ -351,13 +352,13 @@ TEST(MemoryPointer, GetPtrFromMMIOReturnsNull)
 
 TEST_GROUP(FindRegion)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[256];
 
     void setup()
     {
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
+        emu_mem_init(&mem);
+        emu_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
     }
 
     void teardown()
@@ -367,7 +368,7 @@ TEST_GROUP(FindRegion)
 
 TEST(FindRegion, FindExistingRegion)
 {
-    const MemRegion *r = armv8m_mem_find_region(&mem, 0x20000080);
+    const EmuMemRegion *r = emu_mem_find_region(&mem, 0x20000080);
     CHECK(r != NULL);
     CHECK_EQUAL(0x20000000u, r->base);
     CHECK_EQUAL(256u, r->size);
@@ -375,14 +376,14 @@ TEST(FindRegion, FindExistingRegion)
 
 TEST(FindRegion, FindNonExistentRegionReturnsNull)
 {
-    const MemRegion *r = armv8m_mem_find_region(&mem, 0x80000000);
+    const EmuMemRegion *r = emu_mem_find_region(&mem, 0x80000000);
     CHECK(r == NULL);
 }
 
 TEST(FindRegion, FindAddressBelowRegionReturnsNull)
 {
     // Address below the region base
-    const MemRegion *r = armv8m_mem_find_region(&mem, 0x10000000);
+    const EmuMemRegion *r = emu_mem_find_region(&mem, 0x10000000);
     CHECK(r == NULL);
 }
 
@@ -392,16 +393,15 @@ TEST(FindRegion, FindAddressBelowRegionReturnsNull)
 
 static bool mpu_allow_access;
 static bool mpu_check_called;
-static uint32_t mpu_last_addr;
+static uint64_t mpu_last_addr;
 static bool mpu_last_is_write;
 
-static bool mock_mpu_check(void *ctx, uint32_t addr, uint32_t size,
-                           bool is_write, bool privileged, bool in_hardfault_nmi)
+static bool mock_mpu_check(void *ctx, uint64_t addr, uint64_t size,
+                           bool is_write, bool privileged)
 {
     (void)ctx;
     (void)size;
     (void)privileged;
-    (void)in_hardfault_nmi;
     mpu_check_called = true;
     mpu_last_addr = addr;
     mpu_last_is_write = is_write;
@@ -410,16 +410,15 @@ static bool mock_mpu_check(void *ctx, uint32_t addr, uint32_t size,
 
 TEST_GROUP(MPUCallbacks)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[256];
 
     void setup()
     {
         memset(ram, 0, sizeof(ram));
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
-        mem.mpu_ctx = NULL;
-        mem.mpu_check = mock_mpu_check;
+        emu_mem_init(&mem);
+        emu_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
+        emu_mem_set_mpu(&mem, NULL, mock_mpu_check);
         mpu_allow_access = true;
         mpu_check_called = false;
         mpu_last_addr = 0;
@@ -436,7 +435,7 @@ TEST(MPUCallbacks, MPUAllowsRead)
     bool fault = false;
     mpu_allow_access = true;
 
-    armv8m_mem_read(&mem, 0x20000000, 4, true, false, &fault);
+    emu_mem_read(&mem, 0x20000000, 4, true, &fault);
 
     CHECK_TRUE(mpu_check_called);
     CHECK_FALSE(fault);
@@ -447,7 +446,7 @@ TEST(MPUCallbacks, MPUDeniesRead)
     bool fault = false;
     mpu_allow_access = false;
 
-    armv8m_mem_read(&mem, 0x20000000, 4, true, false, &fault);
+    emu_mem_read(&mem, 0x20000000, 4, true, &fault);
 
     CHECK_TRUE(mpu_check_called);
     CHECK_TRUE(fault);
@@ -458,7 +457,7 @@ TEST(MPUCallbacks, MPUAllowsWrite)
     bool fault = false;
     mpu_allow_access = true;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x20000000, 0x12345678, 4, true, &fault);
 
     CHECK_TRUE(mpu_check_called);
     CHECK_FALSE(fault);
@@ -469,7 +468,7 @@ TEST(MPUCallbacks, MPUDeniesWrite)
     bool fault = false;
     mpu_allow_access = false;
 
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x20000000, 0x12345678, 4, true, &fault);
 
     CHECK_TRUE(mpu_check_called);
     CHECK_TRUE(fault);
@@ -480,11 +479,11 @@ TEST(MPUCallbacks, MPUDeniesWrite)
  *============================================================================*/
 
 static bool fault_callback_called;
-static uint32_t fault_last_addr;
+static uint64_t fault_last_addr;
 static bool fault_last_is_write;
 static int fault_last_type;
 
-static void mock_fault_callback(void *ctx, uint32_t addr, bool is_write, int fault_type)
+static void mock_fault_callback(void *ctx, uint64_t addr, bool is_write, int fault_type)
 {
     (void)ctx;
     fault_callback_called = true;
@@ -495,15 +494,14 @@ static void mock_fault_callback(void *ctx, uint32_t addr, bool is_write, int fau
 
 TEST_GROUP(FaultCallbacks)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t rom[256];
 
     void setup()
     {
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
-        mem.fault_ctx = NULL;
-        mem.on_fault = mock_fault_callback;
+        emu_mem_init(&mem);
+        emu_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
+        emu_mem_set_fault_callback(&mem, NULL, mock_fault_callback);
         fault_callback_called = false;
         fault_last_addr = 0;
         fault_last_is_write = false;
@@ -519,7 +517,7 @@ TEST(FaultCallbacks, FaultCallbackOnROMWrite)
 {
     bool fault = false;
 
-    armv8m_mem_write(&mem, 0x00000010, 0xFF, 1, true, false, &fault);
+    emu_mem_write(&mem, 0x00000010, 0xFF, 1, true, &fault);
 
     CHECK_TRUE(fault);
     CHECK_TRUE(fault_callback_called);
@@ -531,7 +529,7 @@ TEST(FaultCallbacks, FaultCallbackOnUnmappedRead)
 {
     bool fault = false;
 
-    armv8m_mem_read(&mem, 0x80000000, 4, true, false, &fault);
+    emu_mem_read(&mem, 0x80000000, 4, true, &fault);
 
     CHECK_TRUE(fault);
     CHECK_TRUE(fault_callback_called);
@@ -545,14 +543,14 @@ TEST(FaultCallbacks, FaultCallbackOnUnmappedRead)
 
 TEST_GROUP(BoundaryAccess)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[256];
 
     void setup()
     {
         memset(ram, 0, sizeof(ram));
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
+        emu_mem_init(&mem);
+        emu_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
     }
 
     void teardown()
@@ -565,7 +563,7 @@ TEST(BoundaryAccess, ReadSpanningBoundaryFaults)
     bool fault = false;
 
     // Try to read 4 bytes starting at last byte of region
-    armv8m_mem_read(&mem, 0x200000FF, 4, true, false, &fault);
+    emu_mem_read(&mem, 0x200000FF, 4, true, &fault);
 
     CHECK_TRUE(fault);
 }
@@ -575,7 +573,7 @@ TEST(BoundaryAccess, WriteSpanningBoundaryFaults)
     bool fault = false;
 
     // Try to write 4 bytes starting at last byte of region
-    armv8m_mem_write(&mem, 0x200000FF, 0x12345678, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x200000FF, 0x12345678, 4, true, &fault);
 
     CHECK_TRUE(fault);
 }
@@ -586,11 +584,11 @@ TEST(BoundaryAccess, WriteSpanningBoundaryFaults)
 
 TEST_GROUP(MMIOEdgeCases)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
 
     void setup()
     {
-        armv8m_mem_init(&mem);
+        emu_mem_init(&mem);
     }
 
     void teardown()
@@ -601,10 +599,10 @@ TEST_GROUP(MMIOEdgeCases)
 TEST(MMIOEdgeCases, ReadWithNullCallbackFaults)
 {
     // Add MMIO region with NULL read callback
-    armv8m_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, NULL, mock_mmio_write);
+    emu_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, NULL, mock_mmio_write);
 
     bool fault = false;
-    armv8m_mem_read(&mem, 0x40000000, 4, true, false, &fault);
+    emu_mem_read(&mem, 0x40000000, 4, true, &fault);
 
     CHECK_TRUE(fault);
 }
@@ -612,10 +610,10 @@ TEST(MMIOEdgeCases, ReadWithNullCallbackFaults)
 TEST(MMIOEdgeCases, WriteWithNullCallbackFaults)
 {
     // Add MMIO region with NULL write callback
-    armv8m_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, mock_mmio_read, NULL);
+    emu_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, mock_mmio_read, NULL);
 
     bool fault = false;
-    armv8m_mem_write(&mem, 0x40000000, 0x12345678, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x40000000, 0x12345678, 4, true, &fault);
 
     CHECK_TRUE(fault);
 }
@@ -626,7 +624,7 @@ TEST(MMIOEdgeCases, WriteWithNullCallbackFaults)
 
 TEST_GROUP(MemoryLoadEdgeCases)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[256];
     uint8_t rom[256];
 
@@ -634,9 +632,9 @@ TEST_GROUP(MemoryLoadEdgeCases)
     {
         memset(ram, 0, sizeof(ram));
         memset(rom, 0, sizeof(rom));
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
-        armv8m_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
+        emu_mem_init(&mem);
+        emu_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
+        emu_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
     }
 
     void teardown()
@@ -647,15 +645,15 @@ TEST_GROUP(MemoryLoadEdgeCases)
 TEST(MemoryLoadEdgeCases, LoadToUnmappedFails)
 {
     uint8_t data[] = {0x01, 0x02, 0x03, 0x04};
-    int result = armv8m_mem_load(&mem, 0x80000000, data, sizeof(data));
-    CHECK_EQUAL(ARMV8M_ERR_BUS_FAULT, result);
+    int result = emu_mem_load(&mem, 0x80000000, data, sizeof(data));
+    CHECK_EQUAL(EMU_ERR_BUS_FAULT, result);
 }
 
 TEST(MemoryLoadEdgeCases, LoadToROMFails)
 {
     uint8_t data[] = {0x01, 0x02, 0x03, 0x04};
-    int result = armv8m_mem_load(&mem, 0x00000000, data, sizeof(data));
-    CHECK_EQUAL(ARMV8M_ERR_MEM_FAULT, result);
+    int result = emu_mem_load(&mem, 0x00000000, data, sizeof(data));
+    CHECK_EQUAL(EMU_ERR_MEM_FAULT, result);
 }
 
 TEST(MemoryLoadEdgeCases, LoadSpanningBoundaryFails)
@@ -663,8 +661,8 @@ TEST(MemoryLoadEdgeCases, LoadSpanningBoundaryFails)
     uint8_t data[512];
     memset(data, 0xAA, sizeof(data));
     // Try to load 512 bytes into 256 byte region
-    int result = armv8m_mem_load(&mem, 0x20000000, data, sizeof(data));
-    CHECK_EQUAL(ARMV8M_ERR_BUS_FAULT, result);
+    int result = emu_mem_load(&mem, 0x20000000, data, sizeof(data));
+    CHECK_EQUAL(EMU_ERR_BUS_FAULT, result);
 }
 
 /*============================================================================
@@ -673,11 +671,11 @@ TEST(MemoryLoadEdgeCases, LoadSpanningBoundaryFails)
 
 TEST_GROUP(RegionManagement)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
 
     void setup()
     {
-        armv8m_mem_init(&mem);
+        emu_mem_init(&mem);
     }
 
     void teardown()
@@ -688,32 +686,31 @@ TEST_GROUP(RegionManagement)
 TEST(RegionManagement, AddMaxRegions)
 {
     uint8_t ram[16];
-    int result = ARMV8M_OK;
+    int result = EMU_OK;
 
     // Add maximum number of regions
-    for (int i = 0; i < MEM_MAX_REGIONS; i++) {
-        result = armv8m_mem_add_ram(&mem, (uint32_t)(0x20000000 + i * 0x1000), sizeof(ram), ram);
-        CHECK_EQUAL(ARMV8M_OK, result);
+    for (int i = 0; i < EMU_MEM_MAX_REGIONS; i++) {
+        result = emu_mem_add_ram(&mem, (uint64_t)(0x20000000 + i * 0x1000), sizeof(ram), ram);
+        CHECK_EQUAL(EMU_OK, result);
     }
 
-    CHECK_EQUAL(MEM_MAX_REGIONS, mem.num_regions);
+    CHECK_EQUAL(EMU_MEM_MAX_REGIONS, mem.num_regions);
 
     // Try to add one more - should fail
-    result = armv8m_mem_add_ram(&mem, 0x30000000, sizeof(ram), ram);
-    CHECK_EQUAL(ARMV8M_ERR_MEM_FAULT, result);
+    result = emu_mem_add_ram(&mem, 0x30000000, sizeof(ram), ram);
+    CHECK_EQUAL(EMU_ERR_MEM_FAULT, result);
 }
 
 TEST(RegionManagement, AddRegionDirectly)
 {
-    MemRegion region;
+    EmuMemRegion region;
     memset(&region, 0, sizeof(region));
     region.base = 0x50000000;
     region.size = 0x1000;
-    region.type = MEM_REGION_UNMAPPED;
-    region.attr = MEM_ATTR_NORMAL;
+    region.type = EMU_MEM_REGION_UNMAPPED;
 
-    int result = armv8m_mem_add_region(&mem, &region);
-    CHECK_EQUAL(ARMV8M_OK, result);
+    int result = emu_mem_add_region(&mem, &region);
+    CHECK_EQUAL(EMU_OK, result);
     CHECK_EQUAL(1, mem.num_regions);
 }
 
@@ -723,19 +720,18 @@ TEST(RegionManagement, AddRegionDirectly)
 
 TEST_GROUP(UnmappedRegionType)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
 
     void setup()
     {
-        armv8m_mem_init(&mem);
+        emu_mem_init(&mem);
         // Add an explicit UNMAPPED region
-        MemRegion region;
+        EmuMemRegion region;
         memset(&region, 0, sizeof(region));
         region.base = 0x50000000;
         region.size = 0x1000;
-        region.type = MEM_REGION_UNMAPPED;
-        region.attr = MEM_ATTR_NORMAL;
-        armv8m_mem_add_region(&mem, &region);
+        region.type = EMU_MEM_REGION_UNMAPPED;
+        emu_mem_add_region(&mem, &region);
     }
 
     void teardown()
@@ -746,14 +742,14 @@ TEST_GROUP(UnmappedRegionType)
 TEST(UnmappedRegionType, ReadFromUnmappedRegionFaults)
 {
     bool fault = false;
-    armv8m_mem_read(&mem, 0x50000000, 4, true, false, &fault);
+    emu_mem_read(&mem, 0x50000000, 4, true, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(UnmappedRegionType, WriteToUnmappedRegionFaults)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x50000000, 0x12345678, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x50000000, 0x12345678, 4, true, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -763,14 +759,14 @@ TEST(UnmappedRegionType, WriteToUnmappedRegionFaults)
 
 TEST_GROUP(InvalidAccessSize)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[256];
 
     void setup()
     {
         memset(ram, 0xAA, sizeof(ram));
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
+        emu_mem_init(&mem);
+        emu_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
     }
 
     void teardown()
@@ -782,7 +778,7 @@ TEST(InvalidAccessSize, ReadWithInvalidSizeFaults)
 {
     bool fault = false;
     // Size 3 is invalid - should fault
-    armv8m_mem_read(&mem, 0x20000000, 3, true, false, &fault);
+    emu_mem_read(&mem, 0x20000000, 3, true, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -790,103 +786,40 @@ TEST(InvalidAccessSize, WriteWithInvalidSizeFaults)
 {
     bool fault = false;
     // Size 3 is invalid - should fault
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 3, true, false, &fault);
+    emu_mem_write(&mem, 0x20000000, 0x12345678, 3, true, &fault);
     CHECK_TRUE(fault);
     // Memory should be unchanged (still 0xAA pattern)
-    CHECK_EQUAL(0xAAu, armv8m_mem_read(&mem, 0x20000000, 1, true, false, &fault));
+    CHECK_EQUAL(0xAAu, emu_mem_read(&mem, 0x20000000, 1, true, &fault));
 }
 
 TEST(InvalidAccessSize, ReadWithZeroSizeFaults)
 {
     bool fault = false;
-    armv8m_mem_read(&mem, 0x20000000, 0, true, false, &fault);
+    emu_mem_read(&mem, 0x20000000, 0, true, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(InvalidAccessSize, WriteWithZeroSizeFaults)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 0, true, false, &fault);
+    emu_mem_write(&mem, 0x20000000, 0x12345678, 0, true, &fault);
     CHECK_TRUE(fault);
 }
 
 /*============================================================================
- * Test Group: Alignment Checks
+ * Test Group: Alignment Checks (MMIO)
  *============================================================================*/
 
-TEST_GROUP(AlignmentChecks)
-{
-    MemorySystem mem;
-    uint8_t ram[256];
+static uint64_t device_reg_value;
 
-    void setup()
-    {
-        memset(ram, 0, sizeof(ram));
-        armv8m_mem_init(&mem);
-        armv8m_mem_add_ram(&mem, 0x20000000, sizeof(ram), ram);
-    }
-
-    void teardown()
-    {
-    }
-};
-
-TEST(AlignmentChecks, AlignedWordAccessSucceeds)
-{
-    bool fault = false;
-    armv8m_mem_write(&mem, 0x20000000, 0x12345678, 4, true, false, &fault);
-    CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x20000000, 4, true, false, &fault);
-    CHECK_FALSE(fault);
-    CHECK_EQUAL(0x12345678u, value);
-}
-
-TEST(AlignmentChecks, AlignedHalfwordAccessSucceeds)
-{
-    bool fault = false;
-    armv8m_mem_write(&mem, 0x20000002, 0x1234, 2, true, false, &fault);
-    CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x20000002, 2, true, false, &fault);
-    CHECK_FALSE(fault);
-    CHECK_EQUAL(0x1234u, value);
-}
-
-TEST(AlignmentChecks, UnalignedWordAccessOnNormalMemorySucceeds)
-{
-    bool fault = false;
-    // Normal memory (RAM) allows unaligned access
-    armv8m_mem_write(&mem, 0x20000001, 0x12345678, 4, true, false, &fault);
-    CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x20000001, 4, true, false, &fault);
-    CHECK_FALSE(fault);
-    CHECK_EQUAL(0x12345678u, value);
-}
-
-TEST(AlignmentChecks, UnalignedHalfwordAccessOnNormalMemorySucceeds)
-{
-    bool fault = false;
-    // Normal memory (RAM) allows unaligned access
-    armv8m_mem_write(&mem, 0x20000001, 0x1234, 2, true, false, &fault);
-    CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x20000001, 2, true, false, &fault);
-    CHECK_FALSE(fault);
-    CHECK_EQUAL(0x1234u, value);
-}
-
-/*============================================================================
- * Test Group: Device Memory Alignment
- *============================================================================*/
-
-static uint32_t device_reg_value;
-
-static uint32_t device_read(void *ctx, uint32_t offset, uint8_t size) {
+static uint64_t device_read(void *ctx, uint64_t offset, uint8_t size) {
     (void)ctx;
     (void)offset;
     (void)size;
     return device_reg_value;
 }
 
-static void device_write(void *ctx, uint32_t offset, uint32_t value, uint8_t size) {
+static void device_write(void *ctx, uint64_t offset, uint64_t value, uint8_t size) {
     (void)ctx;
     (void)offset;
     (void)size;
@@ -895,13 +828,13 @@ static void device_write(void *ctx, uint32_t offset, uint32_t value, uint8_t siz
 
 TEST_GROUP(DeviceMemoryAlignment)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
 
     void setup()
     {
-        armv8m_mem_init(&mem);
-        // MMIO regions have MEM_ATTR_DEVICE by default
-        armv8m_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, device_read, device_write);
+        emu_mem_init(&mem);
+        // MMIO regions require aligned access
+        emu_mem_add_mmio(&mem, 0x40000000, 0x1000, NULL, device_read, device_write);
         device_reg_value = 0;
     }
 
@@ -913,9 +846,9 @@ TEST_GROUP(DeviceMemoryAlignment)
 TEST(DeviceMemoryAlignment, AlignedAccessToDeviceMemorySucceeds)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x40000000, 0xDEADBEEF, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x40000000, 0xDEADBEEF, 4, true, &fault);
     CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x40000000, 4, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0x40000000, 4, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0xDEADBEEFu, value);
 }
@@ -923,28 +856,28 @@ TEST(DeviceMemoryAlignment, AlignedAccessToDeviceMemorySucceeds)
 TEST(DeviceMemoryAlignment, UnalignedWordReadFromDeviceMemoryFaults)
 {
     bool fault = false;
-    armv8m_mem_read(&mem, 0x40000001, 4, true, false, &fault);
+    emu_mem_read(&mem, 0x40000001, 4, true, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(DeviceMemoryAlignment, UnalignedWordWriteToDeviceMemoryFaults)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x40000001, 0x12345678, 4, true, false, &fault);
+    emu_mem_write(&mem, 0x40000001, 0x12345678, 4, true, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(DeviceMemoryAlignment, UnalignedHalfwordReadFromDeviceMemoryFaults)
 {
     bool fault = false;
-    armv8m_mem_read(&mem, 0x40000001, 2, true, false, &fault);
+    emu_mem_read(&mem, 0x40000001, 2, true, &fault);
     CHECK_TRUE(fault);
 }
 
 TEST(DeviceMemoryAlignment, UnalignedHalfwordWriteToDeviceMemoryFaults)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0x40000001, 0x1234, 2, true, false, &fault);
+    emu_mem_write(&mem, 0x40000001, 0x1234, 2, true, &fault);
     CHECK_TRUE(fault);
 }
 
@@ -952,9 +885,9 @@ TEST(DeviceMemoryAlignment, ByteAccessAlwaysSucceeds)
 {
     bool fault = false;
     // Byte access is always aligned
-    armv8m_mem_write(&mem, 0x40000001, 0x42, 1, true, false, &fault);
+    emu_mem_write(&mem, 0x40000001, 0x42, 1, true, &fault);
     CHECK_FALSE(fault);
-    uint32_t value = armv8m_mem_read(&mem, 0x40000001, 1, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0x40000001, 1, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x42u, value);
 }
@@ -965,15 +898,15 @@ TEST(DeviceMemoryAlignment, ByteAccessAlwaysSucceeds)
 
 TEST_GROUP(HighAddressRegion)
 {
-    MemorySystem mem;
+    EmuMemorySystem mem;
     uint8_t ram[256];
 
     void setup()
     {
         memset(ram, 0x55, sizeof(ram));
-        armv8m_mem_init(&mem);
+        emu_mem_init(&mem);
         // Region at high address where base + size would overflow uint32_t
-        armv8m_mem_add_ram(&mem, 0xFFFFFF00, sizeof(ram), ram);
+        emu_mem_add_ram(&mem, 0xFFFFFF00, sizeof(ram), ram);
     }
 
     void teardown()
@@ -984,7 +917,7 @@ TEST_GROUP(HighAddressRegion)
 TEST(HighAddressRegion, ReadFromHighRegion)
 {
     bool fault = false;
-    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFF00, 1, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0xFFFFFF00, 1, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x55u, value);
 }
@@ -992,10 +925,10 @@ TEST(HighAddressRegion, ReadFromHighRegion)
 TEST(HighAddressRegion, WriteToHighRegion)
 {
     bool fault = false;
-    armv8m_mem_write(&mem, 0xFFFFFF00, 0xAA, 1, true, false, &fault);
+    emu_mem_write(&mem, 0xFFFFFF00, 0xAA, 1, true, &fault);
     CHECK_FALSE(fault);
 
-    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFF00, 1, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0xFFFFFF00, 1, true, &fault);
     CHECK_EQUAL(0xAAu, value);
 }
 
@@ -1003,21 +936,21 @@ TEST(HighAddressRegion, AccessAtEndOfHighRegion)
 {
     bool fault = false;
     // Last valid byte in region (0xFFFFFF00 + 255 = 0xFFFFFFFF)
-    uint32_t value = armv8m_mem_read(&mem, 0xFFFFFFFF, 1, true, false, &fault);
+    uint64_t value = emu_mem_read(&mem, 0xFFFFFFFF, 1, true, &fault);
     CHECK_FALSE(fault);
     CHECK_EQUAL(0x55u, value);
 }
 
 TEST(HighAddressRegion, FindHighRegion)
 {
-    const MemRegion *r = armv8m_mem_find_region(&mem, 0xFFFFFF80);
+    const EmuMemRegion *r = emu_mem_find_region(&mem, 0xFFFFFF80);
     CHECK(r != NULL);
     CHECK_EQUAL(0xFFFFFF00u, r->base);
 }
 
 TEST(HighAddressRegion, GetPtrFromHighRegion)
 {
-    const uint8_t *ptr = armv8m_mem_get_ptr(&mem, 0xFFFFFF00, 128);
+    const uint8_t *ptr = emu_mem_get_ptr(&mem, 0xFFFFFF00, 128);
     CHECK(ptr != NULL);
     CHECK_EQUAL(0x55u, ptr[0]);
 }
@@ -1025,11 +958,11 @@ TEST(HighAddressRegion, GetPtrFromHighRegion)
 TEST(HighAddressRegion, LoadToHighRegion)
 {
     uint8_t data[] = {0x11, 0x22, 0x33, 0x44};
-    int result = armv8m_mem_load(&mem, 0xFFFFFF00, data, sizeof(data));
-    CHECK_EQUAL(ARMV8M_OK, result);
+    int result = emu_mem_load(&mem, 0xFFFFFF00, data, sizeof(data));
+    CHECK_EQUAL(EMU_OK, result);
 
     bool fault = false;
-    CHECK_EQUAL(0x44332211u, armv8m_mem_read(&mem, 0xFFFFFF00, 4, true, false, &fault));
+    CHECK_EQUAL(0x44332211u, emu_mem_read(&mem, 0xFFFFFF00, 4, true, &fault));
 }
 
 /*============================================================================
