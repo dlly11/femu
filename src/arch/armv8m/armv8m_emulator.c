@@ -58,8 +58,10 @@ static int nvic_get_pending_callback(void *ctx)
 {
     Emulator *emu = (Emulator *)ctx;
 
-    /* Calculate current execution priority */
-    int current_pri = -1;
+    /* Calculate current execution priority.
+     * Use 256 for thread mode (no active exception) since all configurable
+     * priorities are 0-255. This ensures any pending exception can preempt. */
+    int current_pri = 256;
     if (emu->exec.cpu.current_exception > 0) {
         if (emu->exec.cpu.current_exception < NVIC_NUM_EXCEPTIONS) {
             current_pri = emu->nvic.shpr[emu->exec.cpu.current_exception - 4];
@@ -179,6 +181,25 @@ static void periph_mmio_write(void *ctx, uint64_t offset, uint64_t value, uint8_
     EmuPeripheral *periph = (EmuPeripheral *)ctx;
     if (periph && periph->vtable.write) {
         periph->vtable.write(periph->context, (uint32_t)offset, (uint32_t)value, size);
+    }
+}
+
+/**
+ * IRQ callback for peripherals to trigger interrupts.
+ *
+ * @param emu_ctx  Emulator context (Emulator*)
+ * @param irq      External interrupt number (0-239)
+ * @param level    1 to assert (pend), 0 to deassert (unpend)
+ */
+static void periph_irq_callback(void *emu_ctx, int irq, int level)
+{
+    Emulator *emu = (Emulator *)emu_ctx;
+    if (!emu || irq < 0) return;
+
+    if (level) {
+        armv8m_nvic_set_pending(&emu->nvic, irq);
+    } else {
+        armv8m_nvic_clear_pending(&emu->nvic, irq);
     }
 }
 
@@ -718,6 +739,11 @@ int armv8m_emu_add_peripheral(Emulator *emu, EmuPeripheral *periph, uint32_t bas
     periph->base_addr = base;
     periph->size = size;
     periph->emu_ctx = emu;
+
+    /* Give peripheral the IRQ callback if it has a setter */
+    if (periph->vtable.set_irq_callback) {
+        periph->vtable.set_irq_callback(periph->context, periph_irq_callback, emu);
+    }
 
     /* Add MMIO region */
     int result = emu_mem_add_mmio(&emu->mem, base, size,

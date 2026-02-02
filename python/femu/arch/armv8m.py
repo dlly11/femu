@@ -25,6 +25,7 @@ from .. import _emulator_cffi as cffi
 
 if TYPE_CHECKING:
     from ..elf_loader import ElfInfo
+    from ..peripheral import PeripheralBase
 
 
 @dataclass
@@ -94,6 +95,7 @@ class ARMv8MEmulator(BaseEmulator):
 
         self._config = config or ARMv8MConfig()
         self._elf_info: ElfInfo | None = None
+        self._peripherals: list[PeripheralBase] = []
 
     def __del__(self):
         """Clean up emulator resources."""
@@ -321,6 +323,38 @@ class ARMv8MEmulator(BaseEmulator):
     @fpscr.setter
     def fpscr(self, value: int) -> None:
         self._lib.armv8m_emu_set_fpscr(self._emu_ptr, value & 0xFFFFFFFF)
+
+    # =========================================================================
+    # Peripherals
+    # =========================================================================
+
+    def add_peripheral(self, peripheral: "PeripheralBase", base: int, size: int) -> None:
+        """
+        Add a peripheral to the emulator.
+
+        Args:
+            peripheral: Peripheral instance (Python, C, or plugin)
+            base: Base address for MMIO region
+            size: Size of MMIO region in bytes
+        """
+        # Get the C peripheral structure from the peripheral
+        c_periph = peripheral.c_struct
+
+        # Register with the emulator
+        result = self._lib.armv8m_emu_add_peripheral(
+            self._emu_ptr, c_periph, base, size
+        )
+
+        if result != cffi.ARMV8M_OK:
+            raise EmulatorError(f"Failed to add peripheral (code {result})")
+
+        # Keep reference to prevent GC
+        self._peripherals.append(peripheral)
+
+    @property
+    def peripherals(self) -> list["PeripheralBase"]:
+        """List of attached peripherals."""
+        return list(self._peripherals)
 
     # =========================================================================
     # Utilities

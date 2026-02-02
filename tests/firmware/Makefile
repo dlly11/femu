@@ -24,7 +24,7 @@ TESTS = test_simple test_arithmetic test_memory test_branch \
         test_dsp test_pack test_fpu test_acquire_release test_sat_add \
         test_fpu_mac test_dsp_exchange test_multiply_halfword \
         test_system_hints test_fpu_loadstore \
-        test_mpu_basic test_nvic_basic
+        test_mpu_basic test_nvic_basic test_peripheral test_irq
 
 # TrustZone tests (require cortex-m33 and special linker script)
 TZ_TESTS = test_tt_insn test_sg_insn test_bxns_blxns

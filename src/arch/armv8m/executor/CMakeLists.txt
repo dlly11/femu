@@ -35,7 +35,7 @@ set(EXECUTOR_SOURCES
 )
 
 # Add optional source files if they exist
-foreach(SRC exec_data_proc.c exec_load_store.c exec_branch.c exec_system.c exec_exception.c exec_fpu.c)
+foreach(SRC exec_data_proc.c exec_load_store.c exec_branch.c exec_system.c exec_exception.c exec_fpu.c blocks.c icache.c)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${SRC})
         list(APPEND EXECUTOR_SOURCES ${SRC})
     endif()
@@ -43,6 +43,10 @@ endforeach()
 
 # Build executor as a static library
 add_library(armv8m_executor STATIC ${EXECUTOR_SOURCES})
+
+# Disable -pedantic for executor because it uses computed gotos (GCC extension)
+# for performance in the instruction dispatch loop
+target_compile_options(armv8m_executor PRIVATE -Wno-pedantic)
 
 target_include_directories(armv8m_executor PUBLIC
     ${CMAKE_SOURCE_DIR}/include

@@ -8,9 +8,9 @@ This package provides:
 - CLI interface for the emulator
 - Build and packaging tools
 - Development utilities (validation, testing, AI session helpers)
+- Machine configuration (YAML-based machine definitions)
+- Peripheral management (Python, C, and plugin peripherals)
 - GDB server (planned)
-- Machine configuration (planned)
-- Peripheral management (planned)
 """
 
 from pathlib import Path
@@ -33,6 +33,27 @@ from .emulator import (
     # ARMv8-M specific
     ARMv8MConfig,
     ARMv8MEmulator,
+)
+
+# Peripheral system
+from .peripheral import (
+    PeripheralBase,
+    Peripheral,
+    CPeripheral,
+    PluginPeripheral,
+)
+from .peripheral_registry import (
+    PeripheralRegistry,
+    PeripheralTypeInfo,
+)
+
+# Machine configuration
+from .machine import (
+    Machine,
+    MachineDef,
+    MemoryRegion,
+    PeripheralDef,
+    CPUConfig,
 )
 
 # Project root directory
@@ -82,4 +103,17 @@ __all__ = [
     # ARMv8-M specific
     "ARMv8MConfig",
     "ARMv8MEmulator",
+    # Peripheral system
+    "PeripheralBase",
+    "Peripheral",
+    "CPeripheral",
+    "PluginPeripheral",
+    "PeripheralRegistry",
+    "PeripheralTypeInfo",
+    # Machine configuration
+    "Machine",
+    "MachineDef",
+    "MemoryRegion",
+    "PeripheralDef",
+    "CPUConfig",
 ]

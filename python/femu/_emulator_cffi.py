@@ -91,6 +91,77 @@ _ffi.cdef("""
     void armv8m_emu_set_fpu_reg(Emulator *emu, int reg, uint32_t value);
     uint32_t armv8m_emu_get_fpscr(const Emulator *emu);
     void armv8m_emu_set_fpscr(Emulator *emu, uint32_t value);
+
+    /* ========================================================================
+     * Peripheral Support
+     * ======================================================================== */
+
+    /* Peripheral callback types */
+    typedef uint32_t (*EmuPeriphReadFn)(void *ctx, uint32_t offset, uint8_t size);
+    typedef void (*EmuPeriphWriteFn)(void *ctx, uint32_t offset, uint32_t value, uint8_t size);
+    typedef void (*EmuPeriphResetFn)(void *ctx);
+    typedef void (*EmuPeriphTickFn)(void *ctx, uint64_t cycles);
+    typedef void (*EmuPeriphDestroyFn)(void *ctx);
+
+    /* IRQ/DMA callback types */
+    typedef void (*EmuPeriphIRQCallback)(void *emu_ctx, int irq, int level);
+    typedef void (*EmuPeriphSetIRQFn)(void *ctx, EmuPeriphIRQCallback cb, void *emu_ctx);
+    typedef void (*EmuPeriphDMACallback)(void *emu_ctx, int channel, int request);
+    typedef void (*EmuPeriphSetDMAFn)(void *ctx, EmuPeriphDMACallback cb, void *emu_ctx);
+
+    /* Debug callback */
+    typedef int (*EmuPeriphDebugStateFn)(void *ctx, char *buf, size_t buf_size);
+
+    /* Peripheral virtual function table */
+    typedef struct {
+        EmuPeriphReadFn read;
+        EmuPeriphWriteFn write;
+        EmuPeriphResetFn reset;
+        EmuPeriphTickFn tick;
+        EmuPeriphDestroyFn destroy;
+        EmuPeriphSetIRQFn set_irq_callback;
+        EmuPeriphSetDMAFn set_dma_callback;
+        EmuPeriphDebugStateFn debug_state;
+    } EmuPeripheralVTable;
+
+    /* Peripheral instance structure */
+    typedef struct {
+        const char *name;
+        const char *type;
+        void *context;
+        EmuPeripheralVTable vtable;
+        uint64_t base_addr;
+        uint64_t size;
+        void *emu_ctx;
+    } EmuPeripheral;
+
+    /* Peripheral API */
+    int armv8m_emu_add_peripheral(Emulator *emu, EmuPeripheral *periph,
+                                   uint32_t base, uint32_t size);
+
+    /* ========================================================================
+     * Plugin Support
+     * ======================================================================== */
+
+    /* Plugin metadata */
+    typedef struct {
+        int api_version;
+        const char *name;
+        const char *version;
+        const char *author;
+        const char *description;
+    } EmuPluginInfo;
+
+    /* Peripheral type descriptor (from plugins) */
+    typedef struct {
+        const char *type_name;
+        const char *description;
+        EmuPeripheral* (*create)(const char *name, const char *config_json);
+        void (*destroy)(EmuPeripheral *periph);
+    } EmuPeripheralType;
+
+    /* Plugin init function type */
+    typedef EmuPeripheralType* (*EmuPluginInitFn)(const EmuPluginInfo **info_out);
 """)
 
 # Error codes (must match armv8m_types.h)
@@ -233,3 +304,34 @@ def create_config() -> tuple:
     config = _ffi.new("EmulatorConfig *")
     get_lib().armv8m_emu_default_config(config)
     return config, config
+
+
+def create_peripheral() -> tuple:
+    """
+    Create a new EmuPeripheral structure.
+
+    Returns:
+        A tuple of (peripheral pointer, buffer to keep alive)
+    """
+    periph = _ffi.new("EmuPeripheral *")
+    return periph, periph
+
+
+def load_plugin_library(path: str):
+    """
+    Load a plugin shared library.
+
+    Args:
+        path: Path to the .so/.dll/.dylib file
+
+    Returns:
+        The loaded CFFI library object
+
+    Raises:
+        OSError: If the library cannot be loaded
+    """
+    return _ffi.dlopen(path)
+
+
+# Plugin API version constant
+EMU_PLUGIN_API_VERSION = 1
