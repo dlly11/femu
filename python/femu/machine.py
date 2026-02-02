@@ -48,17 +48,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from .emulator import create_emulator, ArchType
 from .arch.armv8m import ARMv8MConfig, ARMv8MEmulator
+from .emulator import ArchType, create_emulator
 from .peripheral import PeripheralBase, PluginPeripheral
 from .peripheral_registry import PeripheralRegistry
-
 
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def _parse_size(value: str | int) -> int:
     """
@@ -77,21 +76,21 @@ def _parse_size(value: str | int) -> int:
 
     # Handle suffixes
     multipliers = {
-        'K': 1024,
-        'KB': 1024,
-        'M': 1024 * 1024,
-        'MB': 1024 * 1024,
-        'G': 1024 * 1024 * 1024,
-        'GB': 1024 * 1024 * 1024,
+        "K": 1024,
+        "KB": 1024,
+        "M": 1024 * 1024,
+        "MB": 1024 * 1024,
+        "G": 1024 * 1024 * 1024,
+        "GB": 1024 * 1024 * 1024,
     }
 
     for suffix, mult in multipliers.items():
         if value.endswith(suffix):
-            num_str = value[:-len(suffix)].strip()
+            num_str = value[: -len(suffix)].strip()
             return int(num_str) * mult
 
     # Handle hex (0x prefix)
-    if value.startswith('0X'):
+    if value.startswith("0X"):
         return int(value, 16)
 
     return int(value)
@@ -118,26 +117,29 @@ def _parse_address(value: str | int) -> int:
 # Configuration Dataclasses
 # =============================================================================
 
+
 @dataclass
 class MemoryRegion:
     """Memory region definition."""
+
     type: str  # "flash" or "ram"
     base: int
     size: int
 
     @classmethod
-    def from_dict(cls, data: dict) -> "MemoryRegion":
+    def from_dict(cls, data: dict) -> MemoryRegion:
         """Create from dictionary."""
         return cls(
             type=data["type"].lower(),
             base=_parse_address(data["base"]),
-            size=_parse_size(data["size"])
+            size=_parse_size(data["size"]),
         )
 
 
 @dataclass
 class PeripheralDef:
     """Peripheral definition from configuration."""
+
     type: str
     name: str
     base: int
@@ -146,7 +148,7 @@ class PeripheralDef:
     plugin: str | None = None  # Explicit plugin path (optional)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PeripheralDef":
+    def from_dict(cls, data: dict) -> PeripheralDef:
         """Create from dictionary."""
         return cls(
             type=data["type"],
@@ -154,13 +156,14 @@ class PeripheralDef:
             base=_parse_address(data["base"]),
             size=_parse_size(data["size"]),
             config=data.get("config", {}),
-            plugin=data.get("plugin")
+            plugin=data.get("plugin"),
         )
 
 
 @dataclass
 class CPUConfig:
     """CPU configuration."""
+
     has_fpu: bool = False
     has_dsp: bool = False
     has_trustzone: bool = False
@@ -168,20 +171,21 @@ class CPUConfig:
     num_irqs: int = 32
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CPUConfig":
+    def from_dict(cls, data: dict) -> CPUConfig:
         """Create from dictionary."""
         return cls(
             has_fpu=data.get("has_fpu", False),
             has_dsp=data.get("has_dsp", False),
             has_trustzone=data.get("has_trustzone", False),
             num_mpu_regions=data.get("num_mpu_regions", 8),
-            num_irqs=data.get("num_irqs", 32)
+            num_irqs=data.get("num_irqs", 32),
         )
 
 
 @dataclass
 class MachineDef:
     """Complete machine definition."""
+
     name: str
     arch: str
     cpu: CPUConfig
@@ -191,7 +195,7 @@ class MachineDef:
     plugin_dirs: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: dict, base_path: Path | None = None) -> "MachineDef":
+    def from_dict(cls, data: dict, base_path: Path | None = None) -> MachineDef:
         """
         Create from dictionary.
 
@@ -208,8 +212,7 @@ class MachineDef:
         # Resolve relative paths if base_path provided
         if base_path:
             plugins = [
-                str((base_path / p).resolve()) if not Path(p).is_absolute() else p
-                for p in plugins
+                str((base_path / p).resolve()) if not Path(p).is_absolute() else p for p in plugins
             ]
             plugin_dirs = [
                 str((base_path / d).resolve()) if not Path(d).is_absolute() else d
@@ -223,13 +226,14 @@ class MachineDef:
             memory=[MemoryRegion.from_dict(m) for m in data.get("memory", [])],
             peripherals=[PeripheralDef.from_dict(p) for p in data.get("peripherals", [])],
             plugins=plugins,
-            plugin_dirs=plugin_dirs
+            plugin_dirs=plugin_dirs,
         )
 
 
 # =============================================================================
 # Machine Class
 # =============================================================================
+
 
 class Machine:
     """
@@ -278,14 +282,14 @@ class Machine:
             try:
                 PeripheralRegistry.load_plugin(plugin_path)
             except Exception as e:
-                raise RuntimeError(f"Failed to load plugin {plugin_path}: {e}")
+                raise RuntimeError(f"Failed to load plugin {plugin_path}: {e}") from e
 
         # Load from plugin directories
         for plugin_dir in self._def.plugin_dirs:
             try:
                 PeripheralRegistry.load_plugins_from_directory(plugin_dir)
             except Exception as e:
-                raise RuntimeError(f"Failed to load plugins from {plugin_dir}: {e}")
+                raise RuntimeError(f"Failed to load plugins from {plugin_dir}: {e}") from e
 
     def _create_emulator(self) -> ARMv8MEmulator:
         """Create emulator with appropriate configuration."""
@@ -298,7 +302,7 @@ class Machine:
                 has_fpu=cpu.has_fpu,
                 has_dsp=cpu.has_dsp,
                 has_trustzone=cpu.has_trustzone,
-                num_mpu_regions=cpu.num_mpu_regions
+                num_mpu_regions=cpu.num_mpu_regions,
             )
             return create_emulator(ArchType.ARMV8M, config)
 
@@ -307,14 +311,13 @@ class Machine:
                 has_fpu=cpu.has_fpu,
                 has_dsp=cpu.has_dsp,
                 has_trustzone=False,  # ARMv7-M doesn't have TrustZone
-                num_mpu_regions=cpu.num_mpu_regions
+                num_mpu_regions=cpu.num_mpu_regions,
             )
             return create_emulator(ArchType.ARMV7M, config)
 
         else:
             raise ValueError(
-                f"Unsupported architecture: {self._def.arch}. "
-                f"Supported: armv8m, armv7m"
+                f"Unsupported architecture: {self._def.arch}. " f"Supported: armv8m, armv7m"
             )
 
     def _add_memory_region(self, mem: MemoryRegion) -> None:
@@ -324,30 +327,23 @@ class Machine:
         elif mem.type == "ram":
             self._emu.add_ram(mem.base, mem.size)
         else:
-            raise ValueError(
-                f"Unknown memory type: {mem.type}. "
-                f"Supported: flash, ram"
-            )
+            raise ValueError(f"Unknown memory type: {mem.type}. " f"Supported: flash, ram")
 
     def _create_peripheral(self, pdef: PeripheralDef) -> PeripheralBase:
         """Create a peripheral from its definition."""
         # If plugin path is specified explicitly, load directly from there
         if pdef.plugin:
-            return PluginPeripheral.from_plugin(
-                pdef.plugin, pdef.type, pdef.name, pdef.config
-            )
+            return PluginPeripheral.from_plugin(pdef.plugin, pdef.type, pdef.name, pdef.config)
 
         # Otherwise use the registry (handles Python, C, and loaded plugins)
-        return PeripheralRegistry.create(
-            pdef.type, pdef.name, pdef.config
-        )
+        return PeripheralRegistry.create(pdef.type, pdef.name, pdef.config)
 
     # =========================================================================
     # Factory Methods
     # =========================================================================
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "Machine":
+    def from_yaml(cls, path: str | Path) -> Machine:
         """
         Load machine from YAML file.
 
@@ -363,11 +359,10 @@ class Machine:
         # Import yaml here to make it optional
         try:
             import yaml
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
-                "PyYAML is required to load YAML files. "
-                "Install it with: pip install pyyaml"
-            )
+                "PyYAML is required to load YAML files. Install it with: pip install pyyaml"
+            ) from e
 
         path = Path(path)
 
@@ -384,7 +379,7 @@ class Machine:
         return cls(definition)
 
     @classmethod
-    def from_dict(cls, config: dict, base_path: Path | None = None) -> "Machine":
+    def from_dict(cls, config: dict, base_path: Path | None = None) -> Machine:
         """
         Create machine from dictionary.
 

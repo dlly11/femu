@@ -84,11 +84,17 @@ static int nvic_get_pending_callback(void *ctx)
      * priorities are 0-255. This ensures any pending exception can preempt. */
     int current_pri = 256;
     if (emu->exec.cpu.current_exception > 0) {
-        if (emu->exec.cpu.current_exception < NVIC_NUM_EXCEPTIONS) {
+        /* Exceptions 1-3 (Reset, NMI, HardFault) have fixed priorities.
+         * SHPR only applies to exceptions 4-15. External IRQs start at 16. */
+        if (emu->exec.cpu.current_exception >= 4 &&
+            emu->exec.cpu.current_exception < NVIC_NUM_EXCEPTIONS) {
             current_pri = emu->nvic.shpr[emu->exec.cpu.current_exception - 4];
-        } else {
+        } else if (emu->exec.cpu.current_exception >= NVIC_NUM_EXCEPTIONS) {
             int irq = emu->exec.cpu.current_exception - NVIC_NUM_EXCEPTIONS;
             current_pri = emu->nvic.priority[irq];
+        } else {
+            /* Exception 1-3: Reset=-3, NMI=-2, HardFault=-1 (fixed, highest) */
+            current_pri = -1;
         }
     }
 

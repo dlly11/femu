@@ -51,15 +51,16 @@ class SimpleUART(Peripheral):
 
     # Status bits
     STATUS_RXNE = 1 << 0  # Receive buffer not empty
-    STATUS_TXE = 1 << 1   # Transmit buffer empty
+    STATUS_TXE = 1 << 1  # Transmit buffer empty
 
     # Control bits
-    CTRL_EN = 1 << 0      # UART enable
-    CTRL_TE = 1 << 3      # Transmitter enable
-    CTRL_RE = 1 << 4      # Receiver enable
+    CTRL_EN = 1 << 0  # UART enable
+    CTRL_TE = 1 << 3  # Transmitter enable
+    CTRL_RE = 1 << 4  # Receiver enable
 
-    def __init__(self, name: str = "uart", irq: int = -1,
-                 echo: bool = False, max_buffer: int = 4096):
+    def __init__(
+        self, name: str = "uart", irq: int = -1, echo: bool = False, max_buffer: int = 4096
+    ):
         """
         Initialize UART peripheral.
 
@@ -106,7 +107,7 @@ class SimpleUART(Peripheral):
                 char = value & 0xFF
                 self._tx_buffer.append(char)
                 if self._echo:
-                    print(chr(char), end='', flush=True)
+                    print(chr(char), end="", flush=True)
 
         elif offset == self.REG_CTRL:
             self._ctrl = value
@@ -128,7 +129,7 @@ class SimpleUART(Peripheral):
         Returns:
             String of all characters transmitted by firmware
         """
-        return ''.join(chr(c) for c in self._tx_buffer)
+        return "".join(chr(c) for c in self._tx_buffer)
 
     def get_output_bytes(self) -> bytes:
         """
@@ -153,7 +154,7 @@ class SimpleUART(Peripheral):
             data: String or bytes to inject
         """
         if isinstance(data, str):
-            data = data.encode('utf-8')
+            data = data.encode("utf-8")
         for byte in data:
             self._rx_buffer.append(byte)
 

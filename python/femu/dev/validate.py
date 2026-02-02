@@ -8,7 +8,6 @@ Validates that module implementations:
 """
 
 import subprocess
-from pathlib import Path
 
 from rich.console import Console
 
@@ -66,9 +65,9 @@ def validate_module(module: str) -> bool:
         # Build specific target
         target = f"armv8m_{module}"
         compile_project(target=target)
-        console.print(f"  [green]✓[/green] Build successful")
+        console.print("  [green]✓[/green] Build successful")
     except subprocess.CalledProcessError:
-        console.print(f"  [red]✗[/red] Build failed")
+        console.print("  [red]✗[/red] Build failed")
         errors += 1
         return False
 
@@ -79,12 +78,12 @@ def validate_module(module: str) -> bool:
     if test_exe.exists():
         try:
             run_command([str(test_exe), "-v"], cwd=BUILD_DIR)
-            console.print(f"  [green]✓[/green] All tests passed")
+            console.print("  [green]✓[/green] All tests passed")
         except subprocess.CalledProcessError:
-            console.print(f"  [red]✗[/red] Tests failed")
+            console.print("  [red]✗[/red] Tests failed")
             errors += 1
     else:
-        console.print(f"  [yellow]○[/yellow] No test executable found")
+        console.print("  [yellow]○[/yellow] No test executable found")
 
     # Summary
     console.print()

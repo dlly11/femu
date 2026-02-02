@@ -7,7 +7,6 @@ Handles CMake configuration, compilation, and packaging.
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Literal
 
@@ -198,20 +197,76 @@ def run_analysis(tool: str | None = None) -> bool:
 
 
 def package(output_dir: Path | None = None) -> Path | None:
-    """Package the emulator for distribution."""
+    """
+    Package the emulator for distribution.
+
+    Builds a release version and creates a Python wheel with the
+    shared library bundled.
+
+    Args:
+        output_dir: Output directory for wheel (default: PROJECT_ROOT/dist)
+
+    Returns:
+        Path to the created wheel, or None on failure
+    """
+    import sys
+
     console.print("\n[bold blue]Packaging emulator...[/bold blue]\n")
 
-    # Ensure release build
+    # Step 1: Build Release version
     configure(build_type="Release", sanitizers=False)
     compile_project()
+
+    # Step 2: Create _lib directory and copy the shared library
+    lib_dir = PROJECT_ROOT / "python" / "femu" / "_lib"
+    lib_dir.mkdir(exist_ok=True)
+
+    # Determine platform-specific library name
+    if sys.platform == "darwin":
+        lib_name = "libarmv8m_emulator.dylib"
+    elif sys.platform == "win32":
+        lib_name = "armv8m_emulator.dll"
+    else:
+        lib_name = "libarmv8m_emulator.so"
+
+    src_lib = PROJECT_ROOT / "build" / "src" / "arch" / "armv8m" / lib_name
+
+    if not src_lib.exists():
+        console.print(f"[red]Library not found: {src_lib}[/red]")
+        return None
+
+    dest_lib = lib_dir / lib_name
+    console.print(f"[dim]Copying {src_lib} -> {dest_lib}[/dim]")
+    shutil.copy2(src_lib, dest_lib)
+
+    # Step 3: Build wheel
+    console.print("\n[bold]Building wheel...[/bold]\n")
 
     output_dir = output_dir or PROJECT_ROOT / "dist"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # TODO: Implement actual packaging logic
-    # - Copy built libraries
-    # - Create wheel with cffi bindings
-    # - Bundle into distributable
+    cmd = [
+        sys.executable,
+        "-m",
+        "build",
+        "--wheel",
+        "--outdir",
+        str(output_dir),
+    ]
 
-    console.print("[yellow]Packaging not yet fully implemented.[/yellow]")
-    return None
+    try:
+        run_command(cmd, cwd=PROJECT_ROOT)
+    except subprocess.CalledProcessError:
+        console.print("[red]Failed to build wheel.[/red]")
+        return None
+
+    # Step 4: Find and return the wheel path
+    wheels = sorted(output_dir.glob("femu-*.whl"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+    if not wheels:
+        console.print("[red]No wheel found in output directory.[/red]")
+        return None
+
+    wheel_path = wheels[0]
+    console.print(f"\n[green]Package created: {wheel_path}[/green]")
+    return wheel_path

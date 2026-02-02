@@ -31,11 +31,12 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Any
+from typing import TYPE_CHECKING, Any
 
 from . import _emulator_cffi as cffi
-from .logging import get_logger, LogCategory
+from .logging import LogCategory, get_logger
 
 if TYPE_CHECKING:
     from .arch.armv8m import ARMv8MEmulator
@@ -46,6 +47,7 @@ logger = get_logger(LogCategory.PERIPHERAL)
 # =============================================================================
 # Abstract Base
 # =============================================================================
+
 
 class PeripheralBase(ABC):
     """Abstract base for all peripheral types."""
@@ -72,6 +74,7 @@ class PeripheralBase(ABC):
 # =============================================================================
 # Python Peripheral Base Class
 # =============================================================================
+
 
 class Peripheral(PeripheralBase):
     """
@@ -115,7 +118,7 @@ class Peripheral(PeripheralBase):
 
     # Class-level storage to prevent garbage collection of instances
     # that have been passed to C code
-    _instances: dict[int, "Peripheral"] = {}
+    _instances: dict[int, Peripheral] = {}
     _handles: dict[int, Any] = {}
 
     def __init__(self, name: str, peripheral_type: str):
@@ -143,8 +146,8 @@ class Peripheral(PeripheralBase):
 
         # Allocate C struct and string buffers (must keep references)
         self._c_periph = self._ffi.new("EmuPeripheral *")
-        self._name_buf = self._ffi.new("char[]", name.encode('utf-8'))
-        self._type_buf = self._ffi.new("char[]", peripheral_type.encode('utf-8'))
+        self._name_buf = self._ffi.new("char[]", name.encode("utf-8"))
+        self._type_buf = self._ffi.new("char[]", peripheral_type.encode("utf-8"))
 
         # Initialize C struct
         self._c_periph.name = self._name_buf
@@ -347,6 +350,7 @@ def _py_periph_set_irq_callback(ctx, callback, emu_ctx):
 # C Peripheral Wrapper
 # =============================================================================
 
+
 class CPeripheral(PeripheralBase):
     """
     Wrapper for C-implemented peripherals compiled into the library.
@@ -360,8 +364,9 @@ class CPeripheral(PeripheralBase):
         emu.add_peripheral(gpio, 0x42020000, 0x400)
     """
 
-    def __init__(self, c_periph_ptr: Any, name: str, peripheral_type: str,
-                 keep_alive: list | None = None):
+    def __init__(
+        self, c_periph_ptr: Any, name: str, peripheral_type: str, keep_alive: list | None = None
+    ):
         """
         Initialize C peripheral wrapper.
 
@@ -377,8 +382,7 @@ class CPeripheral(PeripheralBase):
         self._keep_alive = keep_alive or []
 
     @classmethod
-    def from_factory(cls, factory_name: str, name: str,
-                     config: dict | None = None) -> "CPeripheral":
+    def from_factory(cls, factory_name: str, name: str, config: dict | None = None) -> CPeripheral:
         """
         Create peripheral by calling a C factory function.
 
@@ -404,8 +408,8 @@ class CPeripheral(PeripheralBase):
         factory_fn = getattr(lib, factory_fn_name)
 
         # Prepare arguments
-        config_json = json.dumps(config or {}).encode('utf-8')
-        name_bytes = name.encode('utf-8')
+        config_json = json.dumps(config or {}).encode("utf-8")
+        name_bytes = name.encode("utf-8")
 
         name_buf = ffi.new("char[]", name_bytes)
         config_buf = ffi.new("char[]", config_json)
@@ -438,6 +442,7 @@ class CPeripheral(PeripheralBase):
 # Plugin Peripheral
 # =============================================================================
 
+
 class PluginPeripheral(PeripheralBase):
     """
     Peripheral loaded from a plugin shared library.
@@ -463,9 +468,15 @@ class PluginPeripheral(PeripheralBase):
     # Cache of loaded plugins: path -> (lib, types_dict, info)
     _loaded_plugins: dict[str, tuple[Any, dict[str, Any], dict]] = {}
 
-    def __init__(self, c_periph_ptr: Any, destroy_fn: Any,
-                 name: str, peripheral_type: str, plugin_path: str,
-                 keep_alive: list | None = None):
+    def __init__(
+        self,
+        c_periph_ptr: Any,
+        destroy_fn: Any,
+        name: str,
+        peripheral_type: str,
+        plugin_path: str,
+        keep_alive: list | None = None,
+    ):
         """
         Initialize plugin peripheral.
 
@@ -491,10 +502,12 @@ class PluginPeripheral(PeripheralBase):
             return
 
         ffi = cffi.get_ffi()
-        if (self._destroy_fn and
-            self._destroy_fn != ffi.NULL and
-            self._c_periph and
-            self._c_periph != ffi.NULL):
+        if (
+            self._destroy_fn
+            and self._destroy_fn != ffi.NULL
+            and self._c_periph
+            and self._c_periph != ffi.NULL
+        ):
             try:
                 self._destroy_fn(self._c_periph)
             except Exception:
@@ -526,16 +539,16 @@ class PluginPeripheral(PeripheralBase):
         try:
             lib = ffi.dlopen(path_str)
         except OSError as e:
-            raise RuntimeError(f"Failed to load plugin {path_str}: {e}")
+            raise RuntimeError(f"Failed to load plugin {path_str}: {e}") from e
 
         # Get the init function
         try:
             init_fn = lib.emu_plugin_init
-        except AttributeError:
+        except AttributeError as e:
             raise RuntimeError(
                 f"Plugin {path_str} missing 'emu_plugin_init' symbol. "
                 "Ensure the function is exported with EMU_PLUGIN_EXPORT."
-            )
+            ) from e
 
         # Call init to get peripheral types
         info_ptr = ffi.new("EmuPluginInfo **")
@@ -554,11 +567,13 @@ class PluginPeripheral(PeripheralBase):
                     f"{info.api_version} (expected {cffi.EMU_PLUGIN_API_VERSION})"
                 )
             plugin_info = {
-                'api_version': info.api_version,
-                'name': ffi.string(info.name).decode('utf-8') if info.name else "",
-                'version': ffi.string(info.version).decode('utf-8') if info.version else "",
-                'author': ffi.string(info.author).decode('utf-8') if info.author else "",
-                'description': ffi.string(info.description).decode('utf-8') if info.description else "",
+                "api_version": info.api_version,
+                "name": ffi.string(info.name).decode("utf-8") if info.name else "",
+                "version": ffi.string(info.version).decode("utf-8") if info.version else "",
+                "author": ffi.string(info.author).decode("utf-8") if info.author else "",
+                "description": (
+                    ffi.string(info.description).decode("utf-8") if info.description else ""
+                ),
             }
 
         # Extract peripheral types (NULL-terminated array)
@@ -566,15 +581,15 @@ class PluginPeripheral(PeripheralBase):
         i = 0
         while types_ptr[i].type_name != ffi.NULL:
             type_def = types_ptr[i]
-            type_name = ffi.string(type_def.type_name).decode('utf-8')
+            type_name = ffi.string(type_def.type_name).decode("utf-8")
             types_dict[type_name] = {
-                'create': type_def.create,
-                'destroy': type_def.destroy if type_def.destroy != ffi.NULL else None,
-                'description': (
-                    ffi.string(type_def.description).decode('utf-8')
+                "create": type_def.create,
+                "destroy": type_def.destroy if type_def.destroy != ffi.NULL else None,
+                "description": (
+                    ffi.string(type_def.description).decode("utf-8")
                     if type_def.description and type_def.description != ffi.NULL
                     else ""
-                )
+                ),
             }
             i += 1
 
@@ -582,8 +597,9 @@ class PluginPeripheral(PeripheralBase):
         return types_dict
 
     @classmethod
-    def from_plugin(cls, plugin_path: str | Path, type_name: str,
-                    name: str, config: dict | None = None) -> "PluginPeripheral":
+    def from_plugin(
+        cls, plugin_path: str | Path, type_name: str, name: str, config: dict | None = None
+    ) -> PluginPeripheral:
         """
         Create a peripheral from a plugin.
 
@@ -600,7 +616,7 @@ class PluginPeripheral(PeripheralBase):
         types = cls.load_plugin(path_str)
 
         if type_name not in types:
-            available = ', '.join(types.keys()) or "(none)"
+            available = ", ".join(types.keys()) or "(none)"
             raise ValueError(
                 f"Plugin {plugin_path} does not provide type '{type_name}'. "
                 f"Available types: {available}"
@@ -610,23 +626,21 @@ class PluginPeripheral(PeripheralBase):
         ffi = cffi.get_ffi()
 
         # Call create function
-        name_buf = ffi.new("char[]", name.encode('utf-8'))
-        config_buf = ffi.new("char[]", json.dumps(config or {}).encode('utf-8'))
+        name_buf = ffi.new("char[]", name.encode("utf-8"))
+        config_buf = ffi.new("char[]", json.dumps(config or {}).encode("utf-8"))
 
-        c_periph = type_def['create'](name_buf, config_buf)
+        c_periph = type_def["create"](name_buf, config_buf)
 
         if c_periph == ffi.NULL:
-            raise RuntimeError(
-                f"Plugin factory for '{type_name}' returned NULL"
-            )
+            raise RuntimeError(f"Plugin factory for '{type_name}' returned NULL")
 
         return cls(
             c_periph,
-            type_def['destroy'],
+            type_def["destroy"],
             name,
             type_name,
             path_str,
-            keep_alive=[name_buf, config_buf]
+            keep_alive=[name_buf, config_buf],
         )
 
     @classmethod
@@ -648,8 +662,8 @@ class PluginPeripheral(PeripheralBase):
         _, types, info = cls._loaded_plugins[path_str]
 
         result = dict(info)
-        result['peripheral_types'] = list(types.keys())
-        result['path'] = path_str
+        result["peripheral_types"] = list(types.keys())
+        result["path"] = path_str
         return result
 
     @classmethod

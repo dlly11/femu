@@ -13,7 +13,9 @@ Usage:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
+
+from .arch.armv8m import ARMv8MConfig, ARMv8MEmulator
 
 # Re-export from arch module for convenience
 from .arch.base import (
@@ -25,13 +27,12 @@ from .arch.base import (
     ExecutionError,
     MemoryFaultError,
 )
-from .arch.armv8m import ARMv8MConfig, ARMv8MEmulator
 
 if TYPE_CHECKING:
-    from .elf_loader import ElfInfo
+    pass
 
 # Type alias for config types
-ConfigType = Union[ARMv8MConfig, BaseEmulatorConfig, None]
+ConfigType = ARMv8MConfig | BaseEmulatorConfig | None
 
 
 def create_emulator(

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .. import _emulator_cffi as cffi
 from .base import (
     ArchType,
     BaseEmulator,
@@ -20,8 +21,6 @@ from .base import (
     ExecutionError,
     MemoryFaultError,
 )
-
-from .. import _emulator_cffi as cffi
 
 if TYPE_CHECKING:
     from ..elf_loader import ElfInfo
@@ -57,8 +56,22 @@ class ARMv8MEmulator(BaseEmulator):
 
     # Register names for dump_regs()
     _REG_NAMES = [
-        "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-        "r8", "r9", "r10", "r11", "r12", "sp", "lr", "pc",
+        "r0",
+        "r1",
+        "r2",
+        "r3",
+        "r4",
+        "r5",
+        "r6",
+        "r7",
+        "r8",
+        "r9",
+        "r10",
+        "r11",
+        "r12",
+        "sp",
+        "lr",
+        "pc",
     ]
 
     def __init__(self, config: ARMv8MConfig | None = None):
@@ -133,7 +146,7 @@ class ARMv8MEmulator(BaseEmulator):
         if result != cffi.ARMV8M_OK:
             raise EmulatorError(f"Failed to load data at 0x{addr:08x} (code {result})")
 
-    def load_elf(self, path: str | Path) -> "ElfInfo":
+    def load_elf(self, path: str | Path) -> ElfInfo:
         elf = super().load_elf(path)
         self._elf_info = elf
         return elf
@@ -300,7 +313,9 @@ class ARMv8MEmulator(BaseEmulator):
     # Watchpoints
     # =========================================================================
 
-    def add_watchpoint(self, addr: int, size: int = 4, wp_type: int = cffi.WATCHPOINT_WRITE) -> None:
+    def add_watchpoint(
+        self, addr: int, size: int = 4, wp_type: int = cffi.WATCHPOINT_WRITE
+    ) -> None:
         """
         Add a watchpoint.
 
@@ -314,7 +329,9 @@ class ARMv8MEmulator(BaseEmulator):
         if result != cffi.ARMV8M_OK:
             raise EmulatorError(f"Failed to add watchpoint (code {result})")
 
-    def remove_watchpoint(self, addr: int, size: int = 4, wp_type: int = cffi.WATCHPOINT_WRITE) -> None:
+    def remove_watchpoint(
+        self, addr: int, size: int = 4, wp_type: int = cffi.WATCHPOINT_WRITE
+    ) -> None:
         """
         Remove a watchpoint.
 
@@ -336,7 +353,7 @@ class ARMv8MEmulator(BaseEmulator):
 
     @property
     def watchpoint_hit_type(self) -> int:
-        """Type of access that triggered the last watchpoint (WATCHPOINT_READ or WATCHPOINT_WRITE)."""
+        """Type of access that triggered the last watchpoint (READ or WRITE)."""
         return self._lib.armv8m_emu_get_watchpoint_hit_type(self._emu_ptr)
 
     # =========================================================================
@@ -374,7 +391,7 @@ class ARMv8MEmulator(BaseEmulator):
     # Peripherals
     # =========================================================================
 
-    def add_peripheral(self, peripheral: "PeripheralBase", base: int, size: int) -> None:
+    def add_peripheral(self, peripheral: PeripheralBase, base: int, size: int) -> None:
         """
         Add a peripheral to the emulator.
 
@@ -387,9 +404,7 @@ class ARMv8MEmulator(BaseEmulator):
         c_periph = peripheral.c_struct
 
         # Register with the emulator
-        result = self._lib.armv8m_emu_add_peripheral(
-            self._emu_ptr, c_periph, base, size
-        )
+        result = self._lib.armv8m_emu_add_peripheral(self._emu_ptr, c_periph, base, size)
 
         if result != cffi.ARMV8M_OK:
             raise EmulatorError(f"Failed to add peripheral (code {result})")
@@ -398,7 +413,7 @@ class ARMv8MEmulator(BaseEmulator):
         self._peripherals.append(peripheral)
 
     @property
-    def peripherals(self) -> list["PeripheralBase"]:
+    def peripherals(self) -> list[PeripheralBase]:
         """List of attached peripherals."""
         return list(self._peripherals)
 
@@ -414,7 +429,7 @@ class ARMv8MEmulator(BaseEmulator):
         return regs
 
     @property
-    def elf_info(self) -> "ElfInfo | None":
+    def elf_info(self) -> ElfInfo | None:
         """Get ELF info if firmware was loaded from ELF."""
         return self._elf_info
 

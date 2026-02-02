@@ -24,7 +24,7 @@ import socket
 from typing import TYPE_CHECKING
 
 from .emulator import EmulatorState
-from .logging import get_logger, LogCategory
+from .logging import LogCategory, get_logger
 
 if TYPE_CHECKING:
     from .emulator import Emulator
@@ -195,7 +195,7 @@ class GDBServer:
 
             return data.decode("latin-1")
 
-        except (socket.error, ConnectionResetError):
+        except (OSError, ConnectionResetError):
             return None
 
     def _send_packet(self, data: str) -> None:
@@ -208,7 +208,7 @@ class GDBServer:
 
         try:
             self._client.send(packet.encode("latin-1"))
-        except (socket.error, ConnectionResetError):
+        except (OSError, ConnectionResetError):
             self._running = False
 
     def _checksum(self, data: str) -> str:
@@ -543,14 +543,17 @@ class GDBServer:
                 return "OK"
             elif bp_type == 2:  # Write watchpoint
                 from . import _emulator_cffi as cffi
+
                 self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_WRITE)
                 return "OK"
             elif bp_type == 3:  # Read watchpoint
                 from . import _emulator_cffi as cffi
+
                 self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_READ)
                 return "OK"
             elif bp_type == 4:  # Access watchpoint (read/write)
                 from . import _emulator_cffi as cffi
+
                 self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_ACCESS)
                 return "OK"
             else:
@@ -572,14 +575,17 @@ class GDBServer:
                 return "OK"
             elif bp_type == 2:  # Write watchpoint
                 from . import _emulator_cffi as cffi
+
                 self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_WRITE)
                 return "OK"
             elif bp_type == 3:  # Read watchpoint
                 from . import _emulator_cffi as cffi
+
                 self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_READ)
                 return "OK"
             elif bp_type == 4:  # Access watchpoint (read/write)
                 from . import _emulator_cffi as cffi
+
                 self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_ACCESS)
                 return "OK"
             else:
@@ -635,7 +641,9 @@ class GDBServer:
     def _to_le_hex(self, value: int) -> str:
         """Convert 32-bit value to little-endian hex string."""
         # GDB expects little-endian byte order
-        return f"{value & 0xFF:02x}{(value >> 8) & 0xFF:02x}{(value >> 16) & 0xFF:02x}{(value >> 24) & 0xFF:02x}"
+        b0, b1 = value & 0xFF, (value >> 8) & 0xFF
+        b2, b3 = (value >> 16) & 0xFF, (value >> 24) & 0xFF
+        return f"{b0:02x}{b1:02x}{b2:02x}{b3:02x}"
 
     def _from_le_hex(self, hex_str: str) -> int:
         """Convert little-endian hex string to 32-bit value."""

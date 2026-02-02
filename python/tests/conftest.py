@@ -2,8 +2,9 @@
 Pytest configuration and fixtures for ARMv8-M emulator tests.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 @pytest.fixture

@@ -21,7 +21,7 @@ Mode bits (per pin):
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from ..peripheral import Peripheral
 from ..peripheral_registry import PeripheralRegistry
@@ -61,8 +61,7 @@ class SimpleGPIO(Peripheral):
     MODE_ALTFUNC = 2
     MODE_ANALOG = 3
 
-    def __init__(self, name: str = "gpio", num_pins: int = 16,
-                 irq: int = -1):
+    def __init__(self, name: str = "gpio", num_pins: int = 16, irq: int = -1):
         """
         Initialize GPIO peripheral.
 
@@ -123,7 +122,7 @@ class SimpleGPIO(Peripheral):
         elif offset == self.REG_BSRR:
             old_odr = self._odr
             # Low 16 bits set, high 16 bits reset
-            self._odr |= (value & 0xFFFF)
+            self._odr |= value & 0xFFFF
             self._odr &= ~((value >> 16) & 0xFFFF)
             self._notify_changes(old_odr, self._odr)
 
@@ -149,11 +148,11 @@ class SimpleGPIO(Peripheral):
             if mode == self.MODE_INPUT:
                 # Input mode: use external input
                 if self._external_input & (1 << pin):
-                    result |= (1 << pin)
+                    result |= 1 << pin
             else:
                 # Output/alternate/analog: return ODR
                 if self._odr & (1 << pin):
-                    result |= (1 << pin)
+                    result |= 1 << pin
         return result
 
     def _notify_changes(self, old_val: int, new_val: int) -> None:
@@ -184,7 +183,7 @@ class SimpleGPIO(Peripheral):
             raise ValueError(f"Invalid pin number: {pin}")
 
         if state:
-            self._external_input |= (1 << pin)
+            self._external_input |= 1 << pin
         else:
             self._external_input &= ~(1 << pin)
 

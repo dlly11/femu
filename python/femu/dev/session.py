@@ -5,8 +5,6 @@ Helps AI assistants understand which files to read for each module
 and provides context for development sessions.
 """
 
-from pathlib import Path
-
 from rich.console import Console
 from rich.table import Table
 

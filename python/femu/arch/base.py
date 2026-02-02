@@ -110,7 +110,7 @@ class BaseEmulator(ABC):
         """Load binary data into memory."""
         pass
 
-    def load_elf(self, path: str | Path) -> "ElfInfo":
+    def load_elf(self, path: str | Path) -> ElfInfo:
         """
         Load an ELF file into the emulator.
 

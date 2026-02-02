@@ -6,7 +6,6 @@ Runs C tests (CppUTest) and Python tests (pytest).
 
 import subprocess
 import sys
-from pathlib import Path
 
 from rich.console import Console
 

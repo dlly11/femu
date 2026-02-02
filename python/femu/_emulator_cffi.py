@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 _ffi = FFI()
 
 # C definitions - using opaque struct style for CFFI dlopen mode
-_ffi.cdef("""
+_ffi.cdef(
+    """
     /* Emulator state enum */
     typedef enum {
         EMU_STATE_STOPPED,
@@ -74,10 +75,14 @@ _ffi.cdef("""
     int armv8m_emu_get_last_error(const Emulator *emu);
 
     /* Memory Access API */
-    uint32_t armv8m_emu_read_mem(const Emulator *emu, uint32_t addr, uint8_t size, bool *fault);
-    void armv8m_emu_write_mem(Emulator *emu, uint32_t addr, uint32_t value, uint8_t size, bool *fault);
-    uint32_t armv8m_emu_read_block(const Emulator *emu, uint32_t addr, uint8_t *data, uint32_t size);
-    uint32_t armv8m_emu_write_block(Emulator *emu, uint32_t addr, const uint8_t *data, uint32_t size);
+    uint32_t armv8m_emu_read_mem(const Emulator *emu, uint32_t addr,
+                                 uint8_t size, bool *fault);
+    void armv8m_emu_write_mem(Emulator *emu, uint32_t addr, uint32_t value,
+                              uint8_t size, bool *fault);
+    uint32_t armv8m_emu_read_block(const Emulator *emu, uint32_t addr,
+                                   uint8_t *data, uint32_t size);
+    uint32_t armv8m_emu_write_block(Emulator *emu, uint32_t addr,
+                                    const uint8_t *data, uint32_t size);
 
     /* Breakpoint API */
     int armv8m_emu_add_breakpoint(Emulator *emu, uint32_t addr);
@@ -93,8 +98,10 @@ _ffi.cdef("""
     } WatchpointType;
 
     /* Watchpoint API */
-    int armv8m_emu_add_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type);
-    int armv8m_emu_remove_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type);
+    int armv8m_emu_add_watchpoint(Emulator *emu, uint32_t addr,
+                                  uint32_t size, WatchpointType type);
+    int armv8m_emu_remove_watchpoint(Emulator *emu, uint32_t addr,
+                                     uint32_t size, WatchpointType type);
     void armv8m_emu_clear_watchpoints(Emulator *emu);
     uint32_t armv8m_emu_get_watchpoint_hit_addr(const Emulator *emu);
     WatchpointType armv8m_emu_get_watchpoint_hit_type(const Emulator *emu);
@@ -193,7 +200,8 @@ _ffi.cdef("""
     void emu_log_set_category_level(int category, int level);
     void emu_log_set_enabled(bool enabled);
     bool emu_log_is_enabled(int level, int category);
-""")
+"""
+)
 
 # Error codes (must match armv8m_types.h)
 ARMV8M_OK = 0
@@ -263,18 +271,30 @@ def _find_library() -> Path:
     # Get project root (femu/python/femu -> femu)
     project_root = Path(__file__).parent.parent.parent
 
-    # Possible library locations (new architecture-specific locations first)
+    # Platform-specific library name
+    import sys
+
+    if sys.platform == "darwin":
+        lib_name = "libarmv8m_emulator.dylib"
+    elif sys.platform == "win32":
+        lib_name = "armv8m_emulator.dll"
+    else:
+        lib_name = "libarmv8m_emulator.so"
+
+    # Possible library locations
     search_paths = [
+        # Package-bundled library (for pip-installed package)
+        Path(__file__).parent / "_lib" / lib_name,
         # New arch-specific location (after restructuring)
-        project_root / "build" / "src" / "arch" / "armv8m" / "libarmv8m_emulator.so",
+        project_root / "build" / "src" / "arch" / "armv8m" / lib_name,
         # Debug build
-        project_root / "build" / "Debug" / "src" / "arch" / "armv8m" / "libarmv8m_emulator.so",
+        project_root / "build" / "Debug" / "src" / "arch" / "armv8m" / lib_name,
         # Release build
-        project_root / "build" / "Release" / "src" / "arch" / "armv8m" / "libarmv8m_emulator.so",
+        project_root / "build" / "Release" / "src" / "arch" / "armv8m" / lib_name,
         # Legacy locations (for backward compatibility)
-        project_root / "build" / "src" / "core" / "emulator" / "libarmv8m_emulator.so",
+        project_root / "build" / "src" / "core" / "emulator" / lib_name,
         # System path (if installed)
-        Path("/usr/local/lib/libarmv8m_emulator.so"),
+        Path("/usr/local/lib") / lib_name,
     ]
 
     for path in search_paths:

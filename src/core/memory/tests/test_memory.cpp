@@ -499,6 +499,7 @@ TEST_GROUP(FaultCallbacks)
 
     void setup()
     {
+        memset(rom, 0, sizeof(rom));
         emu_mem_init(&mem);
         emu_mem_add_rom(&mem, 0x00000000, sizeof(rom), rom);
         emu_mem_set_fault_callback(&mem, NULL, mock_fault_callback);

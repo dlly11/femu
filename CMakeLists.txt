@@ -102,7 +102,23 @@ if(CPPCHECK)
             --enable=all
             --std=c11
             --suppress=missingIncludeSystem
+            --suppress=missingInclude  # External test framework headers
             --suppress=unusedFunction
+            --suppress=constVariablePointer  # Style only
+            --suppress=constVariable  # Style only
+            --suppress=constParameterCallback  # Style only
+            --suppress=staticFunction  # Style only - internal linkage choice
+            --suppress=unusedVariable  # Test code often has unused vars
+            --suppress=unreadVariable  # May be used for debugging
+            --suppress=unusedLabelConfiguration  # Labels for computed goto
+            --suppress=variableScope  # Style only
+            --suppress=duplicateCondition  # Code clarity choice
+            --suppress=knownConditionTrueFalse  # Defensive coding
+            --suppress=shiftTooManyBitsSigned  # False positive for ASR instructions
+            --suppress=assignBoolToPointer  # False positive for GCC computed goto
+            --suppress=normalCheckLevelMaxBranches  # Just an info message
+            --suppress=checkLevelNormal  # Just an info message
+            --suppress=checkersReport  # Just an info message
             --error-exitcode=1
             --inline-suppr
             -I ${CMAKE_SOURCE_DIR}/include

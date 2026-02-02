@@ -2,9 +2,6 @@
 Basic package tests for FEMU.
 """
 
-import pytest
-from pathlib import Path
-
 
 def test_package_import() -> None:
     """Test that the package can be imported."""
@@ -41,7 +38,7 @@ def test_cli_import() -> None:
 
 def test_dev_modules_import() -> None:
     """Test that dev modules can be imported."""
-    from femu.dev import session, validate, test
+    from femu.dev import session, test, validate
 
     assert hasattr(session, "MODULES")
     assert hasattr(session, "show_context")

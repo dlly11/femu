@@ -39,9 +39,13 @@ def build() -> None:
 @build.command("configure")
 @click.option("--build-type", type=click.Choice(["Debug", "Release"]), default="Debug")
 @click.option("--clean", is_flag=True, help="Clean build directory first.")
-@click.option("--compiler", type=click.Choice(["gcc", "clang"]), default=None, help="Compiler to use.")
+@click.option(
+    "--compiler", type=click.Choice(["gcc", "clang"]), default=None, help="Compiler to use."
+)
 @click.option("--no-sanitizers", is_flag=True, help="Disable sanitizers in Debug builds.")
-def build_configure(build_type: str, clean: bool, compiler: str | None, no_sanitizers: bool) -> None:
+def build_configure(
+    build_type: str, clean: bool, compiler: str | None, no_sanitizers: bool
+) -> None:
     """Configure the CMake build."""
     from .build import configure
 
@@ -61,7 +65,9 @@ def build_compile(jobs: int | None, target: str | None) -> None:
 @build.command("all")
 @click.option("--build-type", type=click.Choice(["Debug", "Release"]), default="Debug")
 @click.option("-j", "--jobs", type=int, default=None, help="Number of parallel jobs.")
-@click.option("--compiler", type=click.Choice(["gcc", "clang"]), default=None, help="Compiler to use.")
+@click.option(
+    "--compiler", type=click.Choice(["gcc", "clang"]), default=None, help="Compiler to use."
+)
 @click.option("--no-sanitizers", is_flag=True, help="Disable sanitizers in Debug builds.")
 def build_all(build_type: str, jobs: int | None, compiler: str | None, no_sanitizers: bool) -> None:
     """Configure and compile the project."""
@@ -80,8 +86,12 @@ def build_clean() -> None:
 
 
 @build.command("analyze")
-@click.option("--tool", type=click.Choice(["cppcheck", "clang-tidy"]), default=None,
-              help="Specific tool to run (default: all).")
+@click.option(
+    "--tool",
+    type=click.Choice(["cppcheck", "clang-tidy"]),
+    default=None,
+    help="Specific tool to run (default: all).",
+)
 def build_analyze(tool: str | None) -> None:
     """Run static analysis tools."""
     from .build import run_analysis
@@ -193,14 +203,28 @@ def dev_list() -> None:
 @click.argument("firmware", type=click.Path(exists=True))
 @click.option("--gdb-port", type=int, default=None, help="Start GDB server on port.")
 @click.option("--max-cycles", type=int, default=0, help="Max cycles to execute (0=unlimited).")
-@click.option("-v", "--verbose", count=True, help="Verbosity level (-v=INFO, -vv=DEBUG, -vvv=TRACE).")
-@click.option("--trace", type=str, multiple=True, help="Enable TRACE for category (executor, decoder, memory, nvic, mpu, peripheral, gdb, emulator).")
+@click.option(
+    "-v", "--verbose", count=True, help="Verbosity level (-v=INFO, -vv=DEBUG, -vvv=TRACE)."
+)
+@click.option(
+    "--trace",
+    type=str,
+    multiple=True,
+    help="Enable TRACE for category (executor, decoder, memory, nvic, mpu, etc.).",
+)
 @click.option("--log-file", type=click.Path(), default=None, help="Log to file.")
 @click.option("--json-log", is_flag=True, help="Use JSON log format.")
-def run_emulator(firmware: str, gdb_port: int | None, max_cycles: int, verbose: int,
-                 trace: tuple[str, ...], log_file: str | None, json_log: bool) -> None:
+def run_emulator(
+    firmware: str,
+    gdb_port: int | None,
+    max_cycles: int,
+    verbose: int,
+    trace: tuple[str, ...],
+    log_file: str | None,
+    json_log: bool,
+) -> None:
     """Run the emulator with a firmware file."""
-    from .logging import configure_logging, LogLevel, LogCategory
+    from .logging import LogCategory, LogLevel, configure_logging
 
     # Configure logging based on verbosity
     level_map = {0: LogLevel.WARNING, 1: LogLevel.INFO, 2: LogLevel.DEBUG, 3: LogLevel.TRACE}
@@ -232,12 +256,12 @@ def run_emulator(firmware: str, gdb_port: int | None, max_cycles: int, verbose: 
     )
 
     try:
-        from .emulator import Emulator, EmulatorState
+        from .emulator import Emulator
         from .gdb_server import GDBServer
     except OSError as e:
         console.print(f"[red]Error loading emulator library:[/red] {e}")
         console.print("[yellow]Build the project first with:[/yellow] femu build all")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     try:
         emu = Emulator()
@@ -274,7 +298,7 @@ def run_emulator(firmware: str, gdb_port: int | None, max_cycles: int, verbose: 
                 cycles = emu.run(max_cycles)
                 state = emu.state
 
-                console.print(f"\n[bold]Execution stopped[/bold]")
+                console.print("\n[bold]Execution stopped[/bold]")
                 console.print(f"  State:  {state.name}")
                 console.print(f"  Cycles: {cycles:,}")
                 console.print(f"  PC:     {emu.pc:#010x}")
@@ -297,13 +321,14 @@ def run_emulator(firmware: str, gdb_port: int | None, max_cycles: int, verbose: 
 
     except FileNotFoundError as e:
         console.print(f"[red]File not found:[/red] {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         if verbose:
             import traceback
+
             traceback.print_exc()
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

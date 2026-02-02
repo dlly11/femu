@@ -19,10 +19,10 @@ __version__ = "0.1.0"
 
 # Re-export emulator classes and types for convenience
 from .emulator import (
-    # Factory and types
-    create_emulator,
-    get_supported_architectures,
     ArchType,
+    # ARMv8-M specific
+    ARMv8MConfig,
+    ARMv8MEmulator,
     BaseEmulator,
     BaseEmulatorConfig,
     # Errors
@@ -30,41 +30,41 @@ from .emulator import (
     EmulatorState,
     ExecutionError,
     MemoryFaultError,
-    # ARMv8-M specific
-    ARMv8MConfig,
-    ARMv8MEmulator,
+    # Factory and types
+    create_emulator,
+    get_supported_architectures,
+)
+
+# Logging system
+from .logging import (
+    TRACE,
+    LogCategory,
+    LogLevel,
+    configure_logging,
+    disable_logging,
+    enable_logging,
+    get_logger,
+)
+
+# Machine configuration
+from .machine import (
+    CPUConfig,
+    Machine,
+    MachineDef,
+    MemoryRegion,
+    PeripheralDef,
 )
 
 # Peripheral system
 from .peripheral import (
-    PeripheralBase,
-    Peripheral,
     CPeripheral,
+    Peripheral,
+    PeripheralBase,
     PluginPeripheral,
 )
 from .peripheral_registry import (
     PeripheralRegistry,
     PeripheralTypeInfo,
-)
-
-# Machine configuration
-from .machine import (
-    Machine,
-    MachineDef,
-    MemoryRegion,
-    PeripheralDef,
-    CPUConfig,
-)
-
-# Logging system
-from .logging import (
-    configure_logging,
-    get_logger,
-    disable_logging,
-    enable_logging,
-    LogLevel,
-    LogCategory,
-    TRACE,
 )
 
 # Project root directory

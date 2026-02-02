@@ -12,8 +12,8 @@ Usage:
     emu = ARMv8MEmulator()
 """
 
-from .base import BaseEmulator, EmulatorState, EmulatorError, ArchType
 from .armv8m import ARMv8MEmulator
+from .base import ArchType, BaseEmulator, EmulatorError, EmulatorState
 
 __all__ = [
     "BaseEmulator",

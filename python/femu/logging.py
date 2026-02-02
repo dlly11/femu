@@ -155,9 +155,7 @@ _callback_handle = None
 _log_file_handle: TextIO | None = None
 
 
-@_ffi.callback(
-    "void(void*, int, int, const char*, int, const char*, const char*)"
-)
+@_ffi.callback("void(void*, int, int, const char*, int, const char*, const char*)")
 def _c_log_callback(ctx, level, category, file_ptr, line, func_ptr, msg_ptr):
     """
     C log callback that routes messages to Python logging.
@@ -277,10 +275,9 @@ def configure_logging(
         formatter = JSONFormatter()
     else:
         # Default format with timestamp, logger name, level, file, line, and message
-        formatter = logging.Formatter(
-            "%(asctime)s.%(msecs)03d [%(name)s] %(levelname)-5s %(filename)s:%(lineno)d: %(message)s",
-            datefmt="%H:%M:%S",
-        )
+        fmt = "%(asctime)s.%(msecs)03d [%(name)s] %(levelname)-5s "
+        fmt += "%(filename)s:%(lineno)d: %(message)s"
+        formatter = logging.Formatter(fmt, datefmt="%H:%M:%S")
 
     # Add handlers
     handlers: list[logging.Handler] = []

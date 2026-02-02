@@ -27,8 +27,8 @@ Example usage:
     #     size: 0x400
 """
 
-from .uart import SimpleUART
 from .gpio import SimpleGPIO
+from .uart import SimpleUART
 
 __all__ = [
     "SimpleUART",

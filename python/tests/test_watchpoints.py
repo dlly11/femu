@@ -14,9 +14,9 @@ class TestWatchpointConstants:
     def test_watchpoint_type_constants(self):
         """Verify watchpoint type constants exist and have correct values."""
         from femu._emulator_cffi import (
-            WATCHPOINT_WRITE,
-            WATCHPOINT_READ,
             WATCHPOINT_ACCESS,
+            WATCHPOINT_READ,
+            WATCHPOINT_WRITE,
         )
 
         # Values should match GDB Z packet types
@@ -51,7 +51,7 @@ class TestWatchpointCFFI:
     def cffi_modules(self):
         """Get CFFI modules, skip if library not available."""
         try:
-            from femu._emulator_cffi import get_lib, get_ffi, create_emulator, ARMV8M_OK
+            from femu._emulator_cffi import ARMV8M_OK, create_emulator, get_ffi, get_lib
 
             lib = get_lib()
             ffi = get_ffi()
@@ -72,7 +72,7 @@ class TestWatchpointCFFI:
 
     def test_cffi_add_remove_watchpoint(self, cffi_modules):
         """Test adding and removing watchpoints via CFFI."""
-        from femu._emulator_cffi import WATCHPOINT_WRITE, WATCHPOINT_READ
+        from femu._emulator_cffi import WATCHPOINT_READ, WATCHPOINT_WRITE
 
         lib, ffi, create_emulator, ARMV8M_OK = cffi_modules
 
@@ -106,7 +106,7 @@ class TestEmulatorWatchpoints:
     def emulator(self):
         """Create an emulator instance, skip if library not available."""
         try:
-            from femu.arch.armv8m import ARMv8MEmulator, ARMv8MConfig
+            from femu.arch.armv8m import ARMv8MConfig, ARMv8MEmulator
 
             config = ARMv8MConfig()
             emu = ARMv8MEmulator(config)
@@ -125,7 +125,7 @@ class TestEmulatorWatchpoints:
 
     def test_add_watchpoint(self, emulator):
         """Test adding watchpoints."""
-        from femu._emulator_cffi import WATCHPOINT_WRITE, WATCHPOINT_READ, WATCHPOINT_ACCESS
+        from femu._emulator_cffi import WATCHPOINT_ACCESS, WATCHPOINT_READ, WATCHPOINT_WRITE
 
         # Should not raise
         emulator.add_watchpoint(0x20000100, 4, WATCHPOINT_WRITE)
@@ -142,7 +142,7 @@ class TestEmulatorWatchpoints:
 
     def test_clear_watchpoints(self, emulator):
         """Test clearing all watchpoints."""
-        from femu._emulator_cffi import WATCHPOINT_WRITE, WATCHPOINT_READ
+        from femu._emulator_cffi import WATCHPOINT_READ, WATCHPOINT_WRITE
 
         emulator.add_watchpoint(0x20000100, 4, WATCHPOINT_WRITE)
         emulator.add_watchpoint(0x20000200, 4, WATCHPOINT_READ)
@@ -165,7 +165,6 @@ class TestGDBServerWatchpoints:
 
     def test_gdb_server_imports(self):
         """Verify GDB server can be imported with watchpoint support."""
-        from femu.gdb_server import GDBServer
         from femu.emulator import EmulatorState
 
         # Verify EmulatorState has WATCHPOINT
