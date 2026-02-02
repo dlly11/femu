@@ -9,6 +9,7 @@
 
 #include "emu/emu_memory.h"
 #include <string.h>
+#include <stdlib.h>
 
 /*============================================================================
  * Internal Helpers
@@ -127,6 +128,143 @@ static bool is_aligned(uint64_t addr, uint8_t size)
 }
 
 /*============================================================================
+ * Page Table Functions
+ *============================================================================*/
+
+/**
+ * Build the page table from current regions.
+ */
+static void build_page_table(EmuMemorySystem *mem)
+{
+    if (!mem->page_table) {
+        return;
+    }
+
+    /* Clear the page table */
+    memset(mem->page_table, 0, mem->page_table_size * sizeof(EmuPageEntry));
+
+    /* Populate page table entries from regions */
+    for (int i = 0; i < mem->num_regions; i++) {
+        EmuMemRegion *r = &mem->regions[i];
+
+        /* Calculate page range for this region */
+        uint64_t start_page = r->base >> EMU_PAGE_SHIFT;
+        uint64_t end_addr = r->base + r->size;
+        uint64_t end_page = (end_addr + EMU_PAGE_SIZE - 1) >> EMU_PAGE_SHIFT;
+
+        /* Fill in page table entries */
+        for (uint64_t page = start_page; page < end_page && page < mem->page_table_size; page++) {
+            mem->page_table[page].region = r;
+
+            /* Pre-compute data base for fast RAM/ROM access */
+            if (r->data && (r->type == EMU_MEM_REGION_RAM || r->type == EMU_MEM_REGION_ROM)) {
+                /* data_base points so that data_base[addr] gives the right byte */
+                mem->page_table[page].data_base = r->data - r->base;
+            }
+        }
+    }
+
+    mem->page_table_valid = true;
+}
+
+/**
+ * Fast region lookup using page table.
+ */
+static inline EmuMemRegion *fast_find_region(EmuMemorySystem *mem, uint64_t addr)
+{
+    /* Build page table on first access if not valid */
+    if (mem->page_table && !mem->page_table_valid) {
+        build_page_table(mem);
+    }
+
+    /* Fast path: use page table */
+    if (mem->page_table) {
+        uint64_t page = addr >> EMU_PAGE_SHIFT;
+        if (page < mem->page_table_size) {
+            EmuPageEntry *entry = &mem->page_table[page];
+            if (entry->region) {
+                /* Verify address is actually in region (handles partial page coverage) */
+                EmuMemRegion *r = entry->region;
+                if (addr >= r->base && (addr - r->base) < r->size) {
+                    return r;
+                }
+            }
+        }
+    }
+
+    /* Slow path: linear search */
+    return find_region_internal(mem, addr);
+}
+
+/**
+ * Fast memory read for RAM/ROM using pre-computed data base.
+ */
+static inline uint64_t fast_read_ram(const EmuPageEntry *entry, uint64_t addr, uint8_t size)
+{
+    const uint8_t *data = entry->data_base + addr;
+
+    switch (size) {
+        case 1:
+            return data[0];
+        case 2:
+            return (uint64_t)data[0] |
+                   ((uint64_t)data[1] << 8);
+        case 4:
+            return (uint64_t)data[0] |
+                   ((uint64_t)data[1] << 8) |
+                   ((uint64_t)data[2] << 16) |
+                   ((uint64_t)data[3] << 24);
+        case 8:
+            return (uint64_t)data[0] |
+                   ((uint64_t)data[1] << 8) |
+                   ((uint64_t)data[2] << 16) |
+                   ((uint64_t)data[3] << 24) |
+                   ((uint64_t)data[4] << 32) |
+                   ((uint64_t)data[5] << 40) |
+                   ((uint64_t)data[6] << 48) |
+                   ((uint64_t)data[7] << 56);
+        default:
+            return 0;
+    }
+}
+
+/**
+ * Fast memory write for RAM using pre-computed data base.
+ */
+static inline void fast_write_ram(const EmuPageEntry *entry, uint64_t addr, uint64_t value, uint8_t size)
+{
+    uint8_t *data = entry->data_base + addr;
+
+    switch (size) {
+        case 1:
+            data[0] = (uint8_t)value;
+            break;
+        case 2:
+            data[0] = (uint8_t)value;
+            data[1] = (uint8_t)(value >> 8);
+            break;
+        case 4:
+            data[0] = (uint8_t)value;
+            data[1] = (uint8_t)(value >> 8);
+            data[2] = (uint8_t)(value >> 16);
+            data[3] = (uint8_t)(value >> 24);
+            break;
+        case 8:
+            data[0] = (uint8_t)value;
+            data[1] = (uint8_t)(value >> 8);
+            data[2] = (uint8_t)(value >> 16);
+            data[3] = (uint8_t)(value >> 24);
+            data[4] = (uint8_t)(value >> 32);
+            data[5] = (uint8_t)(value >> 40);
+            data[6] = (uint8_t)(value >> 48);
+            data[7] = (uint8_t)(value >> 56);
+            break;
+        default:
+            break;
+    }
+}
+
+/*============================================================================
  * Public API
  *============================================================================*/
 
@@ -143,6 +281,9 @@ int emu_mem_add_region(EmuMemorySystem *mem, const EmuMemRegion *region)
 
     mem->regions[mem->num_regions] = *region;
     mem->num_regions++;
+
+    /* Invalidate page table so it gets rebuilt on next access */
+    mem->page_table_valid = false;
 
     return EMU_OK;
 }
@@ -216,8 +357,24 @@ uint64_t emu_mem_read(EmuMemorySystem *mem, uint64_t addr, uint8_t size,
         }
     }
 
-    /* Find the region */
-    EmuMemRegion *r = find_region_internal(mem, addr);
+    /* Fast path: use page table for RAM/ROM */
+    if (mem->page_table && mem->page_table_valid) {
+        uint64_t page = addr >> EMU_PAGE_SHIFT;
+        if (page < mem->page_table_size) {
+            EmuPageEntry *entry = &mem->page_table[page];
+            if (entry->data_base) {
+                /* Verify address is in region and access fits */
+                EmuMemRegion *r = entry->region;
+                uint64_t offset = addr - r->base;
+                if (addr >= r->base && r->size - offset >= size) {
+                    return fast_read_ram(entry, addr, size);
+                }
+            }
+        }
+    }
+
+    /* Slow path: find region */
+    EmuMemRegion *r = fast_find_region(mem, addr);
     if (!r) {
         *fault = true;
         report_fault(mem, addr, false, EMU_ERR_BUS_FAULT);
@@ -282,8 +439,25 @@ void emu_mem_write(EmuMemorySystem *mem, uint64_t addr, uint64_t value, uint8_t 
         }
     }
 
-    /* Find the region */
-    EmuMemRegion *r = find_region_internal(mem, addr);
+    /* Fast path: use page table for RAM */
+    if (mem->page_table && mem->page_table_valid) {
+        uint64_t page = addr >> EMU_PAGE_SHIFT;
+        if (page < mem->page_table_size) {
+            EmuPageEntry *entry = &mem->page_table[page];
+            if (entry->data_base && entry->region->type == EMU_MEM_REGION_RAM) {
+                /* Verify address is in region and access fits */
+                EmuMemRegion *r = entry->region;
+                uint64_t offset = addr - r->base;
+                if (addr >= r->base && r->size - offset >= size) {
+                    fast_write_ram(entry, addr, value, size);
+                    return;
+                }
+            }
+        }
+    }
+
+    /* Slow path: find region */
+    EmuMemRegion *r = fast_find_region(mem, addr);
     if (!r) {
         *fault = true;
         report_fault(mem, addr, true, EMU_ERR_BUS_FAULT);
@@ -336,7 +510,22 @@ void emu_mem_write(EmuMemorySystem *mem, uint64_t addr, uint64_t value, uint8_t 
 
 const uint8_t *emu_mem_get_ptr(EmuMemorySystem *mem, uint64_t addr, uint64_t size)
 {
-    EmuMemRegion *r = find_region_internal(mem, addr);
+    /* Fast path: use page table */
+    if (mem->page_table && mem->page_table_valid) {
+        uint64_t page = addr >> EMU_PAGE_SHIFT;
+        if (page < mem->page_table_size) {
+            EmuPageEntry *entry = &mem->page_table[page];
+            if (entry->data_base && entry->region) {
+                EmuMemRegion *r = entry->region;
+                if (addr >= r->base && r->size - (addr - r->base) >= size) {
+                    return entry->data_base + addr;
+                }
+            }
+        }
+    }
+
+    /* Slow path */
+    EmuMemRegion *r = fast_find_region(mem, addr);
     if (!r) {
         return NULL;
     }
@@ -404,4 +593,51 @@ void emu_mem_set_fault_callback(EmuMemorySystem *mem, void *ctx,
 {
     mem->fault_ctx = ctx;
     mem->on_fault = fault_cb;
+}
+
+/*============================================================================
+ * Page Table Management
+ *============================================================================*/
+
+int emu_mem_init_page_table(EmuMemorySystem *mem, uint64_t max_addr)
+{
+    /* Free existing page table if any */
+    if (mem->page_table) {
+        free(mem->page_table);
+        mem->page_table = NULL;
+    }
+
+    /* Use default if not specified */
+    if (max_addr == 0) {
+        max_addr = EMU_PAGE_TABLE_MAX_ADDR;
+    }
+
+    /* Calculate number of pages needed */
+    uint32_t num_pages = (uint32_t)((max_addr + EMU_PAGE_SIZE - 1) >> EMU_PAGE_SHIFT);
+
+    /* Allocate page table */
+    mem->page_table = (EmuPageEntry *)calloc(num_pages, sizeof(EmuPageEntry));
+    if (!mem->page_table) {
+        return EMU_ERR_OUT_OF_MEMORY;
+    }
+
+    mem->page_table_size = num_pages;
+    mem->page_table_valid = false;  /* Will be built on first access */
+
+    return EMU_OK;
+}
+
+void emu_mem_free_page_table(EmuMemorySystem *mem)
+{
+    if (mem->page_table) {
+        free(mem->page_table);
+        mem->page_table = NULL;
+        mem->page_table_size = 0;
+        mem->page_table_valid = false;
+    }
+}
+
+void emu_mem_invalidate_page_table(EmuMemorySystem *mem)
+{
+    mem->page_table_valid = false;
 }

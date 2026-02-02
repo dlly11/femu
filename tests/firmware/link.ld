@@ -24,6 +24,17 @@ SECTIONS
         *(.rodata*)
     } > FLASH
 
+    /* Test result area - FIRST in RAM to keep fixed addresses */
+    .testresults (NOLOAD) :
+    {
+        _test_results_start = .;
+        . += 0x100;                /* 256 bytes for test results at 0x20000000 */
+        _test_results_end = .;
+        _test_counters = .;        /* Pass/fail counters at 0x20000100 */
+        . += 8;                    /* 2 x 4 bytes for counters */
+        _test_counters_end = .;
+    } > RAM
+
     /* Initialized data (copied from flash to RAM at startup) */
     .data :
     {
@@ -31,6 +42,9 @@ SECTIONS
         *(.data*)
         _data_end = .;
     } > RAM AT > FLASH
+
+    /* Load address of .data section (for C startup to copy) */
+    _data_load = LOADADDR(.data);
 
     /* Zero-initialized data */
     .bss :

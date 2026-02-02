@@ -6,6 +6,7 @@ build/
 *.dylib
 *.bin
 *.elf
+*.lst
 
 # Python
 __pycache__/

@@ -14,10 +14,38 @@
 
 #include "arch/armv8m/armv8m_types.h"
 #include "arch/armv8m/armv8m_decoder.h"
+#include "arch/armv8m/armv8m_icache.h"
+#include "arch/armv8m/armv8m_blocks.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/*============================================================================
+ * Lazy Flag Evaluation
+ *============================================================================*/
+
+/**
+ * Operation type for lazy flag computation.
+ */
+typedef enum {
+    LAZY_OP_NONE = 0,       /**< No pending lazy flags */
+    LAZY_OP_ADD,            /**< Addition (need carry and overflow) */
+    LAZY_OP_SUB,            /**< Subtraction (need borrow and overflow) */
+    LAZY_OP_LOGIC,          /**< Logical operation (only N and Z, C from shifter) */
+} LazyOpType;
+
+/**
+ * Lazy flag state - defers flag computation until flags are read.
+ */
+typedef struct {
+    uint32_t result;        /**< Result of operation (for N and Z) */
+    uint32_t op1;           /**< First operand */
+    uint32_t op2;           /**< Second operand */
+    LazyOpType op_type;     /**< Type of operation */
+    bool shifter_carry;     /**< Carry out from shifter (for logic ops) */
+    bool valid;             /**< True if lazy flags are pending */
+} LazyFlags;
 
 /*============================================================================
  * CPU State
@@ -29,7 +57,7 @@ extern "C" {
 typedef struct {
     /* General purpose registers */
     uint32_t r[16];             /**< R0-R15 (R13=SP, R14=LR, R15=PC) */
-    
+
     /* Program status */
     uint32_t xpsr;              /**< Combined program status register */
     
@@ -94,6 +122,8 @@ typedef struct {
     uint32_t fpdscr;            /**< FPU Default Status Control Register */
     bool fp_context_active;     /**< FPCA bit tracking for lazy preservation */
 
+    /* Lazy flag evaluation */
+    LazyFlags lazy_flags;       /**< Deferred flag computation state */
 } CPUState;
 
 /*============================================================================
@@ -196,6 +226,10 @@ typedef struct {
     /* Vector Table Offset Registers */
     uint32_t vtor;              /**< VTOR - Vector Table Offset Register */
     uint32_t vtor_ns;           /**< Non-Secure VTOR (TrustZone only) */
+
+    /* Performance optimization caches */
+    InsnCache *icache;          /**< Decoded instruction cache (optional) */
+    BlockCache *blocks;         /**< Basic block cache (optional) */
 } Executor;
 
 /*============================================================================
@@ -263,6 +297,29 @@ bool armv8m_check_condition(uint32_t xpsr, ConditionCode cond);
 void armv8m_update_flags(CPUState *cpu, uint32_t result, bool carry, bool overflow);
 
 /**
+ * Set lazy flags for deferred flag computation.
+ * Use this instead of armv8m_update_flags() for add/sub/logic operations.
+ *
+ * @param cpu       CPU state
+ * @param op_type   Type of operation
+ * @param result    Result of operation
+ * @param op1       First operand
+ * @param op2       Second operand
+ * @param shifter_carry  Carry from shifter (for logic ops)
+ */
+void armv8m_set_lazy_flags(CPUState *cpu, LazyOpType op_type,
+                            uint32_t result, uint32_t op1, uint32_t op2,
+                            bool shifter_carry);
+
+/**
+ * Materialize lazy flags into APSR.
+ * Call this before reading flags (condition checks, MRS, exception entry).
+ *
+ * @param cpu       CPU state
+ */
+void armv8m_materialize_flags(CPUState *cpu);
+
+/**
  * Get current stack pointer value.
  *
  * @param cpu       CPU state
@@ -304,6 +361,85 @@ int armv8m_exception_entry(Executor *exec, int exception);
  * @return          ARMV8M_OK or error code
  */
 int armv8m_exception_return(Executor *exec, uint32_t exc_return);
+
+/**
+ * Set instruction cache for executor.
+ *
+ * @param exec      Executor context
+ * @param cache     Instruction cache (NULL to disable)
+ */
+void armv8m_exec_set_icache(Executor *exec, InsnCache *cache);
+
+/**
+ * Invalidate instruction cache (if set).
+ *
+ * @param exec      Executor context
+ */
+void armv8m_exec_invalidate_icache(Executor *exec);
+
+/**
+ * Set block cache for executor.
+ *
+ * @param exec      Executor context
+ * @param cache     Block cache (NULL to disable)
+ */
+void armv8m_exec_set_blocks(Executor *exec, BlockCache *cache);
+
+/**
+ * Invalidate block cache (if set).
+ *
+ * @param exec      Executor context
+ */
+void armv8m_exec_invalidate_blocks(Executor *exec);
+
+/**
+ * Execute a single basic block.
+ *
+ * @param exec      Executor context
+ * @param block     Block to execute
+ * @return          ARMV8M_OK or error code
+ */
+int armv8m_exec_block(Executor *exec, BasicBlock *block);
+
+/**
+ * Execute using basic blocks until cycles exhausted.
+ * Uses block cache for faster execution.
+ *
+ * @param exec      Executor context
+ * @param max_cycles Maximum cycles to execute
+ * @return          Number of cycles executed, or negative on error
+ */
+int64_t armv8m_exec_run_blocks(Executor *exec, uint64_t max_cycles);
+
+/**
+ * Execute using linked basic blocks until cycles exhausted.
+ * Uses block linking for faster block-to-block transitions.
+ *
+ * @param exec      Executor context
+ * @param max_cycles Maximum cycles to execute
+ * @return          Number of cycles executed, or negative on error
+ */
+int64_t armv8m_exec_run_linked(Executor *exec, uint64_t max_cycles);
+
+/**
+ * Execute a basic block using threaded interpretation (computed goto).
+ * Falls back to switch dispatch on non-GCC/Clang compilers.
+ *
+ * @param exec      Executor context
+ * @param block     Block to execute
+ * @return          ARMV8M_OK or error code
+ */
+int armv8m_exec_block_threaded(Executor *exec, BasicBlock *block);
+
+/**
+ * Execute using threaded interpretation until cycles exhausted.
+ * Combines block caching with computed goto dispatch for maximum performance.
+ *
+ * @param exec      Executor context
+ * @param max_cycles Maximum cycles to execute
+ * @return          Number of cycles executed, or negative on error
+ */
+int64_t armv8m_exec_run_threaded(Executor *exec, uint64_t max_cycles);
 
 #ifdef __cplusplus
 }

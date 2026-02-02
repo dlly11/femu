@@ -230,10 +230,11 @@ int decode_vfp(uint16_t hw1, uint16_t hw2, DecodedInsn *out)
     decode_vfp_regs(hw1, hw2, out, is_double);
 
     /* Check for compare (VCMP/VCMPE) - use mask for D bit
-     * VCMP/VCMPE encoding: opc1 = 1D11 (0xB or 0xF), Vn = 01x0 (4 or 6), opc2 = 4 or 6
+     * VCMP/VCMPE encoding: opc1 = 1D11 (0xB or 0xF), Vn = 01xx (4-7), opc2 = 4/5/6/7
+     * Vn bit[0] = 0 for register compare, 1 for compare with #0.0
      * Must check Vn field to distinguish from VABS (Vn=0), VNEG/VSQRT (Vn=1) */
     uint8_t Vn_field = (uint8_t)EXTRACT(hw1, 0, 4);
-    if ((opc1_dp & 0xB) == 0xB && (Vn_field == 4 || Vn_field == 6) && (opc2_dp & 0x5) == 0x4) {
+    if ((opc1_dp & 0xB) == 0xB && ((Vn_field & 0xC) == 4) && (opc2_dp & 0x5) == 0x4) {
         out->type = INSN_FPU_CMP;
         out->op = (uint8_t)BIT(hw2, 7);  /* E bit for VCMPE vs VCMP at hw2[7] */
         /* Check for compare with zero (M=0 and Vm=0000) */

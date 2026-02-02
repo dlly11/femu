@@ -360,6 +360,17 @@ def suggest_memory_config(elf: ElfInfo) -> dict:
         ram_base = 0x20000000
         ram_end = ram_base + 0x20000  # 128KB
 
+    # Check initial SP from vector table (first word in flash segment)
+    # This ensures the stack area is covered by RAM
+    for seg in elf.segments:
+        if seg.is_executable and len(seg.data) >= 4:
+            initial_sp = int.from_bytes(seg.data[:4], "little")
+            # If initial SP is in RAM region, extend RAM to cover it
+            if ram_base is not None and initial_sp > ram_base:
+                if initial_sp > ram_end:
+                    ram_end = initial_sp
+            break
+
     # Round up sizes to power of 2 for convenience
     def round_up_power2(size: int, min_size: int = 0x1000) -> int:
         size = max(size, min_size)

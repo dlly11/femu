@@ -38,6 +38,29 @@ typedef struct {
 } EmuMemRegion;
 
 /*============================================================================
+ * Page Table for Fast Lookup
+ *============================================================================*/
+
+#define EMU_PAGE_SHIFT 12               /* 4KB pages */
+#define EMU_PAGE_SIZE (1U << EMU_PAGE_SHIFT)
+#define EMU_PAGE_MASK (EMU_PAGE_SIZE - 1)
+
+/**
+ * Maximum addressable memory for page table (16MB by default).
+ * Adjust EMU_PAGE_TABLE_SIZE for larger address spaces.
+ */
+#define EMU_PAGE_TABLE_MAX_ADDR 0x01000000  /* 16MB */
+#define EMU_PAGE_TABLE_SIZE (EMU_PAGE_TABLE_MAX_ADDR >> EMU_PAGE_SHIFT)  /* 4096 entries */
+
+/**
+ * Page table entry for fast region lookup.
+ */
+typedef struct {
+    EmuMemRegion *region;   /**< Pointer to region (NULL if unmapped) */
+    uint8_t *data_base;     /**< Pre-computed data pointer for fast RAM access */
+} EmuPageEntry;
+
+/*============================================================================
  * Memory System Context
  *============================================================================*/
 
@@ -49,6 +72,11 @@ typedef struct {
 typedef struct {
     EmuMemRegion regions[EMU_MEM_MAX_REGIONS];
     int num_regions;
+
+    /* Page table for O(1) region lookup */
+    EmuPageEntry *page_table;       /**< Page table (NULL if not allocated) */
+    uint32_t page_table_size;       /**< Number of entries in page table */
+    bool page_table_valid;          /**< True if page table is up-to-date */
 
     /* MPU/MMU callbacks (optional, NULL if no protection unit) */
     void *mpu_ctx;
@@ -196,6 +224,30 @@ void emu_mem_set_mpu(EmuMemorySystem *mem, void *ctx,
 void emu_mem_set_fault_callback(EmuMemorySystem *mem, void *ctx,
                                 void (*fault_cb)(void *ctx, uint64_t addr,
                                                  bool is_write, int fault_type));
+
+/**
+ * Initialize page table for fast memory lookup.
+ * Call this after adding all memory regions for best performance.
+ *
+ * @param mem       Memory system
+ * @param max_addr  Maximum address to cover (0 for default 16MB)
+ * @return          EMU_OK or error code
+ */
+int emu_mem_init_page_table(EmuMemorySystem *mem, uint64_t max_addr);
+
+/**
+ * Free page table resources.
+ *
+ * @param mem       Memory system
+ */
+void emu_mem_free_page_table(EmuMemorySystem *mem);
+
+/**
+ * Invalidate page table (call when regions change).
+ *
+ * @param mem       Memory system
+ */
+void emu_mem_invalidate_page_table(EmuMemorySystem *mem);
 
 #ifdef __cplusplus
 }

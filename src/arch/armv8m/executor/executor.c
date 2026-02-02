@@ -7,6 +7,8 @@
 
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_decoder.h"
+#include "arch/armv8m/armv8m_icache.h"
+#include "arch/armv8m/armv8m_blocks.h"
 #include <string.h>
 
 /*============================================================================
@@ -131,6 +133,10 @@ SecurityAttr armv8m_check_security(const Executor *exec, uint32_t addr)
  * Helper Functions
  *============================================================================*/
 
+/**
+ * Check condition code against xPSR flags.
+ * Note: Caller must materialize lazy flags before calling if using CPUState.
+ */
 bool armv8m_check_condition(uint32_t xpsr, ConditionCode cond)
 {
     bool n = (xpsr >> 31) & 1;
@@ -161,6 +167,9 @@ bool armv8m_check_condition(uint32_t xpsr, ConditionCode cond)
 
 void armv8m_update_flags(CPUState *cpu, uint32_t result, bool carry, bool overflow)
 {
+    /* Invalidate any pending lazy flags */
+    cpu->lazy_flags.valid = false;
+
     cpu->xpsr &= ~(ARMV8M_XPSR_N | ARMV8M_XPSR_Z | ARMV8M_XPSR_C | ARMV8M_XPSR_V);
 
     if (result & 0x80000000) {
@@ -175,6 +184,79 @@ void armv8m_update_flags(CPUState *cpu, uint32_t result, bool carry, bool overfl
     if (overflow) {
         cpu->xpsr |= ARMV8M_XPSR_V;
     }
+}
+
+void armv8m_set_lazy_flags(CPUState *cpu, LazyOpType op_type,
+                            uint32_t result, uint32_t op1, uint32_t op2,
+                            bool shifter_carry)
+{
+    cpu->lazy_flags.op_type = op_type;
+    cpu->lazy_flags.result = result;
+    cpu->lazy_flags.op1 = op1;
+    cpu->lazy_flags.op2 = op2;
+    cpu->lazy_flags.shifter_carry = shifter_carry;
+    cpu->lazy_flags.valid = true;
+}
+
+void armv8m_materialize_flags(CPUState *cpu)
+{
+    if (!cpu->lazy_flags.valid) {
+        return;
+    }
+
+    uint32_t result = cpu->lazy_flags.result;
+    uint32_t op1 = cpu->lazy_flags.op1;
+    uint32_t op2 = cpu->lazy_flags.op2;
+    bool carry = false;
+    bool overflow = false;
+
+    switch (cpu->lazy_flags.op_type) {
+        case LAZY_OP_ADD: {
+            /* Carry: result < op1 (unsigned overflow) */
+            uint64_t wide_result = (uint64_t)op1 + (uint64_t)op2;
+            carry = wide_result > 0xFFFFFFFF;
+            /* Overflow: both operands same sign, result different sign */
+            overflow = (((op1 ^ ~op2) & (op1 ^ result)) >> 31) & 1;
+            break;
+        }
+
+        case LAZY_OP_SUB: {
+            /* For subtraction a - b, carry is set if a >= b (no borrow) */
+            carry = op1 >= op2;
+            /* Overflow: operands different sign, result sign differs from first operand */
+            overflow = (((op1 ^ op2) & (op1 ^ result)) >> 31) & 1;
+            break;
+        }
+
+        case LAZY_OP_LOGIC:
+            /* Logical ops: carry from shifter, no overflow */
+            carry = cpu->lazy_flags.shifter_carry;
+            overflow = (cpu->xpsr >> 28) & 1;  /* Preserve V flag */
+            break;
+
+        case LAZY_OP_NONE:
+        default:
+            cpu->lazy_flags.valid = false;
+            return;
+    }
+
+    /* Update flags */
+    cpu->xpsr &= ~(ARMV8M_XPSR_N | ARMV8M_XPSR_Z | ARMV8M_XPSR_C | ARMV8M_XPSR_V);
+
+    if (result & 0x80000000) {
+        cpu->xpsr |= ARMV8M_XPSR_N;
+    }
+    if (result == 0) {
+        cpu->xpsr |= ARMV8M_XPSR_Z;
+    }
+    if (carry) {
+        cpu->xpsr |= ARMV8M_XPSR_C;
+    }
+    if (overflow) {
+        cpu->xpsr |= ARMV8M_XPSR_V;
+    }
+
+    cpu->lazy_flags.valid = false;
 }
 
 uint32_t armv8m_get_sp(const CPUState *cpu)
@@ -363,6 +445,11 @@ void armv8m_exec_reset(Executor *exec, uint32_t vtor)
     if (exec->has_trustzone) {
         cpu->security = SECURITY_SECURE;
     }
+
+    /* Invalidate instruction cache */
+    if (exec->icache) {
+        armv8m_icache_invalidate(exec->icache);
+    }
 }
 
 /*============================================================================
@@ -498,6 +585,7 @@ int armv8m_exec_step(Executor *exec)
 {
     CPUState *cpu = &exec->cpu;
     DecodedInsn insn;
+    const DecodedInsn *cached_insn = NULL;
     int result;
 
     /* Check if halted or sleeping */
@@ -514,29 +602,48 @@ int armv8m_exec_step(Executor *exec)
         }
     }
 
-    /* Fetch instruction bytes */
+    /* Fetch instruction from PC */
     uint32_t pc = cpu->r[ARMV8M_REG_PC];
-    const uint8_t *mem = NULL;
 
-    if (exec->mem.get_ptr) {
-        mem = exec->mem.get_ptr(exec->mem.ctx, pc, 4);
+    /* Try instruction cache first */
+    if (exec->icache) {
+        cached_insn = armv8m_icache_lookup(exec->icache, pc);
     }
 
-    if (!mem) {
-        return ARMV8M_ERR_BUS_FAULT;
-    }
+    if (cached_insn) {
+        /* Cache hit - use cached instruction */
+        insn = *cached_insn;
+    } else {
+        /* Cache miss - fetch and decode */
+        const uint8_t *mem = NULL;
 
-    /* Decode instruction */
-    armv8m_decode_init(&insn);
-    result = armv8m_decode(mem, pc, &insn);
+        if (exec->mem.get_ptr) {
+            mem = exec->mem.get_ptr(exec->mem.ctx, pc, 4);
+        }
 
-    if (result < 0) {
-        return result;
+        if (!mem) {
+            return ARMV8M_ERR_BUS_FAULT;
+        }
+
+        /* Decode instruction */
+        armv8m_decode_init(&insn);
+        result = armv8m_decode(mem, pc, &insn);
+
+        if (result < 0) {
+            return result;
+        }
+
+        /* Insert into cache */
+        if (exec->icache) {
+            armv8m_icache_insert(exec->icache, pc, &insn);
+        }
     }
 
     /* Check IT block condition */
     ConditionCode it_cond = get_it_condition(cpu);
     if (it_cond != COND_AL) {
+        /* Materialize lazy flags before condition check */
+        armv8m_materialize_flags(cpu);
         if (!armv8m_check_condition(cpu->xpsr, it_cond)) {
             /* Condition failed, skip instruction */
             cpu->r[ARMV8M_REG_PC] += insn.size;
@@ -548,6 +655,8 @@ int armv8m_exec_step(Executor *exec)
 
     /* Check instruction's own condition (for conditional branches) */
     if (insn.cond != COND_AL && insn.type == INSN_BRANCH) {
+        /* Materialize lazy flags before condition check */
+        armv8m_materialize_flags(cpu);
         if (!armv8m_check_condition(cpu->xpsr, insn.cond)) {
             /* Condition failed, skip instruction */
             cpu->r[ARMV8M_REG_PC] += insn.size;
@@ -629,4 +738,777 @@ int64_t armv8m_exec_run(Executor *exec, uint64_t max_cycles)
     }
 
     return (int64_t)(exec->cpu.cycles - start_cycles);
+}
+
+/*============================================================================
+ * Instruction Cache Management
+ *============================================================================*/
+
+void armv8m_exec_set_icache(Executor *exec, InsnCache *cache)
+{
+    exec->icache = cache;
+}
+
+void armv8m_exec_invalidate_icache(Executor *exec)
+{
+    if (exec->icache) {
+        armv8m_icache_invalidate(exec->icache);
+    }
+}
+
+/*============================================================================
+ * Block Cache Management
+ *============================================================================*/
+
+void armv8m_exec_set_blocks(Executor *exec, BlockCache *cache)
+{
+    exec->blocks = cache;
+}
+
+void armv8m_exec_invalidate_blocks(Executor *exec)
+{
+    if (exec->blocks) {
+        armv8m_blocks_invalidate(exec->blocks);
+    }
+}
+
+/*============================================================================
+ * Block Execution
+ *============================================================================*/
+
+/**
+ * Get IT condition for current instruction within IT block.
+ */
+static ConditionCode get_it_condition_internal(const CPUState *cpu)
+{
+    if (cpu->it_state == 0) {
+        return COND_AL;
+    }
+    uint8_t cond = (uint8_t)(((cpu->it_state >> 4) & 0xE) | ((cpu->it_state >> 4) & 0x1));
+    return (ConditionCode)cond;
+}
+
+/**
+ * Advance IT state after executing an instruction.
+ */
+static void advance_it_state_internal(CPUState *cpu)
+{
+    if (cpu->it_state == 0) {
+        return;
+    }
+    if ((cpu->it_state & 0x0F) == 0x08) {
+        cpu->it_state = 0;
+    } else {
+        uint8_t upper = cpu->it_state & 0xE0;
+        uint8_t lower = cpu->it_state & 0x1F;
+        cpu->it_state = upper | ((lower << 1) & 0x1F);
+    }
+}
+
+int armv8m_exec_block(Executor *exec, BasicBlock *block)
+{
+    CPUState *cpu = &exec->cpu;
+    int result = ARMV8M_OK;
+
+    /* Execute each instruction in the block */
+    for (uint16_t i = 0; i < block->num_insns && result == ARMV8M_OK; i++) {
+        const DecodedInsn *insn = &block->insns[i];
+
+        /* Check IT block condition */
+        ConditionCode it_cond = get_it_condition_internal(cpu);
+        if (it_cond != COND_AL) {
+            /* Materialize lazy flags before condition check */
+            armv8m_materialize_flags(cpu);
+            if (!armv8m_check_condition(cpu->xpsr, it_cond)) {
+                /* Condition failed, skip instruction */
+                cpu->r[ARMV8M_REG_PC] = insn->pc + insn->size;
+                advance_it_state_internal(cpu);
+                cpu->cycles++;
+                continue;
+            }
+        }
+
+        /* Check instruction's own condition (for conditional branches) */
+        if (insn->cond != COND_AL && insn->type == INSN_BRANCH) {
+            /* Materialize lazy flags before condition check */
+            armv8m_materialize_flags(cpu);
+            if (!armv8m_check_condition(cpu->xpsr, insn->cond)) {
+                cpu->r[ARMV8M_REG_PC] = insn->pc + insn->size;
+                advance_it_state_internal(cpu);
+                cpu->cycles++;
+                continue;
+            }
+        }
+
+        /* Save PC for branch detection */
+        uint32_t old_pc = insn->pc;
+        cpu->r[ARMV8M_REG_PC] = insn->pc;
+
+        /* Execute instruction */
+        result = armv8m_exec_insn(exec, insn);
+
+        if (result != ARMV8M_OK) {
+            break;
+        }
+
+        /* Update PC if not modified by instruction */
+        if (cpu->r[ARMV8M_REG_PC] == old_pc) {
+            cpu->r[ARMV8M_REG_PC] = insn->pc + insn->size;
+        }
+
+        /* Advance IT state */
+        if (insn->type != INSN_IT) {
+            advance_it_state_internal(cpu);
+        }
+
+        cpu->cycles++;
+    }
+
+    block->exec_count++;
+    return result;
+}
+
+/**
+ * Memory get_ptr wrapper for block cache.
+ */
+static const uint8_t *block_mem_get_ptr(void *ctx, uint32_t addr, uint32_t size)
+{
+    Executor *exec = (Executor *)ctx;
+    if (exec->mem.get_ptr) {
+        return exec->mem.get_ptr(exec->mem.ctx, addr, size);
+    }
+    return NULL;
+}
+
+int64_t armv8m_exec_run_blocks(Executor *exec, uint64_t max_cycles)
+{
+    uint64_t start_cycles = exec->cpu.cycles;
+    CPUState *cpu = &exec->cpu;
+    int result = ARMV8M_OK;
+
+    /* Need block cache for block execution */
+    if (!exec->blocks) {
+        return armv8m_exec_run(exec, max_cycles);
+    }
+
+    while (result == ARMV8M_OK) {
+        if (max_cycles > 0 && (cpu->cycles - start_cycles) >= max_cycles) {
+            break;
+        }
+
+        /* Check if halted or sleeping */
+        if (cpu->halted) {
+            result = ARMV8M_ERR_HALTED;
+            break;
+        }
+
+        if (cpu->sleeping) {
+            if (exec->nvic.get_pending && exec->nvic.get_pending(exec->nvic.ctx) >= 0) {
+                cpu->sleeping = false;
+            } else {
+                break;
+            }
+        }
+
+        /* Get or build basic block at current PC */
+        uint32_t pc = cpu->r[ARMV8M_REG_PC];
+        BasicBlock *block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+
+        if (!block) {
+            /* Fall back to single-stepping */
+            result = armv8m_exec_step(exec);
+            continue;
+        }
+
+        /* Execute the block */
+        result = armv8m_exec_block(exec, block);
+
+        /* Check for pending exceptions */
+        if (result == ARMV8M_OK && exec->nvic.get_pending) {
+            int pending = exec->nvic.get_pending(exec->nvic.ctx);
+            if (pending >= 0) {
+                int current_pri = -1;
+                if (cpu->current_exception > 0 && exec->nvic.get_priority) {
+                    current_pri = exec->nvic.get_priority(exec->nvic.ctx, cpu->current_exception);
+                }
+
+                int pending_pri = exec->nvic.get_priority ?
+                                  exec->nvic.get_priority(exec->nvic.ctx, pending) : 0;
+
+                if (pending_pri < current_pri || current_pri < 0) {
+                    result = armv8m_exception_entry(exec, pending);
+                }
+            }
+        }
+
+        if (cpu->sleeping || cpu->halted) {
+            break;
+        }
+    }
+
+    return (int64_t)(cpu->cycles - start_cycles);
+}
+
+/*============================================================================
+ * Linked Block Execution
+ *============================================================================*/
+
+/**
+ * Determine if a branch was taken based on block end type and current state.
+ */
+static bool was_branch_taken(const Executor *exec, const BasicBlock *block)
+{
+    const CPUState *cpu = &exec->cpu;
+    uint32_t pc = cpu->r[ARMV8M_REG_PC];
+
+    switch (block->end_type) {
+        case BLOCK_END_BRANCH:
+            /* Unconditional branch - always taken */
+            return true;
+
+        case BLOCK_END_COND_BRANCH:
+            /* Check if PC went to taken target */
+            return (pc == block->target_taken);
+
+        case BLOCK_END_CALL:
+            /* Call - always taken (returns to different address) */
+            return true;
+
+        case BLOCK_END_RETURN:
+        case BLOCK_END_INDIRECT:
+            /* Unknown target - need to lookup by PC */
+            return true;
+
+        case BLOCK_END_MAX_SIZE:
+        case BLOCK_END_IT_BLOCK:
+        case BLOCK_END_SYSTEM:
+        default:
+            /* Fall through to next block */
+            return false;
+    }
+}
+
+/*============================================================================
+ * Threaded Interpretation (Computed Goto)
+ *============================================================================*/
+
+#if defined(__GNUC__) || defined(__clang__)
+#define USE_COMPUTED_GOTO 1
+#else
+#define USE_COMPUTED_GOTO 0
+#endif
+
+int armv8m_exec_block_threaded(Executor *exec, BasicBlock *block)
+{
+    CPUState *cpu = &exec->cpu;
+    int result = ARMV8M_OK;
+
+#if USE_COMPUTED_GOTO
+    /* Dispatch table for computed goto */
+    static const void *dispatch_table[INSN_TYPE_COUNT] = {
+        [INSN_UNDEFINED] = &&label_undefined,
+        [INSN_DATA_PROC_IMM] = &&label_data_proc_imm,
+        [INSN_DATA_PROC_REG] = &&label_data_proc_reg,
+        [INSN_DATA_PROC_SHIFTED] = &&label_data_proc_shifted,
+        [INSN_MULTIPLY] = &&label_multiply,
+        [INSN_DIVIDE] = &&label_divide,
+        [INSN_SATURATE] = &&label_saturate,
+        [INSN_SAT_ARITH] = &&label_sat_arith,
+        [INSN_PARALLEL] = &&label_parallel,
+        [INSN_PACK] = &&label_pack,
+        [INSN_BITFIELD] = &&label_bitfield,
+        [INSN_EXTEND] = &&label_extend,
+        [INSN_LOAD_IMM] = &&label_load_imm,
+        [INSN_LOAD_REG] = &&label_load_reg,
+        [INSN_LOAD_LITERAL] = &&label_load_literal,
+        [INSN_STORE_IMM] = &&label_store_imm,
+        [INSN_STORE_REG] = &&label_store_reg,
+        [INSN_LOAD_MULTIPLE] = &&label_load_multiple,
+        [INSN_STORE_MULTIPLE] = &&label_store_multiple,
+        [INSN_LOAD_EXCLUSIVE] = &&label_load_exclusive,
+        [INSN_STORE_EXCLUSIVE] = &&label_store_exclusive,
+        [INSN_CLEAR_EXCLUSIVE] = &&label_clear_exclusive,
+        [INSN_LOAD_ACQUIRE] = &&label_load_acquire,
+        [INSN_STORE_RELEASE] = &&label_store_release,
+        [INSN_BRANCH] = &&label_branch,
+        [INSN_BRANCH_LINK] = &&label_branch_link,
+        [INSN_BRANCH_EXCHANGE] = &&label_branch_exchange,
+        [INSN_BRANCH_LINK_EXCHANGE] = &&label_branch_link_exchange,
+        [INSN_COMPARE_BRANCH] = &&label_compare_branch,
+        [INSN_TABLE_BRANCH] = &&label_table_branch,
+        [INSN_SVC] = &&label_svc,
+        [INSN_MRS] = &&label_mrs,
+        [INSN_MSR] = &&label_msr,
+        [INSN_CPS] = &&label_cps,
+        [INSN_BARRIER] = &&label_barrier,
+        [INSN_HINT] = &&label_hint,
+        [INSN_IT] = &&label_it,
+        [INSN_SG] = &&label_sg,
+        [INSN_BXNS] = &&label_bxns,
+        [INSN_BLXNS] = &&label_blxns,
+        [INSN_TT] = &&label_tt,
+        [INSN_MCR] = &&label_mcr,
+        [INSN_MRC] = &&label_mrc,
+        [INSN_FPU_LOAD] = &&label_fpu_load,
+        [INSN_FPU_STORE] = &&label_fpu_store,
+        [INSN_FPU_MOVE] = &&label_fpu_move,
+        [INSN_FPU_ARITH] = &&label_fpu_arith,
+        [INSN_FPU_CMP] = &&label_fpu_cmp,
+        [INSN_FPU_CVT] = &&label_fpu_cvt,
+        [INSN_FPU_MULTI] = &&label_fpu_multi,
+    };
+
+    const DecodedInsn *insn = block->insns;
+    const DecodedInsn *end = block->insns + block->num_insns;
+
+    #define DISPATCH() do { \
+        if (insn >= end || result != ARMV8M_OK) goto done; \
+        cpu->r[ARMV8M_REG_PC] = insn->pc; \
+        goto *dispatch_table[insn->type]; \
+    } while(0)
+
+    #define NEXT_INSN() do { \
+        if (cpu->r[ARMV8M_REG_PC] == insn->pc) \
+            cpu->r[ARMV8M_REG_PC] = insn->pc + insn->size; \
+        if (insn->type != INSN_IT) advance_it_state_internal(cpu); \
+        cpu->cycles++; \
+        insn++; \
+        DISPATCH(); \
+    } while(0)
+
+    DISPATCH();
+
+    /* Data processing handlers */
+    label_data_proc_imm:
+        result = exec_data_proc_imm(exec, insn);
+        NEXT_INSN();
+
+    label_data_proc_reg:
+        result = exec_data_proc_reg(exec, insn);
+        NEXT_INSN();
+
+    label_data_proc_shifted:
+        result = exec_data_proc_shifted(exec, insn);
+        NEXT_INSN();
+
+    label_multiply:
+        result = exec_multiply(exec, insn);
+        NEXT_INSN();
+
+    label_divide:
+        result = exec_divide(exec, insn);
+        NEXT_INSN();
+
+    label_saturate:
+        result = exec_saturate(exec, insn);
+        NEXT_INSN();
+
+    label_sat_arith:
+        result = exec_sat_arith(exec, insn);
+        NEXT_INSN();
+
+    label_parallel:
+        result = exec_parallel(exec, insn);
+        NEXT_INSN();
+
+    label_pack:
+        result = exec_pack(exec, insn);
+        NEXT_INSN();
+
+    label_bitfield:
+        result = exec_bitfield(exec, insn);
+        NEXT_INSN();
+
+    label_extend:
+        result = exec_extend(exec, insn);
+        NEXT_INSN();
+
+    /* Load/store handlers */
+    label_load_imm:
+        result = exec_load_imm(exec, insn);
+        NEXT_INSN();
+
+    label_load_reg:
+        result = exec_load_reg(exec, insn);
+        NEXT_INSN();
+
+    label_load_literal:
+        result = exec_load_literal(exec, insn);
+        NEXT_INSN();
+
+    label_store_imm:
+        result = exec_store_imm(exec, insn);
+        NEXT_INSN();
+
+    label_store_reg:
+        result = exec_store_reg(exec, insn);
+        NEXT_INSN();
+
+    label_load_multiple:
+        result = exec_load_multiple(exec, insn);
+        NEXT_INSN();
+
+    label_store_multiple:
+        result = exec_store_multiple(exec, insn);
+        NEXT_INSN();
+
+    label_load_exclusive:
+        result = exec_load_exclusive(exec, insn);
+        NEXT_INSN();
+
+    label_store_exclusive:
+        result = exec_store_exclusive(exec, insn);
+        NEXT_INSN();
+
+    label_clear_exclusive:
+        result = exec_clear_exclusive(exec, insn);
+        NEXT_INSN();
+
+    label_load_acquire:
+        result = exec_load_acquire(exec, insn);
+        NEXT_INSN();
+
+    label_store_release:
+        result = exec_store_release(exec, insn);
+        NEXT_INSN();
+
+    /* Branch handlers */
+    label_branch:
+        result = exec_branch(exec, insn);
+        NEXT_INSN();
+
+    label_branch_link:
+        result = exec_branch_link(exec, insn);
+        NEXT_INSN();
+
+    label_branch_exchange:
+        result = exec_branch_exchange(exec, insn);
+        NEXT_INSN();
+
+    label_branch_link_exchange:
+        result = exec_branch_link_exchange(exec, insn);
+        NEXT_INSN();
+
+    label_compare_branch:
+        result = exec_compare_branch(exec, insn);
+        NEXT_INSN();
+
+    label_table_branch:
+        result = exec_table_branch(exec, insn);
+        NEXT_INSN();
+
+    /* System handlers */
+    label_svc:
+        result = exec_svc(exec, insn);
+        NEXT_INSN();
+
+    label_mrs:
+        result = exec_mrs(exec, insn);
+        NEXT_INSN();
+
+    label_msr:
+        result = exec_msr(exec, insn);
+        NEXT_INSN();
+
+    label_cps:
+        result = exec_cps(exec, insn);
+        NEXT_INSN();
+
+    label_barrier:
+        result = exec_barrier(exec, insn);
+        NEXT_INSN();
+
+    label_hint:
+        result = exec_hint(exec, insn);
+        NEXT_INSN();
+
+    label_it:
+        result = exec_it(exec, insn);
+        NEXT_INSN();
+
+    /* TrustZone handlers */
+    label_sg:
+        result = exec_sg(exec, insn);
+        NEXT_INSN();
+
+    label_bxns:
+        result = exec_bxns(exec, insn);
+        NEXT_INSN();
+
+    label_blxns:
+        result = exec_blxns(exec, insn);
+        NEXT_INSN();
+
+    label_tt:
+        result = exec_tt(exec, insn);
+        NEXT_INSN();
+
+    /* Coprocessor handlers */
+    label_mcr:
+        result = exec_mcr(exec, insn);
+        NEXT_INSN();
+
+    label_mrc:
+        result = exec_mrc(exec, insn);
+        NEXT_INSN();
+
+    /* FPU handlers */
+    label_fpu_load:
+        result = exec_fpu_load(exec, insn);
+        NEXT_INSN();
+
+    label_fpu_store:
+        result = exec_fpu_store(exec, insn);
+        NEXT_INSN();
+
+    label_fpu_move:
+        result = exec_fpu_move(exec, insn);
+        NEXT_INSN();
+
+    label_fpu_arith:
+        result = exec_fpu_arith(exec, insn);
+        NEXT_INSN();
+
+    label_fpu_cmp:
+        result = exec_fpu_cmp(exec, insn);
+        NEXT_INSN();
+
+    label_fpu_cvt:
+        result = exec_fpu_cvt(exec, insn);
+        NEXT_INSN();
+
+    label_fpu_multi:
+        result = exec_fpu_multi(exec, insn);
+        NEXT_INSN();
+
+    label_undefined:
+        result = ARMV8M_ERR_UNDEFINED_INSN;
+        goto done;
+
+    #undef DISPATCH
+    #undef NEXT_INSN
+
+done:
+    block->exec_count++;
+    return result;
+
+#else
+    /* Fallback: use regular block execution for non-GCC/Clang */
+    return armv8m_exec_block(exec, block);
+#endif
+}
+
+int64_t armv8m_exec_run_threaded(Executor *exec, uint64_t max_cycles)
+{
+    uint64_t start_cycles = exec->cpu.cycles;
+    CPUState *cpu = &exec->cpu;
+    int result = ARMV8M_OK;
+    uint64_t interrupt_check_counter = 0;
+
+    /* Need block cache for threaded execution */
+    if (!exec->blocks) {
+        return armv8m_exec_run(exec, max_cycles);
+    }
+
+    /* Get initial block */
+    uint32_t pc = cpu->r[ARMV8M_REG_PC];
+    BasicBlock *block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+
+    while (result == ARMV8M_OK && block != NULL) {
+        if (max_cycles > 0 && (cpu->cycles - start_cycles) >= max_cycles) {
+            break;
+        }
+
+        /* Check if halted or sleeping */
+        if (cpu->halted) {
+            result = ARMV8M_ERR_HALTED;
+            break;
+        }
+
+        if (cpu->sleeping) {
+            if (exec->nvic.get_pending && exec->nvic.get_pending(exec->nvic.ctx) >= 0) {
+                cpu->sleeping = false;
+            } else {
+                break;
+            }
+        }
+
+        /* Execute the block using threaded interpretation */
+        result = armv8m_exec_block_threaded(exec, block);
+
+        if (result != ARMV8M_OK) {
+            break;
+        }
+
+        /* Periodic interrupt check */
+        interrupt_check_counter++;
+        if ((interrupt_check_counter & 0x3F) == 0 && exec->nvic.get_pending) {
+            int pending = exec->nvic.get_pending(exec->nvic.ctx);
+            if (pending >= 0) {
+                int current_pri = -1;
+                if (cpu->current_exception > 0 && exec->nvic.get_priority) {
+                    current_pri = exec->nvic.get_priority(exec->nvic.ctx, cpu->current_exception);
+                }
+
+                int pending_pri = exec->nvic.get_priority ?
+                                  exec->nvic.get_priority(exec->nvic.ctx, pending) : 0;
+
+                if (pending_pri < current_pri || current_pri < 0) {
+                    result = armv8m_exception_entry(exec, pending);
+                    if (result != ARMV8M_OK) {
+                        break;
+                    }
+                    pc = cpu->r[ARMV8M_REG_PC];
+                    block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+                    continue;
+                }
+            }
+        }
+
+        if (cpu->sleeping || cpu->halted) {
+            break;
+        }
+
+        /* Get next block using links */
+        bool taken = was_branch_taken(exec, block);
+        pc = cpu->r[ARMV8M_REG_PC];
+
+        BasicBlock *next = NULL;
+        if (taken && block->link_taken &&
+            block->link_taken->generation == exec->blocks->generation &&
+            block->link_taken->start_pc == pc) {
+            next = block->link_taken;
+            exec->blocks->hits++;
+        } else if (!taken && block->link_not_taken &&
+                   block->link_not_taken->generation == exec->blocks->generation &&
+                   block->link_not_taken->start_pc == pc) {
+            next = block->link_not_taken;
+            exec->blocks->hits++;
+        }
+
+        if (!next) {
+            next = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+            if (next && next->generation == exec->blocks->generation) {
+                if (taken) {
+                    block->link_taken = next;
+                } else {
+                    block->link_not_taken = next;
+                }
+            }
+        }
+
+        block = next;
+    }
+
+    return (int64_t)(cpu->cycles - start_cycles);
+}
+
+int64_t armv8m_exec_run_linked(Executor *exec, uint64_t max_cycles)
+{
+    uint64_t start_cycles = exec->cpu.cycles;
+    CPUState *cpu = &exec->cpu;
+    int result = ARMV8M_OK;
+    uint64_t interrupt_check_counter = 0;
+
+    /* Need block cache for linked execution */
+    if (!exec->blocks) {
+        return armv8m_exec_run(exec, max_cycles);
+    }
+
+    /* Get initial block */
+    uint32_t pc = cpu->r[ARMV8M_REG_PC];
+    BasicBlock *block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+
+    while (result == ARMV8M_OK && block != NULL) {
+        if (max_cycles > 0 && (cpu->cycles - start_cycles) >= max_cycles) {
+            break;
+        }
+
+        /* Check if halted or sleeping */
+        if (cpu->halted) {
+            result = ARMV8M_ERR_HALTED;
+            break;
+        }
+
+        if (cpu->sleeping) {
+            if (exec->nvic.get_pending && exec->nvic.get_pending(exec->nvic.ctx) >= 0) {
+                cpu->sleeping = false;
+            } else {
+                break;
+            }
+        }
+
+        /* Execute the block */
+        result = armv8m_exec_block(exec, block);
+
+        if (result != ARMV8M_OK) {
+            break;
+        }
+
+        /* Periodic interrupt check (every 64 blocks or so) */
+        interrupt_check_counter++;
+        if ((interrupt_check_counter & 0x3F) == 0 && exec->nvic.get_pending) {
+            int pending = exec->nvic.get_pending(exec->nvic.ctx);
+            if (pending >= 0) {
+                int current_pri = -1;
+                if (cpu->current_exception > 0 && exec->nvic.get_priority) {
+                    current_pri = exec->nvic.get_priority(exec->nvic.ctx, cpu->current_exception);
+                }
+
+                int pending_pri = exec->nvic.get_priority ?
+                                  exec->nvic.get_priority(exec->nvic.ctx, pending) : 0;
+
+                if (pending_pri < current_pri || current_pri < 0) {
+                    result = armv8m_exception_entry(exec, pending);
+                    if (result != ARMV8M_OK) {
+                        break;
+                    }
+                    /* PC changed due to exception - need fresh block lookup */
+                    pc = cpu->r[ARMV8M_REG_PC];
+                    block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+                    continue;
+                }
+            }
+        }
+
+        if (cpu->sleeping || cpu->halted) {
+            break;
+        }
+
+        /* Get next block using links */
+        bool taken = was_branch_taken(exec, block);
+        pc = cpu->r[ARMV8M_REG_PC];
+
+        /* Try linked block first */
+        BasicBlock *next = NULL;
+        if (taken && block->link_taken &&
+            block->link_taken->generation == exec->blocks->generation &&
+            block->link_taken->start_pc == pc) {
+            next = block->link_taken;
+            exec->blocks->hits++;
+        } else if (!taken && block->link_not_taken &&
+                   block->link_not_taken->generation == exec->blocks->generation &&
+                   block->link_not_taken->start_pc == pc) {
+            next = block->link_not_taken;
+            exec->blocks->hits++;
+        }
+
+        if (!next) {
+            /* No valid link - lookup or build block */
+            next = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+
+            /* Establish link for next time */
+            if (next && next->generation == exec->blocks->generation) {
+                if (taken) {
+                    block->link_taken = next;
+                } else {
+                    block->link_not_taken = next;
+                }
+            }
+        }
+
+        block = next;
+    }
+
+    return (int64_t)(cpu->cycles - start_cycles);
 }
