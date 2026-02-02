@@ -8,6 +8,7 @@
  */
 
 #include "emu/emu_memory.h"
+#include "emu/emu_log.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -105,6 +106,8 @@ static void write_ram(const EmuMemRegion *r, uint64_t addr, uint64_t value, uint
  */
 static void report_fault(EmuMemorySystem *mem, uint64_t addr, bool is_write, int fault_type)
 {
+    EMU_LOG_DEBUG(EMU_LOG_CAT_MEMORY, "Memory fault: addr=0x%08llX %s fault_type=%d",
+                  (unsigned long long)addr, is_write ? "write" : "read", fault_type);
     if (mem->on_fault) {
         mem->on_fault(mem->fault_ctx, addr, is_write, fault_type);
     }

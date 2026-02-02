@@ -38,7 +38,7 @@ if(BUILD_EMULATOR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/armv8m_emulator.c)
         ${CMAKE_SOURCE_DIR}/include
     )
 
-    # Link to all ARMv8-M components, shared memory, and emulator core
+    # Link to all ARMv8-M components, shared memory, emulator core, and logging
     target_link_libraries(armv8m_emulator
         armv8m_decoder
         armv8m_executor
@@ -46,6 +46,7 @@ if(BUILD_EMULATOR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/armv8m_emulator.c)
         armv8m_mpu
         emu_memory
         emu_core
+        emu_log
     )
 
     # Tests for the emulator (currently in src/core/emulator/tests/)
@@ -85,6 +86,7 @@ if(BUILD_PYTHON_BINDINGS)
         armv8m_mpu
         emu_memory
         emu_core
+        emu_log
     )
 
     # Set output name and properties

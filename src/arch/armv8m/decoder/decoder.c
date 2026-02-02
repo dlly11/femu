@@ -7,6 +7,7 @@
  */
 
 #include "arch/armv8m/armv8m_decoder.h"
+#include "emu/emu_log.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -82,6 +83,8 @@ int armv8m_decode(const uint8_t *mem, uint32_t pc, DecodedInsn *insn)
 
         result = decode_thumb32(hw1, hw2, pc, insn);
         if (result < 0) {
+            EMU_LOG_DEBUG(EMU_LOG_CAT_DECODER, "Decode error at PC=0x%08X: encoding=0x%08X result=%d",
+                          pc, insn->encoding, result);
             return result;
         }
         return 4;
@@ -94,6 +97,8 @@ int armv8m_decode(const uint8_t *mem, uint32_t pc, DecodedInsn *insn)
 
     result = decode_thumb16(hw1, pc, insn);
     if (result < 0) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_DECODER, "Decode error at PC=0x%08X: encoding=0x%04X result=%d",
+                      pc, insn->encoding, result);
         return result;
     }
     return 2;

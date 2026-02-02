@@ -193,9 +193,44 @@ def dev_list() -> None:
 @click.argument("firmware", type=click.Path(exists=True))
 @click.option("--gdb-port", type=int, default=None, help="Start GDB server on port.")
 @click.option("--max-cycles", type=int, default=0, help="Max cycles to execute (0=unlimited).")
-@click.option("-v", "--verbose", is_flag=True, help="Verbose output.")
-def run_emulator(firmware: str, gdb_port: int | None, max_cycles: int, verbose: bool) -> None:
+@click.option("-v", "--verbose", count=True, help="Verbosity level (-v=INFO, -vv=DEBUG, -vvv=TRACE).")
+@click.option("--trace", type=str, multiple=True, help="Enable TRACE for category (executor, decoder, memory, nvic, mpu, peripheral, gdb, emulator).")
+@click.option("--log-file", type=click.Path(), default=None, help="Log to file.")
+@click.option("--json-log", is_flag=True, help="Use JSON log format.")
+def run_emulator(firmware: str, gdb_port: int | None, max_cycles: int, verbose: int,
+                 trace: tuple[str, ...], log_file: str | None, json_log: bool) -> None:
     """Run the emulator with a firmware file."""
+    from .logging import configure_logging, LogLevel, LogCategory
+
+    # Configure logging based on verbosity
+    level_map = {0: LogLevel.WARNING, 1: LogLevel.INFO, 2: LogLevel.DEBUG, 3: LogLevel.TRACE}
+    log_level = level_map.get(min(verbose, 3), LogLevel.TRACE)
+
+    # Build category overrides for --trace
+    category_map = {
+        "decoder": LogCategory.DECODER,
+        "executor": LogCategory.EXECUTOR,
+        "memory": LogCategory.MEMORY,
+        "nvic": LogCategory.NVIC,
+        "mpu": LogCategory.MPU,
+        "peripheral": LogCategory.PERIPHERAL,
+        "gdb": LogCategory.GDB,
+        "emulator": LogCategory.EMULATOR,
+    }
+    category_levels = {}
+    for cat_name in trace:
+        if cat_name.lower() in category_map:
+            category_levels[category_map[cat_name.lower()]] = LogLevel.TRACE
+        else:
+            console.print(f"[yellow]Unknown trace category: {cat_name}[/yellow]")
+
+    configure_logging(
+        level=log_level,
+        category_levels=category_levels if category_levels else None,
+        log_file=log_file,
+        json_format=json_log,
+    )
+
     try:
         from .emulator import Emulator, EmulatorState
         from .gdb_server import GDBServer

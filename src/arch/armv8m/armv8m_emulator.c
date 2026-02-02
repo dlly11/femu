@@ -6,6 +6,7 @@
  */
 
 #include "arch/armv8m/armv8m_emulator.h"
+#include "emu/emu_log.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -298,6 +299,9 @@ int armv8m_emu_init(Emulator *emu, const EmulatorConfig *config)
         armv8m_emu_default_config(&cfg);
     }
 
+    EMU_LOG_INFO(EMU_LOG_CAT_EMULATOR, "Initializing ARMv8-M emulator (FPU=%d, DSP=%d, TZ=%d, MPU=%d, IRQs=%d)",
+                 cfg.has_fpu, cfg.has_dsp, cfg.has_trustzone, cfg.num_mpu_regions, cfg.num_irqs);
+
     /* Initialize executor */
     armv8m_exec_init(&emu->exec);
     emu->exec.has_fpu = cfg.has_fpu;
@@ -348,6 +352,8 @@ int armv8m_emu_init(Emulator *emu, const EmulatorConfig *config)
 
     emu->state = EMU_STATE_STOPPED;
 
+    EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Emulator initialized successfully");
+
     return ARMV8M_OK;
 }
 
@@ -373,6 +379,8 @@ void armv8m_emu_reset(Emulator *emu)
 {
     if (!emu) return;
 
+    EMU_LOG_INFO(EMU_LOG_CAT_EMULATOR, "Resetting emulator (VTOR=0x%08X)", emu->exec.vtor);
+
     /* Reset all modules */
     armv8m_nvic_reset(&emu->nvic);
     armv8m_mpu_reset(&emu->mpu);
@@ -392,6 +400,9 @@ void armv8m_emu_reset(Emulator *emu)
             emu->exec.cpu.sp_main = initial_sp;
             emu->exec.cpu.r[ARMV8M_REG_SP] = initial_sp;
             emu->exec.cpu.r[ARMV8M_REG_PC] = reset_vector & ~1u;  /* Clear Thumb bit */
+
+            EMU_LOG_INFO(EMU_LOG_CAT_EMULATOR, "Reset vector: SP=0x%08X, PC=0x%08X",
+                         initial_sp, reset_vector & ~1u);
         }
     }
 
@@ -415,12 +426,16 @@ int armv8m_emu_add_flash(Emulator *emu, uint32_t base, uint32_t size)
     if (!emu) return ARMV8M_ERR_INVALID_PARAM;
     if (size == 0) return ARMV8M_ERR_INVALID_PARAM;
 
+    EMU_LOG_INFO(EMU_LOG_CAT_MEMORY, "Adding flash region: base=0x%08X, size=0x%X (%u KB)",
+                 base, size, size / 1024);
+
     /* Free existing flash */
     free(emu->flash_data);
 
     /* Allocate backing storage */
     emu->flash_data = (uint8_t *)calloc(1, size);
     if (!emu->flash_data) {
+        EMU_LOG_ERROR(EMU_LOG_CAT_MEMORY, "Failed to allocate flash memory");
         return ARMV8M_ERR_INVALID_PARAM;  /* Out of memory */
     }
 
@@ -440,12 +455,16 @@ int armv8m_emu_add_ram(Emulator *emu, uint32_t base, uint32_t size)
     if (!emu) return ARMV8M_ERR_INVALID_PARAM;
     if (size == 0) return ARMV8M_ERR_INVALID_PARAM;
 
+    EMU_LOG_INFO(EMU_LOG_CAT_MEMORY, "Adding RAM region: base=0x%08X, size=0x%X (%u KB)",
+                 base, size, size / 1024);
+
     /* Free existing RAM */
     free(emu->ram_data);
 
     /* Allocate backing storage */
     emu->ram_data = (uint8_t *)calloc(1, size);
     if (!emu->ram_data) {
+        EMU_LOG_ERROR(EMU_LOG_CAT_MEMORY, "Failed to allocate RAM memory");
         return ARMV8M_ERR_INVALID_PARAM;  /* Out of memory */
     }
 
@@ -498,6 +517,9 @@ int64_t armv8m_emu_run(Emulator *emu, uint64_t max_cycles)
 {
     if (!emu) return ARMV8M_ERR_INVALID_PARAM;
 
+    EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Starting execution at PC=0x%08X (max_cycles=%lu)",
+                  emu->exec.cpu.r[ARMV8M_REG_PC], (unsigned long)max_cycles);
+
     emu->state = EMU_STATE_RUNNING;
     emu->stop_requested = false;
 
@@ -508,6 +530,7 @@ int64_t armv8m_emu_run(Emulator *emu, uint64_t max_cycles)
         /* Check for breakpoint */
         uint32_t pc = emu->exec.cpu.r[ARMV8M_REG_PC];
         if (armv8m_emu_has_breakpoint(emu, pc)) {
+            EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Hit breakpoint at PC=0x%08X", pc);
             emu->state = EMU_STATE_BREAKPOINT;
             break;
         }
@@ -519,9 +542,12 @@ int64_t armv8m_emu_run(Emulator *emu, uint64_t max_cycles)
             emu->state = EMU_STATE_BREAKPOINT;
             break;
         } else if (result == ARMV8M_ERR_HALTED) {
+            EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "CPU halted");
             emu->state = EMU_STATE_HALTED;
             break;
         } else if (result != ARMV8M_OK) {
+            EMU_LOG_ERROR(EMU_LOG_CAT_EMULATOR, "Execution fault at PC=0x%08X: error=%d",
+                          emu->exec.cpu.r[ARMV8M_REG_PC], result);
             emu->state = EMU_STATE_FAULT;
             emu->last_error = result;
             return -(int64_t)result;
@@ -539,7 +565,11 @@ int64_t armv8m_emu_run(Emulator *emu, uint64_t max_cycles)
         emu->state = EMU_STATE_STOPPED;
     }
 
-    return (int64_t)(emu->exec.cpu.cycles - start_cycles);
+    uint64_t executed = emu->exec.cpu.cycles - start_cycles;
+    EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Execution stopped: state=%d, cycles=%lu, PC=0x%08X",
+                  emu->state, (unsigned long)executed, emu->exec.cpu.r[ARMV8M_REG_PC]);
+
+    return (int64_t)executed;
 }
 
 void armv8m_emu_stop(Emulator *emu)
@@ -732,8 +762,14 @@ int armv8m_emu_add_peripheral(Emulator *emu, EmuPeripheral *periph, uint32_t bas
     if (!emu || !periph) return ARMV8M_ERR_INVALID_PARAM;
 
     if (emu->num_peripherals >= EMU_MAX_PERIPHERALS) {
+        EMU_LOG_ERROR(EMU_LOG_CAT_PERIPHERAL, "Maximum number of peripherals reached");
         return ARMV8M_ERR_INVALID_PARAM;
     }
+
+    EMU_LOG_INFO(EMU_LOG_CAT_PERIPHERAL, "Adding peripheral '%s' (type=%s) at 0x%08X-0x%08X",
+                 periph->name ? periph->name : "unnamed",
+                 periph->type ? periph->type : "unknown",
+                 base, base + size - 1);
 
     /* Configure peripheral */
     periph->base_addr = base;
@@ -749,6 +785,7 @@ int armv8m_emu_add_peripheral(Emulator *emu, EmuPeripheral *periph, uint32_t bas
     int result = emu_mem_add_mmio(&emu->mem, base, size,
                                       periph, periph_mmio_read, periph_mmio_write);
     if (result != ARMV8M_OK) {
+        EMU_LOG_ERROR(EMU_LOG_CAT_PERIPHERAL, "Failed to add MMIO region for peripheral");
         return result;
     }
 

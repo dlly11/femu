@@ -4,6 +4,7 @@
  */
 
 #include "arch/armv8m/armv8m_mpu.h"
+#include "emu/emu_log.h"
 #include <string.h>
 
 /*============================================================================
@@ -105,6 +106,8 @@ static bool check_default_map(uint32_t addr, bool is_write, bool is_fetch)
  */
 static void set_fault_info(MPUFaultInfo *fault, bool is_fetch, uint32_t addr)
 {
+    EMU_LOG_DEBUG(EMU_LOG_CAT_MPU, "MPU fault: addr=0x%08X %s", addr,
+                  is_fetch ? "fetch" : "data");
     if (fault) {
         fault->type = is_fetch ? MPU_FAULT_IACCVIOL : MPU_FAULT_DACCVIOL;
         fault->addr = addr;

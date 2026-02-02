@@ -42,6 +42,11 @@ target_include_directories(armv8m_nvic PUBLIC
     $<$<BOOL:${STANDALONE_BUILD}>:${CMAKE_SOURCE_DIR}/../../../include>
 )
 
+# Link to logging
+if(TARGET emu_log)
+    target_link_libraries(armv8m_nvic emu_log)
+endif()
+
 # Tests
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_nvic.cpp)
     add_executable(test_nvic tests/test_nvic.cpp)

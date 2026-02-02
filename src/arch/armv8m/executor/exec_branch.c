@@ -7,6 +7,7 @@
 
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
+#include "emu/emu_log.h"
 
 /*============================================================================
  * Internal Helpers
@@ -76,6 +77,8 @@ int exec_branch(Executor *exec, const DecodedInsn *insn)
     /* Calculate target: PC + 4 + offset (PC is already pointing to current insn) */
     uint32_t target = (uint32_t)((int32_t)pc + 4 + insn->branch_offset);
 
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "B 0x%08X -> 0x%08X", pc, target & ~1u);
+
     /* Thumb mode requires bit 0 to be 0 for execution */
     exec->cpu.r[ARMV8M_REG_PC] = target & ~1u;
 
@@ -93,6 +96,9 @@ int exec_branch_link(Executor *exec, const DecodedInsn *insn)
     /* Calculate target */
     uint32_t target = (uint32_t)((int32_t)pc + 4 + insn->branch_offset);
 
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "BL 0x%08X -> 0x%08X (LR=0x%08X)",
+                  pc, target & ~1u, exec->cpu.r[ARMV8M_REG_LR]);
+
     exec->cpu.r[ARMV8M_REG_PC] = target & ~1u;
 
     return ARMV8M_OK;
@@ -105,20 +111,24 @@ int exec_branch_exchange(Executor *exec, const DecodedInsn *insn)
 
     /* Check for exception return */
     if (is_exc_return(target)) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "BX EXC_RETURN 0x%08X", target);
         return armv8m_exception_return(exec, target);
     }
 
     /* Check for FNC_RETURN (TrustZone function return) */
     if (is_fnc_return(target) && exec->has_trustzone) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "BX FNC_RETURN");
         return exec_fnc_return(exec);
     }
 
     /* In Thumb mode, bit 0 indicates Thumb state (must be 1) */
     if (!(target & 1)) {
         /* Attempting to switch to ARM state is UsageFault on M-profile */
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BX to ARM state (target=0x%08X) - UsageFault", target);
         return ARMV8M_ERR_USAGE_FAULT;
     }
 
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "BX R%d -> 0x%08X", insn->rm, target & ~1u);
     exec->cpu.r[ARMV8M_REG_PC] = target & ~1u;
 
     return ARMV8M_OK;
@@ -135,14 +145,18 @@ int exec_branch_link_exchange(Executor *exec, const DecodedInsn *insn)
 
     /* Check for exception return (unusual but possible) */
     if (is_exc_return(target)) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "BLX EXC_RETURN 0x%08X", target);
         return armv8m_exception_return(exec, target);
     }
 
     /* In Thumb mode, bit 0 indicates Thumb state (must be 1) */
     if (!(target & 1)) {
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BLX to ARM state (target=0x%08X) - UsageFault", target);
         return ARMV8M_ERR_USAGE_FAULT;
     }
 
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "BLX R%d -> 0x%08X (LR=0x%08X)",
+                  insn->rm, target & ~1u, exec->cpu.r[ARMV8M_REG_LR]);
     exec->cpu.r[ARMV8M_REG_PC] = target & ~1u;
 
     return ARMV8M_OK;
@@ -165,9 +179,12 @@ int exec_compare_branch(Executor *exec, const DecodedInsn *insn)
 
     if (take_branch) {
         uint32_t target = (uint32_t)((int32_t)pc + 4 + insn->branch_offset);
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "%s R%d=0x%X -> 0x%08X (taken)",
+                      insn->op == 0 ? "CBZ" : "CBNZ", insn->rn, rn_val, target & ~1u);
         exec->cpu.r[ARMV8M_REG_PC] = target & ~1u;
     } else {
-        /* Fall through - PC will be updated by step function */
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "%s R%d=0x%X (not taken)",
+                      insn->op == 0 ? "CBZ" : "CBNZ", insn->rn, rn_val);
     }
 
     return ARMV8M_OK;
@@ -194,12 +211,18 @@ int exec_table_branch(Executor *exec, const DecodedInsn *insn)
     }
 
     if (fault) {
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "%s fault reading table",
+                        insn->access_size == ACCESS_BYTE ? "TBB" : "TBH");
         return ARMV8M_ERR_BUS_FAULT;
     }
 
     /* Branch target = (PC+4) + 2*offset
      * Per ARM spec, target is always relative to PC+4 */
     uint32_t target = pc + 4 + (offset * 2);
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "%s [R%d+R%d*%d] offset=%u -> 0x%08X",
+                  insn->access_size == ACCESS_BYTE ? "TBB" : "TBH",
+                  insn->rn, insn->rm, insn->access_size == ACCESS_BYTE ? 1 : 2,
+                  offset, target & ~1u);
     exec->cpu.r[ARMV8M_REG_PC] = target & ~1u;
 
     return ARMV8M_OK;
@@ -240,6 +263,7 @@ int exec_sg(Executor *exec, const DecodedInsn *insn)
 
     if (!exec->has_trustzone) {
         /* No TrustZone - SG is undefined */
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "SG without TrustZone - undefined");
         return ARMV8M_ERR_UNDEFINED_INSN;
     }
 
@@ -250,13 +274,16 @@ int exec_sg(Executor *exec, const DecodedInsn *insn)
 
         if (attr != SEC_NSC) {
             /* SG not in NSC region - SecureFault (INVTRAN) */
+            EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "SG at 0x%08X not in NSC region - SecureFault", pc);
             return ARMV8M_ERR_SECURE_FAULT;
         }
 
         /* Transition to secure state */
+        EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "SG: NS -> S transition at 0x%08X", pc);
         exec->cpu.security = SECURITY_SECURE;
+    } else {
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "SG (NOP in secure state)");
     }
-    /* In secure state, SG is a NOP */
 
     return ARMV8M_OK;
 }
@@ -267,6 +294,7 @@ int exec_bxns(Executor *exec, const DecodedInsn *insn)
 
     if (!exec->has_trustzone) {
         /* No TrustZone - BXNS is undefined */
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BXNS without TrustZone - undefined");
         return ARMV8M_ERR_UNDEFINED_INSN;
     }
 
@@ -283,6 +311,7 @@ int exec_bxns(Executor *exec, const DecodedInsn *insn)
         /* Transitioning from Secure to Non-secure */
         if (attr == SEC_SECURE) {
             /* Cannot branch to secure memory with BXNS from secure */
+            EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BXNS to secure address 0x%08X - SecureFault", target_addr);
             return ARMV8M_ERR_SECURE_FAULT;
         }
 
@@ -290,11 +319,15 @@ int exec_bxns(Executor *exec, const DecodedInsn *insn)
         clear_caller_saved_regs(&exec->cpu);
 
         /* Transition to Non-secure state */
+        EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "BXNS: S -> NS transition to 0x%08X", target_addr);
         exec->cpu.security = SECURITY_NONSECURE;
+    } else {
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "BXNS R%d -> 0x%08X (already NS)", insn->rm, target_addr);
     }
 
     /* Check Thumb bit */
     if (!(target & 1)) {
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BXNS to ARM state - UsageFault");
         return ARMV8M_ERR_USAGE_FAULT;
     }
 
@@ -308,6 +341,7 @@ int exec_blxns(Executor *exec, const DecodedInsn *insn)
 
     if (!exec->has_trustzone) {
         /* No TrustZone - BLXNS is undefined */
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BLXNS without TrustZone - undefined");
         return ARMV8M_ERR_UNDEFINED_INSN;
     }
 
@@ -325,6 +359,7 @@ int exec_blxns(Executor *exec, const DecodedInsn *insn)
     if (exec->cpu.security == SECURITY_SECURE) {
         if (attr == SEC_SECURE) {
             /* Cannot branch to secure memory with BLXNS from secure */
+            EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BLXNS to secure address 0x%08X - SecureFault", target_addr);
             return ARMV8M_ERR_SECURE_FAULT;
         }
 
@@ -338,6 +373,7 @@ int exec_blxns(Executor *exec, const DecodedInsn *insn)
         }
         if (fault) {
             exec->tz_regs.msp_s += 4;  /* Restore SP on failure */
+            EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BLXNS stack push fault");
             return ARMV8M_ERR_BUS_FAULT;
         }
 
@@ -348,11 +384,16 @@ int exec_blxns(Executor *exec, const DecodedInsn *insn)
         clear_caller_saved_regs(&exec->cpu);
 
         /* Transition to non-secure state */
+        EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "BLXNS: S -> NS call to 0x%08X (LR=FNC_RETURN)", target_addr);
         exec->cpu.security = SECURITY_NONSECURE;
+    } else {
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "BLXNS R%d -> 0x%08X (already NS, LR=0x%08X)",
+                      insn->rm, target_addr, exec->cpu.r[ARMV8M_REG_LR]);
     }
 
     /* Check Thumb bit */
     if (!(target & 1)) {
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BLXNS to ARM state - UsageFault");
         return ARMV8M_ERR_USAGE_FAULT;
     }
 
@@ -383,6 +424,7 @@ static int exec_fnc_return(Executor *exec)
     /* FNC_RETURN only valid from Non-Secure state */
     if (cpu->security != SECURITY_NONSECURE) {
         /* Attempting FNC_RETURN from Secure state is a UsageFault */
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "FNC_RETURN from Secure state - UsageFault");
         exec->cpu.cfsr |= ARMV8M_UFSR_INVSTATE;
         return ARMV8M_ERR_USAGE_FAULT;
     }
@@ -399,6 +441,7 @@ static int exec_fnc_return(Executor *exec)
     /* Read return address from secure stack */
     uint32_t ret_addr = mem_read(exec, sp, ACCESS_WORD, &fault);
     if (fault) {
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "FNC_RETURN stack read fault at 0x%08X", sp);
         return ARMV8M_ERR_BUS_FAULT;
     }
 
@@ -407,6 +450,8 @@ static int exec_fnc_return(Executor *exec)
 
     /* Set PC to return address (clear Thumb bit for storage) */
     cpu->r[ARMV8M_REG_PC] = ret_addr & ~1U;
+
+    EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "FNC_RETURN: NS -> S, returning to 0x%08X", ret_addr & ~1U);
 
     return ARMV8M_OK;
 }

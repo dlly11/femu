@@ -56,6 +56,17 @@ from .machine import (
     CPUConfig,
 )
 
+# Logging system
+from .logging import (
+    configure_logging,
+    get_logger,
+    disable_logging,
+    enable_logging,
+    LogLevel,
+    LogCategory,
+    TRACE,
+)
+
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
@@ -116,4 +127,12 @@ __all__ = [
     "MemoryRegion",
     "PeripheralDef",
     "CPUConfig",
+    # Logging system
+    "configure_logging",
+    "get_logger",
+    "disable_logging",
+    "enable_logging",
+    "LogLevel",
+    "LogCategory",
+    "TRACE",
 ]

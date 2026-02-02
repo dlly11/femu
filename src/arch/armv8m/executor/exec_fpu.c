@@ -7,6 +7,7 @@
 
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
+#include "emu/emu_log.h"
 #include <math.h>
 #include <string.h>
 
@@ -274,6 +275,7 @@ static int check_lazy_preservation(Executor *exec)
 int exec_fpu_load(Executor *exec, const DecodedInsn *insn)
 {
     if (!is_fpu_enabled(exec)) {
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "VLDR: FPU not enabled - NOCP");
         exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
         return ARMV8M_ERR_USAGE_FAULT;
     }
@@ -300,12 +302,15 @@ int exec_fpu_load(Executor *exec, const DecodedInsn *insn)
         uint8_t s_base = (uint8_t)((insn->dd & 15) * 2);
         exec->cpu.s[s_base] = lo;
         exec->cpu.s[s_base + 1] = hi;
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "VLDR.64 D%d, [0x%08X]", insn->dd & 15, addr);
     } else {
         /* VLDR.32 */
         uint32_t val = mem_read(exec, addr, ACCESS_WORD, &fault);
         if (fault) return ARMV8M_ERR_BUS_FAULT;
 
         exec->cpu.s[insn->sd & 31] = val;
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "VLDR.32 S%d, [0x%08X] = 0x%08X",
+                      insn->sd & 31, addr, val);
     }
 
     return ARMV8M_OK;
@@ -314,6 +319,7 @@ int exec_fpu_load(Executor *exec, const DecodedInsn *insn)
 int exec_fpu_store(Executor *exec, const DecodedInsn *insn)
 {
     if (!is_fpu_enabled(exec)) {
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "VSTR: FPU not enabled - NOCP");
         exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
         return ARMV8M_ERR_USAGE_FAULT;
     }
@@ -337,10 +343,14 @@ int exec_fpu_store(Executor *exec, const DecodedInsn *insn)
         if (fault) return ARMV8M_ERR_BUS_FAULT;
         mem_write(exec, addr + 4, exec->cpu.s[s_base + 1], ACCESS_WORD, &fault);
         if (fault) return ARMV8M_ERR_BUS_FAULT;
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "VSTR.64 D%d, [0x%08X]", insn->dd & 15, addr);
     } else {
         /* VSTR.32 */
-        mem_write(exec, addr, exec->cpu.s[insn->sd & 31], ACCESS_WORD, &fault);
+        uint32_t val = exec->cpu.s[insn->sd & 31];
+        mem_write(exec, addr, val, ACCESS_WORD, &fault);
         if (fault) return ARMV8M_ERR_BUS_FAULT;
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "VSTR.32 S%d, [0x%08X] = 0x%08X",
+                      insn->sd & 31, addr, val);
     }
 
     return ARMV8M_OK;

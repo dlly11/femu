@@ -21,15 +21,15 @@ Connect with:
 from __future__ import annotations
 
 import socket
-import logging
 from typing import TYPE_CHECKING
 
 from .emulator import EmulatorState
+from .logging import get_logger, LogCategory
 
 if TYPE_CHECKING:
     from .emulator import Emulator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(LogCategory.GDB)
 
 
 class GDBServer:

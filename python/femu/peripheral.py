@@ -35,9 +35,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Any
 
 from . import _emulator_cffi as cffi
+from .logging import get_logger, LogCategory
 
 if TYPE_CHECKING:
     from .arch.armv8m import ARMv8MEmulator
+
+logger = get_logger(LogCategory.PERIPHERAL)
 
 
 # =============================================================================
@@ -294,7 +297,7 @@ def _py_periph_read(ctx, offset, size):
         result = periph.read(offset, size)
         return result & 0xFFFFFFFF
     except Exception as e:
-        print(f"Peripheral read error at offset 0x{offset:x}: {e}")
+        logger.error("Peripheral read error at offset 0x%x: %s", offset, e)
         return 0
 
 
@@ -305,7 +308,7 @@ def _py_periph_write(ctx, offset, value, size):
         periph = _ffi.from_handle(ctx)
         periph.write(offset, value, size)
     except Exception as e:
-        print(f"Peripheral write error at offset 0x{offset:x}: {e}")
+        logger.error("Peripheral write error at offset 0x%x: %s", offset, e)
 
 
 @_ffi.callback("void(void*)")
@@ -315,7 +318,7 @@ def _py_periph_reset(ctx):
         periph = _ffi.from_handle(ctx)
         periph.reset()
     except Exception as e:
-        print(f"Peripheral reset error: {e}")
+        logger.error("Peripheral reset error: %s", e)
 
 
 @_ffi.callback("void(void*, uint64_t)")
@@ -325,7 +328,7 @@ def _py_periph_tick(ctx, cycles):
         periph = _ffi.from_handle(ctx)
         periph.tick(cycles)
     except Exception as e:
-        print(f"Peripheral tick error: {e}")
+        logger.error("Peripheral tick error: %s", e)
 
 
 @_ffi.callback("void(void*, EmuPeriphIRQCallback, void*)")
@@ -337,7 +340,7 @@ def _py_periph_set_irq_callback(ctx, callback, emu_ctx):
         periph._c_irq_callback = callback
         periph._c_emu_ctx = emu_ctx
     except Exception as e:
-        print(f"Peripheral set_irq_callback error: {e}")
+        logger.error("Peripheral set_irq_callback error: %s", e)
 
 
 # =============================================================================

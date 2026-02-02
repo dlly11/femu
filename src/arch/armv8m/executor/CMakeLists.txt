@@ -53,9 +53,12 @@ target_include_directories(armv8m_executor PUBLIC
     $<$<BOOL:${STANDALONE_BUILD}>:${CMAKE_SOURCE_DIR}/../../../include>
 )
 
-# Link to decoder (executor depends on decoder types)
+# Link to decoder (executor depends on decoder types) and logging
 if(TARGET armv8m_decoder)
     target_link_libraries(armv8m_executor armv8m_decoder)
+endif()
+if(TARGET emu_log)
+    target_link_libraries(armv8m_executor emu_log)
 endif()
 
 # Unit tests (with mocked decoder)

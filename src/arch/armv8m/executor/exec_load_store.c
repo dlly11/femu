@@ -7,6 +7,7 @@
 
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
+#include "emu/emu_log.h"
 
 /*============================================================================
  * Internal Helpers
@@ -32,7 +33,13 @@ static uint32_t mem_read(Executor *exec, uint32_t addr, uint8_t size, bool *faul
         return 0;
     }
 
-    return exec->mem.read(exec->mem.ctx, addr, size, fault);
+    uint32_t value = exec->mem.read(exec->mem.ctx, addr, size, fault);
+    if (*fault) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_MEMORY, "Read fault at 0x%08X size=%d", addr, size);
+    } else {
+        EMU_LOG_TRACE(EMU_LOG_CAT_MEMORY, "Read 0x%08X size=%d -> 0x%X", addr, size, value);
+    }
+    return value;
 }
 
 /**
@@ -48,6 +55,11 @@ static void mem_write(Executor *exec, uint32_t addr, uint32_t value, uint8_t siz
     }
 
     exec->mem.write(exec->mem.ctx, addr, value, size, fault);
+    if (*fault) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_MEMORY, "Write fault at 0x%08X size=%d value=0x%X", addr, size, value);
+    } else {
+        EMU_LOG_TRACE(EMU_LOG_CAT_MEMORY, "Write 0x%08X size=%d <- 0x%X", addr, size, value);
+    }
 }
 
 /**

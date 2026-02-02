@@ -7,6 +7,7 @@
 
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
+#include "emu/emu_log.h"
 
 /*============================================================================
  * Internal Helpers
@@ -267,6 +268,7 @@ static int exec_dp_operation(Executor *exec, DataProcOp op,
             break;
 
         default:
+            EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "Unknown DP op %d", op);
             return ARMV8M_ERR_UNDEFINED_INSN;
     }
 
@@ -277,6 +279,8 @@ static int exec_dp_operation(Executor *exec, DataProcOp op,
 
     /* Write result to destination register */
     if (write_result && rd != ARMV8M_REG_NONE) {
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "DP op=%d R%d=0x%X op2=0x%X -> R%d=0x%X%s",
+                      op, rd, rn_val, op2, rd, result, set_flags ? " [S]" : "");
         set_reg(exec, rd, result);
     }
 
@@ -806,6 +810,8 @@ int exec_divide(Executor *exec, const DecodedInsn *insn)
 
     if (rm_val == 0) {
         /* Division by zero returns 0 (no exception in ARMv8-M baseline) */
+        EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "%s R%d/R%d: division by zero -> 0",
+                      insn->is_signed ? "SDIV" : "UDIV", insn->rn, insn->rm);
         result = 0;
     } else {
         /* Check if signed or unsigned based on operation encoding */
@@ -825,6 +831,8 @@ int exec_divide(Executor *exec, const DecodedInsn *insn)
         }
     }
 
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "%s 0x%X / 0x%X -> R%d=0x%X",
+                  insn->is_signed ? "SDIV" : "UDIV", rn_val, rm_val, insn->rd, result);
     set_reg(exec, insn->rd, result);
     return ARMV8M_OK;
 }
@@ -1009,9 +1017,13 @@ int exec_saturate(Executor *exec, const DecodedInsn *insn)
 
     /* Set Q flag (sticky) if saturation occurred */
     if (saturated) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "%s: saturation (Q flag set)",
+                      insn->is_signed ? "SSAT" : "USAT");
         cpu->xpsr |= ARMV8M_XPSR_Q;
     }
 
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "%s #%d, R%d -> R%d=0x%X",
+                  insn->is_signed ? "SSAT" : "USAT", sat_width, insn->rn, insn->rd, result);
     set_reg(exec, insn->rd, result);
     return ARMV8M_OK;
 }

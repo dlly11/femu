@@ -7,6 +7,7 @@
 
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
+#include "emu/emu_log.h"
 
 /*============================================================================
  * Special Register Numbers (for MRS/MSR)
@@ -60,6 +61,41 @@
 /*============================================================================
  * Internal Helpers
  *============================================================================*/
+
+/**
+ * Get name of a system register for logging.
+ */
+static const char *sysreg_name(uint8_t sysreg)
+{
+    switch (sysreg) {
+        case SYSREG_APSR: return "APSR";
+        case SYSREG_IAPSR: return "IAPSR";
+        case SYSREG_EAPSR: return "EAPSR";
+        case SYSREG_XPSR: return "XPSR";
+        case SYSREG_IPSR: return "IPSR";
+        case SYSREG_EPSR: return "EPSR";
+        case SYSREG_IEPSR: return "IEPSR";
+        case SYSREG_MSP: return "MSP";
+        case SYSREG_PSP: return "PSP";
+        case SYSREG_MSPLIM: return "MSPLIM";
+        case SYSREG_PSPLIM: return "PSPLIM";
+        case SYSREG_PRIMASK: return "PRIMASK";
+        case SYSREG_BASEPRI: return "BASEPRI";
+        case SYSREG_BASEPRI_MAX: return "BASEPRI_MAX";
+        case SYSREG_FAULTMASK: return "FAULTMASK";
+        case SYSREG_CONTROL: return "CONTROL";
+        case SYSREG_MSP_NS: return "MSP_NS";
+        case SYSREG_PSP_NS: return "PSP_NS";
+        case SYSREG_MSPLIM_NS: return "MSPLIM_NS";
+        case SYSREG_PSPLIM_NS: return "PSPLIM_NS";
+        case SYSREG_PRIMASK_NS: return "PRIMASK_NS";
+        case SYSREG_BASEPRI_NS: return "BASEPRI_NS";
+        case SYSREG_FAULTMASK_NS: return "FAULTMASK_NS";
+        case SYSREG_CONTROL_NS: return "CONTROL_NS";
+        case SYSREG_SP_NS: return "SP_NS";
+        default: return "UNKNOWN";
+    }
+}
 
 /**
  * Check if currently privileged (can access special registers).
@@ -248,10 +284,12 @@ int exec_mrs(Executor *exec, const DecodedInsn *insn)
 
         default:
             /* Unknown register - return 0 */
+            EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "MRS: unknown sysreg 0x%02X", sysreg);
             value = 0;
             break;
     }
 
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "MRS R%d, %s -> 0x%08X", insn->rd, sysreg_name(sysreg), value);
     set_reg(exec, insn->rd, value);
     return ARMV8M_OK;
 }
@@ -266,6 +304,10 @@ int exec_msr(Executor *exec, const DecodedInsn *insn)
     uint8_t sysreg = insn->sysreg;
     uint32_t value = get_reg(exec, insn->rn);
     bool privileged = is_privileged(exec);
+
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "MSR %s, R%d (0x%08X)%s",
+                  sysreg_name(sysreg), insn->rn, value,
+                  privileged ? "" : " [unprivileged]");
 
     switch (sysreg) {
         case SYSREG_APSR:
@@ -446,6 +488,7 @@ int exec_cps(Executor *exec, const DecodedInsn *insn)
 
     /* CPS is only effective in privileged mode */
     if (!is_privileged(exec)) {
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "CPS ignored (unprivileged)");
         return ARMV8M_OK;
     }
 
@@ -455,10 +498,14 @@ int exec_cps(Executor *exec, const DecodedInsn *insn)
     bool affect_f = insn->imm & 1;          /* FAULTMASK */
 
     if (affect_i) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "CPS%s PRIMASK=%d",
+                      disable ? "ID" : "IE", disable ? 1 : 0);
         cpu->primask = disable ? 1 : 0;
     }
 
     if (affect_f && cpu->mode == MODE_HANDLER) {
+        EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "CPS%s FAULTMASK=%d",
+                      disable ? "ID" : "IE", disable ? 1 : 0);
         cpu->faultmask = disable ? 1 : 0;
     }
 
@@ -480,18 +527,22 @@ int exec_barrier(Executor *exec, const DecodedInsn *insn)
     switch (insn->op) {
         case BARRIER_DSB:
             /* Data Synchronization Barrier */
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "DSB");
             break;
 
         case BARRIER_DMB:
             /* Data Memory Barrier */
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "DMB");
             break;
 
         case BARRIER_ISB:
             /* Instruction Synchronization Barrier */
             /* Would flush pipeline/prefetch if we had one */
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "ISB");
             break;
 
         default:
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "BARRIER op=%d", insn->op);
             break;
     }
 
@@ -509,45 +560,54 @@ int exec_hint(Executor *exec, const DecodedInsn *insn)
     switch (insn->op) {
         case HINT_NOP:
             /* No operation */
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "NOP");
             break;
 
         case HINT_YIELD:
             /* Yield to other threads - NOP in single-threaded emulator */
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "YIELD");
             break;
 
         case HINT_WFE:
             /* Wait For Event */
             if (cpu->event_registered) {
                 /* Event already registered, clear it and continue */
+                EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "WFE: event pending, continue");
                 cpu->event_registered = false;
             } else {
                 /* Enter sleep until event */
+                EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "WFE: entering sleep");
                 cpu->sleeping = true;
             }
             break;
 
         case HINT_WFI:
             /* Wait For Interrupt */
+            EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "WFI: entering sleep");
             cpu->sleeping = true;
             break;
 
         case HINT_SEV:
             /* Send Event - set event flag for other processors */
             /* In single-processor emulator, just set our own flag */
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "SEV");
             cpu->event_registered = true;
             break;
 
         case HINT_SEVL:
             /* Send Event Local - like SEV but only to this processor */
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "SEVL");
             cpu->event_registered = true;
             break;
 
         case HINT_BKPT:
             /* Breakpoint instruction - halt execution for debugger */
+            EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "BKPT at 0x%08X", cpu->r[ARMV8M_REG_PC]);
             return ARMV8M_ERR_BREAKPOINT;
 
         default:
             /* Unknown hints are NOPs */
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "HINT op=%d (NOP)", insn->op);
             break;
     }
 
@@ -574,6 +634,9 @@ int exec_it(Executor *exec, const DecodedInsn *insn)
     uint8_t mask = insn->it_mask & 0xF;
     exec->cpu.it_state = (uint8_t)(((cond >> 1) << 5) | ((cond & 1) << 4) | mask);
 
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "IT cond=%d mask=0x%X -> it_state=0x%02X",
+                  cond, mask, exec->cpu.it_state);
+
     return ARMV8M_OK;
 }
 
@@ -583,6 +646,9 @@ int exec_it(Executor *exec, const DecodedInsn *insn)
 
 int exec_svc(Executor *exec, const DecodedInsn *insn)
 {
+    EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "SVC #%d at 0x%08X",
+                 insn->imm & 0xFF, exec->cpu.r[ARMV8M_REG_PC]);
+
     /* Advance PC to point to the next instruction before exception entry.
      * For SVC, the return address saved on the exception frame should be
      * the instruction following the SVC, not the SVC itself. */
@@ -612,6 +678,7 @@ int exec_mcr(Executor *exec, const DecodedInsn *insn)
     /* Non-VFP coprocessor access - always faults with NOCP.
      * FPU coprocessor (CP10/CP11) accesses are decoded as VFP instructions
      * and handled in exec_fpu.c, not here. */
+    EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "MCR - NOCP fault");
     exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
     return ARMV8M_ERR_USAGE_FAULT;
 }
@@ -632,6 +699,7 @@ int exec_mrc(Executor *exec, const DecodedInsn *insn)
     /* Non-VFP coprocessor access - always faults with NOCP.
      * FPU coprocessor (CP10/CP11) accesses are decoded as VFP instructions
      * and handled in exec_fpu.c, not here. */
+    EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "MRC - NOCP fault");
     exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
     return ARMV8M_ERR_USAGE_FAULT;
 }
@@ -657,6 +725,7 @@ int exec_tt(Executor *exec, const DecodedInsn *insn)
 {
     if (!exec->has_trustzone) {
         /* No TrustZone - TT is undefined */
+        EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "TT without TrustZone - undefined");
         return ARMV8M_ERR_UNDEFINED_INSN;
     }
 
@@ -768,6 +837,10 @@ int exec_tt(Executor *exec, const DecodedInsn *insn)
     } else {
         result |= 0x1;  /* R bit only */
     }
+
+    static const char *tt_names[] = {"TT", "TTT", "TTA", "TTAT"};
+    EMU_LOG_DEBUG(EMU_LOG_CAT_EXECUTOR, "%s R%d=0x%08X -> R%d=0x%08X",
+                  tt_names[insn->op & 3], insn->rn, addr, insn->rd, result);
 
     exec->cpu.r[insn->rd] = result;
     return ARMV8M_OK;

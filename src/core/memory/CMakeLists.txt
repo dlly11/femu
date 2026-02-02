@@ -42,6 +42,11 @@ target_include_directories(emu_memory PUBLIC
     $<$<BOOL:${STANDALONE_BUILD}>:${CMAKE_SOURCE_DIR}/../../../include>
 )
 
+# Link to logging
+if(TARGET emu_log)
+    target_link_libraries(emu_memory emu_log)
+endif()
+
 # Provide backward-compatible alias for ARMv8-M code
 add_library(armv8m_memory ALIAS emu_memory)
 

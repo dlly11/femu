@@ -184,10 +184,26 @@ if(BUILD_PYTHON_BINDINGS)
 endif()
 
 # =============================================================================
+# Logging Configuration
+# =============================================================================
+
+option(EMU_DISABLE_LOGGING "Disable all logging for release builds (zero overhead)" OFF)
+
+if(EMU_DISABLE_LOGGING)
+    add_compile_definitions(EMU_LOG_DISABLE_ALL)
+    message(STATUS "Logging disabled (EMU_DISABLE_LOGGING=ON)")
+endif()
+
+# =============================================================================
 # Core (Shared) Modules
 # =============================================================================
 
 option(BUILD_MEMORY "Build memory module" ON)
+
+# Logging utilities (used by all modules)
+if(EXISTS ${CMAKE_SOURCE_DIR}/src/emu/emu_log.c)
+    add_subdirectory(src/emu)
+endif()
 
 # Memory is shared across all architectures
 if(BUILD_MEMORY AND EXISTS ${CMAKE_SOURCE_DIR}/src/core/memory/memory.c)
@@ -232,6 +248,11 @@ message(STATUS "║  C Compiler:     ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_V
 message(STATUS "║  C++ Compiler:   ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "║  Sanitizers:     ${ENABLE_SANITIZERS}")
 message(STATUS "║  Coverage:       ${ENABLE_COVERAGE}")
+if(EMU_DISABLE_LOGGING)
+    message(STATUS "║  Logging:        Disabled (zero overhead)")
+else()
+    message(STATUS "║  Logging:        Enabled")
+endif()
 message(STATUS "╠══════════════════════════════════════════════════════════════╣")
 message(STATUS "║  Python bindings: ${BUILD_PYTHON_BINDINGS}")
 message(STATUS "║  Architectures:")

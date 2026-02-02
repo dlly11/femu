@@ -162,6 +162,22 @@ _ffi.cdef("""
 
     /* Plugin init function type */
     typedef EmuPeripheralType* (*EmuPluginInitFn)(const EmuPluginInfo **info_out);
+
+    /* ========================================================================
+     * Logging Support
+     * ======================================================================== */
+
+    /* Log callback function type */
+    typedef void (*EmuLogCallback)(void *ctx, int level, int category,
+                                   const char *file, int line, const char *func,
+                                   const char *msg);
+
+    /* Logging configuration API */
+    void emu_log_set_callback(EmuLogCallback callback, void *ctx);
+    void emu_log_set_level(int level);
+    void emu_log_set_category_level(int category, int level);
+    void emu_log_set_enabled(bool enabled);
+    bool emu_log_is_enabled(int level, int category);
 """)
 
 # Error codes (must match armv8m_types.h)
@@ -198,6 +214,23 @@ EMU_STATE_RUNNING = 1
 EMU_STATE_HALTED = 2
 EMU_STATE_BREAKPOINT = 3
 EMU_STATE_FAULT = 4
+
+# Log levels (must match EmuLogLevel in emu_log.h)
+EMU_LOG_TRACE = 0
+EMU_LOG_DEBUG = 1
+EMU_LOG_INFO = 2
+EMU_LOG_WARNING = 3
+EMU_LOG_ERROR = 4
+
+# Log categories (must match EmuLogCategory in emu_log.h)
+EMU_LOG_CAT_DECODER = 0
+EMU_LOG_CAT_EXECUTOR = 1
+EMU_LOG_CAT_MEMORY = 2
+EMU_LOG_CAT_NVIC = 3
+EMU_LOG_CAT_MPU = 4
+EMU_LOG_CAT_PERIPHERAL = 5
+EMU_LOG_CAT_GDB = 6
+EMU_LOG_CAT_EMULATOR = 7
 
 # Cache for library instance
 _lib = None

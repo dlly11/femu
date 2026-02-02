@@ -9,6 +9,7 @@
 #include "arch/armv8m/armv8m_decoder.h"
 #include "arch/armv8m/armv8m_icache.h"
 #include "arch/armv8m/armv8m_blocks.h"
+#include "emu/emu_log.h"
 #include <string.h>
 
 /*============================================================================
@@ -669,8 +670,32 @@ int armv8m_exec_step(Executor *exec)
     /* Save PC for branch detection */
     uint32_t old_pc = cpu->r[ARMV8M_REG_PC];
 
+    /* TRACE: Log instruction execution with register changes for data operations */
+    uint32_t rd_before = 0;
+    int trace_rd = -1;
+    if (emu_log_is_enabled(EMU_LOG_TRACE, EMU_LOG_CAT_EXECUTOR)) {
+        /* Capture destination register value before execution */
+        if (insn.rd < ARMV8M_NUM_REGS) {
+            trace_rd = (int)insn.rd;
+            rd_before = cpu->r[trace_rd];
+        }
+    }
+
     /* Execute instruction */
     result = armv8m_exec_insn(exec, &insn);
+
+    /* TRACE: Log after execution */
+    if (trace_rd >= 0 && result == ARMV8M_OK) {
+        uint32_t rd_after = cpu->r[trace_rd];
+        if (rd_after != rd_before) {
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "0x%08X: insn_type=%d ; R%d: 0x%X -> 0x%X",
+                          old_pc, insn.type, trace_rd, rd_before, rd_after);
+        } else {
+            EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "0x%08X: insn_type=%d", old_pc, insn.type);
+        }
+    } else if (emu_log_is_enabled(EMU_LOG_TRACE, EMU_LOG_CAT_EXECUTOR)) {
+        EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "0x%08X: insn_type=%d", old_pc, insn.type);
+    }
 
     if (result != ARMV8M_OK) {
         return result;

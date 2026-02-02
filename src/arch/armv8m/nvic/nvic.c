@@ -4,6 +4,7 @@
  */
 
 #include "arch/armv8m/armv8m_nvic.h"
+#include "emu/emu_log.h"
 #include <string.h>
 
 /*============================================================================
@@ -343,6 +344,7 @@ void armv8m_nvic_set_pending(NVIC *nvic, int irq)
         return;
     }
 
+    EMU_LOG_INFO(EMU_LOG_CAT_NVIC, "IRQ %d pending", irq);
     nvic->pending[irq_reg(irq)] |= (1u << irq_bit(irq));
     nvic->need_rescan = true;
 }
@@ -353,6 +355,7 @@ void armv8m_nvic_clear_pending(NVIC *nvic, int irq)
         return;
     }
 
+    EMU_LOG_DEBUG(EMU_LOG_CAT_NVIC, "IRQ %d cleared", irq);
     nvic->pending[irq_reg(irq)] &= ~(1u << irq_bit(irq));
     nvic->need_rescan = true;
 }

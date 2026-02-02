@@ -7,6 +7,7 @@
 
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
+#include "emu/emu_log.h"
 
 /*============================================================================
  * EXC_RETURN Values
@@ -188,6 +189,10 @@ int armv8m_exception_entry(Executor *exec, int exception)
     CPUState *cpu = &exec->cpu;
     bool fault = false;
 
+    EMU_LOG_INFO(EMU_LOG_CAT_NVIC, "Exception entry: exc=%d from PC=0x%08X mode=%s",
+                 exception, cpu->r[ARMV8M_REG_PC],
+                 cpu->mode == MODE_THREAD ? "Thread" : "Handler");
+
     /* 1. Determine which SP to use for stacking */
     uint32_t sp;
     bool use_psp = (cpu->mode == MODE_THREAD) && (cpu->control & ARMV8M_CONTROL_SPSEL);
@@ -350,6 +355,9 @@ int armv8m_exception_return(Executor *exec, uint32_t exc_return)
 {
     CPUState *cpu = &exec->cpu;
     bool fault = false;
+
+    EMU_LOG_DEBUG(EMU_LOG_CAT_NVIC, "Exception return: EXC_RETURN=0x%08X current_exc=%d",
+                  exc_return, cpu->current_exception);
 
     /* Validate EXC_RETURN value */
     int validation_result = validate_exc_return(exec, exc_return);
