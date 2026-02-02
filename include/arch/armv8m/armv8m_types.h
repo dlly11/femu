@@ -356,6 +356,7 @@ typedef enum {
     ARMV8M_ERR_HALTED = -8,
     ARMV8M_ERR_SECURE_FAULT = -9,    /* TrustZone security violation */
     ARMV8M_ERR_INVALID_PARAM = -10,  /* Invalid parameter */
+    ARMV8M_ERR_WATCHPOINT = -11,     /* Hit a watchpoint */
 } ARMv8MError;
 
 /*============================================================================

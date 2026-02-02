@@ -60,6 +60,30 @@ typedef struct {
 
 #define EMU_MAX_PERIPHERALS 32
 #define EMU_MAX_BREAKPOINTS 64
+#define EMU_MAX_WATCHPOINTS 32
+
+/*============================================================================
+ * Watchpoint Types
+ *============================================================================*/
+
+/**
+ * Watchpoint type - matches GDB Z packet types.
+ */
+typedef enum {
+    WATCHPOINT_WRITE = 2,       /**< Write watchpoint (Z2) */
+    WATCHPOINT_READ = 3,        /**< Read watchpoint (Z3) */
+    WATCHPOINT_ACCESS = 4,      /**< Access watchpoint - read or write (Z4) */
+} WatchpointType;
+
+/**
+ * Watchpoint descriptor.
+ */
+typedef struct {
+    uint32_t addr;              /**< Watched address */
+    uint32_t size;              /**< Size of watched region */
+    WatchpointType type;        /**< Type of watchpoint */
+    bool active;                /**< Whether this slot is in use */
+} Watchpoint;
 
 /**
  * Emulator context - integrates all modules.
@@ -90,6 +114,12 @@ typedef struct {
     /* Breakpoints */
     uint32_t breakpoints[EMU_MAX_BREAKPOINTS];
     int num_breakpoints;
+
+    /* Watchpoints */
+    Watchpoint watchpoints[EMU_MAX_WATCHPOINTS];
+    int num_watchpoints;
+    uint32_t watchpoint_hit_addr;   /**< Address that triggered watchpoint */
+    WatchpointType watchpoint_hit_type; /**< Type of access that triggered */
 
     /* Stop request flag (for external stop) */
     volatile bool stop_requested;
@@ -355,6 +385,66 @@ bool armv8m_emu_has_breakpoint(const Emulator *emu, uint32_t addr);
  * @param emu       Emulator
  */
 void armv8m_emu_clear_breakpoints(Emulator *emu);
+
+/*============================================================================
+ * Watchpoint API
+ *============================================================================*/
+
+/**
+ * Add a watchpoint.
+ *
+ * @param emu       Emulator
+ * @param addr      Watch address
+ * @param size      Size of watched region (1, 2, or 4 bytes)
+ * @param type      Watchpoint type (WATCHPOINT_WRITE, WATCHPOINT_READ, WATCHPOINT_ACCESS)
+ * @return          ARMV8M_OK or error code
+ */
+int armv8m_emu_add_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type);
+
+/**
+ * Remove a watchpoint.
+ *
+ * @param emu       Emulator
+ * @param addr      Watch address
+ * @param size      Size of watched region
+ * @param type      Watchpoint type
+ * @return          ARMV8M_OK or error code
+ */
+int armv8m_emu_remove_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type);
+
+/**
+ * Check if address has a watchpoint of given type.
+ *
+ * @param emu       Emulator
+ * @param addr      Address to check
+ * @param size      Access size
+ * @param is_write  True if checking for write access
+ * @return          Pointer to matching watchpoint, or NULL
+ */
+const Watchpoint *armv8m_emu_check_watchpoint(const Emulator *emu, uint32_t addr, uint32_t size, bool is_write);
+
+/**
+ * Clear all watchpoints.
+ *
+ * @param emu       Emulator
+ */
+void armv8m_emu_clear_watchpoints(Emulator *emu);
+
+/**
+ * Get the address that triggered the last watchpoint hit.
+ *
+ * @param emu       Emulator
+ * @return          Address that triggered watchpoint
+ */
+uint32_t armv8m_emu_get_watchpoint_hit_addr(const Emulator *emu);
+
+/**
+ * Get the type of access that triggered the last watchpoint hit.
+ *
+ * @param emu       Emulator
+ * @return          Type of access (WATCHPOINT_READ or WATCHPOINT_WRITE)
+ */
+WatchpointType armv8m_emu_get_watchpoint_hit_type(const Emulator *emu);
 
 /*============================================================================
  * Peripheral API

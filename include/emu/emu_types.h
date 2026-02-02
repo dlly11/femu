@@ -87,6 +87,7 @@ typedef enum {
     EMU_STATE_RUNNING,          /**< Currently executing */
     EMU_STATE_HALTED,           /**< Halted (WFI/WFE/debug halt) */
     EMU_STATE_BREAKPOINT,       /**< Hit a breakpoint */
+    EMU_STATE_WATCHPOINT,       /**< Hit a watchpoint */
     EMU_STATE_FAULT,            /**< Unrecoverable fault */
 } EmuState;
 

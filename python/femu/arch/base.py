@@ -34,7 +34,8 @@ class EmulatorState(IntEnum):
     RUNNING = 1
     HALTED = 2
     BREAKPOINT = 3
-    FAULT = 4
+    WATCHPOINT = 4
+    FAULT = 5
 
 
 class EmulatorError(Exception):

@@ -148,6 +148,9 @@ class ARMv8MEmulator(BaseEmulator):
         if result == cffi.ARMV8M_ERR_BREAKPOINT:
             return result  # Let caller handle breakpoint
 
+        if result == cffi.ARMV8M_ERR_WATCHPOINT:
+            return result  # Let caller handle watchpoint
+
         if result < 0 and result != cffi.ARMV8M_ERR_HALTED:
             raise ExecutionError(result)
 
@@ -292,6 +295,49 @@ class ARMv8MEmulator(BaseEmulator):
 
     def clear_breakpoints(self) -> None:
         self._lib.armv8m_emu_clear_breakpoints(self._emu_ptr)
+
+    # =========================================================================
+    # Watchpoints
+    # =========================================================================
+
+    def add_watchpoint(self, addr: int, size: int = 4, wp_type: int = cffi.WATCHPOINT_WRITE) -> None:
+        """
+        Add a watchpoint.
+
+        Args:
+            addr: Address to watch
+            size: Size of watched region (1, 2, or 4 bytes)
+            wp_type: Watchpoint type - WATCHPOINT_WRITE (2), WATCHPOINT_READ (3),
+                    or WATCHPOINT_ACCESS (4)
+        """
+        result = self._lib.armv8m_emu_add_watchpoint(self._emu_ptr, addr, size, wp_type)
+        if result != cffi.ARMV8M_OK:
+            raise EmulatorError(f"Failed to add watchpoint (code {result})")
+
+    def remove_watchpoint(self, addr: int, size: int = 4, wp_type: int = cffi.WATCHPOINT_WRITE) -> None:
+        """
+        Remove a watchpoint.
+
+        Args:
+            addr: Address of watchpoint
+            size: Size of watched region
+            wp_type: Watchpoint type
+        """
+        self._lib.armv8m_emu_remove_watchpoint(self._emu_ptr, addr, size, wp_type)
+
+    def clear_watchpoints(self) -> None:
+        """Remove all watchpoints."""
+        self._lib.armv8m_emu_clear_watchpoints(self._emu_ptr)
+
+    @property
+    def watchpoint_hit_addr(self) -> int:
+        """Address that triggered the last watchpoint hit."""
+        return self._lib.armv8m_emu_get_watchpoint_hit_addr(self._emu_ptr)
+
+    @property
+    def watchpoint_hit_type(self) -> int:
+        """Type of access that triggered the last watchpoint (WATCHPOINT_READ or WATCHPOINT_WRITE)."""
+        return self._lib.armv8m_emu_get_watchpoint_hit_type(self._emu_ptr)
 
     # =========================================================================
     # Special Registers

@@ -299,13 +299,17 @@ class GDBServer:
 
     def _cmd_query_supported(self, cmd: str) -> str:
         """Handle qSupported query."""
-        return "PacketSize=4096;QStartNoAckMode+"
+        # Advertise watchpoint support (hwbreak for hw breakpoints which we emulate as sw)
+        return "PacketSize=4096;QStartNoAckMode+;hwbreak+"
 
     def _cmd_halt_reason(self) -> str:
         """Return halt reason (? command)."""
         state = self.emu.state
         if state == EmulatorState.BREAKPOINT:
             return "S05"  # SIGTRAP
+        elif state == EmulatorState.WATCHPOINT:
+            # Return stop reply with watchpoint info
+            return self._watchpoint_stop_reply()
         elif state == EmulatorState.HALTED:
             return "S00"  # No signal
         elif state == EmulatorState.FAULT:
@@ -523,12 +527,12 @@ class GDBServer:
         return ""
 
     def _cmd_set_breakpoint(self, args: str) -> str:
-        """Set breakpoint (Z command)."""
+        """Set breakpoint or watchpoint (Z command)."""
         try:
             parts = args.split(",")
             bp_type = int(parts[0])
             addr = int(parts[1], 16)
-            # kind = int(parts[2]) if len(parts) > 2 else 0
+            size = int(parts[2], 16) if len(parts) > 2 else 4
 
             if bp_type == 0:  # Software breakpoint
                 self.emu.add_breakpoint(addr)
@@ -537,26 +541,51 @@ class GDBServer:
                 # Treat as software breakpoint
                 self.emu.add_breakpoint(addr)
                 return "OK"
+            elif bp_type == 2:  # Write watchpoint
+                from . import _emulator_cffi as cffi
+                self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_WRITE)
+                return "OK"
+            elif bp_type == 3:  # Read watchpoint
+                from . import _emulator_cffi as cffi
+                self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_READ)
+                return "OK"
+            elif bp_type == 4:  # Access watchpoint (read/write)
+                from . import _emulator_cffi as cffi
+                self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_ACCESS)
+                return "OK"
             else:
                 return ""  # Unsupported
         except Exception as e:
-            logger.error(f"Error setting breakpoint: {e}")
+            logger.error(f"Error setting breakpoint/watchpoint: {e}")
             return "E01"
 
     def _cmd_clear_breakpoint(self, args: str) -> str:
-        """Clear breakpoint (z command)."""
+        """Clear breakpoint or watchpoint (z command)."""
         try:
             parts = args.split(",")
             bp_type = int(parts[0])
             addr = int(parts[1], 16)
+            size = int(parts[2], 16) if len(parts) > 2 else 4
 
             if bp_type in (0, 1):  # Software/hardware breakpoint
                 self.emu.remove_breakpoint(addr)
                 return "OK"
+            elif bp_type == 2:  # Write watchpoint
+                from . import _emulator_cffi as cffi
+                self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_WRITE)
+                return "OK"
+            elif bp_type == 3:  # Read watchpoint
+                from . import _emulator_cffi as cffi
+                self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_READ)
+                return "OK"
+            elif bp_type == 4:  # Access watchpoint (read/write)
+                from . import _emulator_cffi as cffi
+                self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_ACCESS)
+                return "OK"
             else:
                 return ""
         except Exception as e:
-            logger.error(f"Error clearing breakpoint: {e}")
+            logger.error(f"Error clearing breakpoint/watchpoint: {e}")
             return "E01"
 
     def _cmd_detach(self) -> str:
@@ -575,12 +604,29 @@ class GDBServer:
         state = self.emu.state
         if state == EmulatorState.BREAKPOINT:
             return "S05"  # SIGTRAP
+        elif state == EmulatorState.WATCHPOINT:
+            return self._watchpoint_stop_reply()
         elif state == EmulatorState.HALTED:
             return "S00"
         elif state == EmulatorState.FAULT:
             return "S0B"  # SIGSEGV
         else:
             return "S05"
+
+    def _watchpoint_stop_reply(self) -> str:
+        """Generate stop reply for watchpoint hit."""
+        from . import _emulator_cffi as cffi
+
+        addr = self.emu.watchpoint_hit_addr
+        wp_type = self.emu.watchpoint_hit_type
+
+        # GDB expects: T05watch:<addr>;  or  T05rwatch:<addr>;  or  T05awatch:<addr>;
+        if wp_type == cffi.WATCHPOINT_WRITE:
+            return f"T05watch:{addr:x};"
+        elif wp_type == cffi.WATCHPOINT_READ:
+            return f"T05rwatch:{addr:x};"
+        else:  # ACCESS
+            return f"T05awatch:{addr:x};"
 
     # =========================================================================
     # Utilities

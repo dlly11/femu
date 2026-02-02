@@ -21,6 +21,16 @@ static uint32_t mem_read_callback(void *ctx, uint32_t addr, uint8_t size, bool *
 {
     Emulator *emu = (Emulator *)ctx;
 
+    /* Check for read watchpoint */
+    const Watchpoint *wp = armv8m_emu_check_watchpoint(emu, addr, size, false);
+    if (wp) {
+        emu->watchpoint_hit_addr = addr;
+        emu->watchpoint_hit_type = WATCHPOINT_READ;
+        emu->state = EMU_STATE_WATCHPOINT;
+        *fault = true;
+        return 0;
+    }
+
     /* Determine privilege level */
     bool privileged = (emu->exec.cpu.privilege == PRIV_PRIVILEGED);
 
@@ -33,6 +43,16 @@ static uint32_t mem_read_callback(void *ctx, uint32_t addr, uint8_t size, bool *
 static void mem_write_callback(void *ctx, uint32_t addr, uint32_t value, uint8_t size, bool *fault)
 {
     Emulator *emu = (Emulator *)ctx;
+
+    /* Check for write watchpoint */
+    const Watchpoint *wp = armv8m_emu_check_watchpoint(emu, addr, size, true);
+    if (wp) {
+        emu->watchpoint_hit_addr = addr;
+        emu->watchpoint_hit_type = WATCHPOINT_WRITE;
+        emu->state = EMU_STATE_WATCHPOINT;
+        *fault = true;
+        return;
+    }
 
     bool privileged = (emu->exec.cpu.privilege == PRIV_PRIVILEGED);
 
@@ -499,6 +519,11 @@ int armv8m_emu_step(Emulator *emu)
     emu->state = EMU_STATE_RUNNING;
     int result = armv8m_exec_step(&emu->exec);
 
+    /* Check if a watchpoint was hit during execution */
+    if (emu->state == EMU_STATE_WATCHPOINT) {
+        return ARMV8M_ERR_WATCHPOINT;
+    }
+
     if (result == ARMV8M_ERR_BREAKPOINT) {
         emu->state = EMU_STATE_BREAKPOINT;
     } else if (result == ARMV8M_ERR_HALTED) {
@@ -537,6 +562,13 @@ int64_t armv8m_emu_run(Emulator *emu, uint64_t max_cycles)
 
         /* Execute one instruction */
         int result = armv8m_exec_step(&emu->exec);
+
+        /* Check if a watchpoint was hit during execution */
+        if (emu->state == EMU_STATE_WATCHPOINT) {
+            EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Hit watchpoint at addr=0x%08X",
+                          emu->watchpoint_hit_addr);
+            break;
+        }
 
         if (result == ARMV8M_ERR_BREAKPOINT) {
             emu->state = EMU_STATE_BREAKPOINT;
@@ -751,6 +783,123 @@ void armv8m_emu_clear_breakpoints(Emulator *emu)
     if (emu) {
         emu->num_breakpoints = 0;
     }
+}
+
+/*============================================================================
+ * Watchpoint API
+ *============================================================================*/
+
+int armv8m_emu_add_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type)
+{
+    if (!emu) return ARMV8M_ERR_INVALID_PARAM;
+
+    /* Check if already exists */
+    for (int i = 0; i < emu->num_watchpoints; i++) {
+        if (emu->watchpoints[i].active &&
+            emu->watchpoints[i].addr == addr &&
+            emu->watchpoints[i].size == size &&
+            emu->watchpoints[i].type == type) {
+            return ARMV8M_OK;  /* Already exists */
+        }
+    }
+
+    /* Find empty slot */
+    int slot = -1;
+    for (int i = 0; i < EMU_MAX_WATCHPOINTS; i++) {
+        if (!emu->watchpoints[i].active) {
+            slot = i;
+            break;
+        }
+    }
+
+    if (slot < 0) {
+        return ARMV8M_ERR_INVALID_PARAM;  /* No free slots */
+    }
+
+    emu->watchpoints[slot].addr = addr;
+    emu->watchpoints[slot].size = size;
+    emu->watchpoints[slot].type = type;
+    emu->watchpoints[slot].active = true;
+    emu->num_watchpoints++;
+
+    EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Added watchpoint: addr=0x%08X size=%u type=%d",
+                  addr, size, type);
+
+    return ARMV8M_OK;
+}
+
+int armv8m_emu_remove_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type)
+{
+    if (!emu) return ARMV8M_ERR_INVALID_PARAM;
+
+    for (int i = 0; i < EMU_MAX_WATCHPOINTS; i++) {
+        if (emu->watchpoints[i].active &&
+            emu->watchpoints[i].addr == addr &&
+            emu->watchpoints[i].size == size &&
+            emu->watchpoints[i].type == type) {
+            emu->watchpoints[i].active = false;
+            emu->num_watchpoints--;
+            EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Removed watchpoint: addr=0x%08X size=%u type=%d",
+                          addr, size, type);
+            return ARMV8M_OK;
+        }
+    }
+
+    return ARMV8M_OK;  /* Not found is OK */
+}
+
+const Watchpoint *armv8m_emu_check_watchpoint(const Emulator *emu, uint32_t addr, uint32_t size, bool is_write)
+{
+    if (!emu) return NULL;
+
+    uint32_t access_end = addr + size;
+
+    for (int i = 0; i < EMU_MAX_WATCHPOINTS; i++) {
+        if (!emu->watchpoints[i].active) {
+            continue;
+        }
+
+        const Watchpoint *wp = &emu->watchpoints[i];
+        uint32_t wp_end = wp->addr + wp->size;
+
+        /* Check if address ranges overlap */
+        if (addr < wp_end && access_end > wp->addr) {
+            /* Check if watchpoint type matches access type */
+            if (wp->type == WATCHPOINT_ACCESS) {
+                return wp;  /* Access watchpoint matches both read and write */
+            }
+            if (is_write && wp->type == WATCHPOINT_WRITE) {
+                return wp;
+            }
+            if (!is_write && wp->type == WATCHPOINT_READ) {
+                return wp;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+void armv8m_emu_clear_watchpoints(Emulator *emu)
+{
+    if (!emu) return;
+
+    for (int i = 0; i < EMU_MAX_WATCHPOINTS; i++) {
+        emu->watchpoints[i].active = false;
+    }
+    emu->num_watchpoints = 0;
+}
+
+uint32_t armv8m_emu_get_watchpoint_hit_addr(const Emulator *emu)
+{
+    if (!emu) return 0;
+    return emu->watchpoint_hit_addr;
+}
+
+WatchpointType armv8m_emu_get_watchpoint_hit_type(const Emulator *emu)
+{
+    if (!emu) return WATCHPOINT_WRITE;
+    return emu->watchpoint_hit_type;
 }
 
 /*============================================================================

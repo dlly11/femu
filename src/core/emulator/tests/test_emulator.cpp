@@ -182,6 +182,117 @@ TEST(EmulatorTests, Breakpoints)
     CHECK_EQUAL(0, emu.num_breakpoints);
 }
 
+TEST(EmulatorTests, WatchpointAddRemove)
+{
+    armv8m_emu_init(&emu, nullptr);
+
+    // Add write watchpoint
+    int result = armv8m_emu_add_watchpoint(&emu, 0x20000100, 4, WATCHPOINT_WRITE);
+    CHECK_EQUAL(ARMV8M_OK, result);
+    CHECK_EQUAL(1, emu.num_watchpoints);
+
+    // Add same watchpoint again (should be OK, no duplicate)
+    result = armv8m_emu_add_watchpoint(&emu, 0x20000100, 4, WATCHPOINT_WRITE);
+    CHECK_EQUAL(ARMV8M_OK, result);
+    CHECK_EQUAL(1, emu.num_watchpoints);
+
+    // Add different type at same address
+    result = armv8m_emu_add_watchpoint(&emu, 0x20000100, 4, WATCHPOINT_READ);
+    CHECK_EQUAL(ARMV8M_OK, result);
+    CHECK_EQUAL(2, emu.num_watchpoints);
+
+    // Add access watchpoint at different address
+    result = armv8m_emu_add_watchpoint(&emu, 0x20000200, 4, WATCHPOINT_ACCESS);
+    CHECK_EQUAL(ARMV8M_OK, result);
+    CHECK_EQUAL(3, emu.num_watchpoints);
+
+    // Remove write watchpoint
+    result = armv8m_emu_remove_watchpoint(&emu, 0x20000100, 4, WATCHPOINT_WRITE);
+    CHECK_EQUAL(ARMV8M_OK, result);
+    CHECK_EQUAL(2, emu.num_watchpoints);
+
+    // Remove non-existent watchpoint (should be OK)
+    result = armv8m_emu_remove_watchpoint(&emu, 0x20000300, 4, WATCHPOINT_WRITE);
+    CHECK_EQUAL(ARMV8M_OK, result);
+    CHECK_EQUAL(2, emu.num_watchpoints);
+
+    // Clear all watchpoints
+    armv8m_emu_clear_watchpoints(&emu);
+    CHECK_EQUAL(0, emu.num_watchpoints);
+}
+
+TEST(EmulatorTests, WatchpointCheck)
+{
+    armv8m_emu_init(&emu, nullptr);
+
+    // Add watchpoints
+    armv8m_emu_add_watchpoint(&emu, 0x20000100, 4, WATCHPOINT_WRITE);
+    armv8m_emu_add_watchpoint(&emu, 0x20000200, 4, WATCHPOINT_READ);
+    armv8m_emu_add_watchpoint(&emu, 0x20000300, 4, WATCHPOINT_ACCESS);
+
+    // Check write watchpoint - should match write access
+    const Watchpoint *wp = armv8m_emu_check_watchpoint(&emu, 0x20000100, 4, true);
+    CHECK(wp != nullptr);
+    CHECK_EQUAL(WATCHPOINT_WRITE, wp->type);
+
+    // Write watchpoint should NOT match read access
+    wp = armv8m_emu_check_watchpoint(&emu, 0x20000100, 4, false);
+    CHECK(wp == nullptr);
+
+    // Check read watchpoint - should match read access
+    wp = armv8m_emu_check_watchpoint(&emu, 0x20000200, 4, false);
+    CHECK(wp != nullptr);
+    CHECK_EQUAL(WATCHPOINT_READ, wp->type);
+
+    // Read watchpoint should NOT match write access
+    wp = armv8m_emu_check_watchpoint(&emu, 0x20000200, 4, true);
+    CHECK(wp == nullptr);
+
+    // Access watchpoint should match both read and write
+    wp = armv8m_emu_check_watchpoint(&emu, 0x20000300, 4, true);
+    CHECK(wp != nullptr);
+    CHECK_EQUAL(WATCHPOINT_ACCESS, wp->type);
+
+    wp = armv8m_emu_check_watchpoint(&emu, 0x20000300, 4, false);
+    CHECK(wp != nullptr);
+    CHECK_EQUAL(WATCHPOINT_ACCESS, wp->type);
+
+    // Check overlapping access (1 byte within 4-byte watchpoint)
+    wp = armv8m_emu_check_watchpoint(&emu, 0x20000102, 1, true);
+    CHECK(wp != nullptr);
+
+    // Check non-overlapping access
+    wp = armv8m_emu_check_watchpoint(&emu, 0x20000104, 4, true);
+    CHECK(wp == nullptr);
+}
+
+TEST(EmulatorTests, WatchpointHitInfo)
+{
+    armv8m_emu_init(&emu, nullptr);
+
+    // Initially should return defaults
+    CHECK_EQUAL(0u, armv8m_emu_get_watchpoint_hit_addr(&emu));
+
+    // Set hit info (normally done by memory callbacks)
+    emu.watchpoint_hit_addr = 0x20000100;
+    emu.watchpoint_hit_type = WATCHPOINT_WRITE;
+
+    CHECK_EQUAL(0x20000100u, armv8m_emu_get_watchpoint_hit_addr(&emu));
+    CHECK_EQUAL(WATCHPOINT_WRITE, armv8m_emu_get_watchpoint_hit_type(&emu));
+}
+
+TEST(EmulatorTests, WatchpointNullPointerHandling)
+{
+    // All watchpoint functions should handle NULL gracefully
+    CHECK_EQUAL(ARMV8M_ERR_INVALID_PARAM, armv8m_emu_add_watchpoint(nullptr, 0, 4, WATCHPOINT_WRITE));
+    CHECK_EQUAL(ARMV8M_ERR_INVALID_PARAM, armv8m_emu_remove_watchpoint(nullptr, 0, 4, WATCHPOINT_WRITE));
+    CHECK(armv8m_emu_check_watchpoint(nullptr, 0, 4, true) == nullptr);
+    CHECK_EQUAL(0u, armv8m_emu_get_watchpoint_hit_addr(nullptr));
+
+    // These should not crash
+    armv8m_emu_clear_watchpoints(nullptr);
+}
+
 TEST(EmulatorTests, Reset)
 {
     armv8m_emu_init(&emu, nullptr);

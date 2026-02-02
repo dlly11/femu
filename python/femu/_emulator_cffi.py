@@ -26,6 +26,7 @@ _ffi.cdef("""
         EMU_STATE_RUNNING,
         EMU_STATE_HALTED,
         EMU_STATE_BREAKPOINT,
+        EMU_STATE_WATCHPOINT,
         EMU_STATE_FAULT,
     } EmulatorState;
 
@@ -83,6 +84,20 @@ _ffi.cdef("""
     int armv8m_emu_remove_breakpoint(Emulator *emu, uint32_t addr);
     bool armv8m_emu_has_breakpoint(const Emulator *emu, uint32_t addr);
     void armv8m_emu_clear_breakpoints(Emulator *emu);
+
+    /* Watchpoint types (matches GDB Z packet types) */
+    typedef enum {
+        WATCHPOINT_WRITE = 2,
+        WATCHPOINT_READ = 3,
+        WATCHPOINT_ACCESS = 4,
+    } WatchpointType;
+
+    /* Watchpoint API */
+    int armv8m_emu_add_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type);
+    int armv8m_emu_remove_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type);
+    void armv8m_emu_clear_watchpoints(Emulator *emu);
+    uint32_t armv8m_emu_get_watchpoint_hit_addr(const Emulator *emu);
+    WatchpointType armv8m_emu_get_watchpoint_hit_type(const Emulator *emu);
 
     /* Special Register Access */
     uint32_t armv8m_emu_get_special_reg(const Emulator *emu, int reg);
@@ -192,6 +207,7 @@ ARMV8M_ERR_BREAKPOINT = -7
 ARMV8M_ERR_HALTED = -8
 ARMV8M_ERR_SECURE_FAULT = -9
 ARMV8M_ERR_INVALID_PARAM = -10
+ARMV8M_ERR_WATCHPOINT = -11
 
 # Register indices
 ARMV8M_REG_SP = 13
@@ -213,7 +229,13 @@ EMU_STATE_STOPPED = 0
 EMU_STATE_RUNNING = 1
 EMU_STATE_HALTED = 2
 EMU_STATE_BREAKPOINT = 3
-EMU_STATE_FAULT = 4
+EMU_STATE_WATCHPOINT = 4
+EMU_STATE_FAULT = 5
+
+# Watchpoint types (matches GDB Z packet types)
+WATCHPOINT_WRITE = 2
+WATCHPOINT_READ = 3
+WATCHPOINT_ACCESS = 4
 
 # Log levels (must match EmuLogLevel in emu_log.h)
 EMU_LOG_TRACE = 0
