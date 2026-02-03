@@ -15,7 +15,8 @@
  *   // my_plugin.c
  *   #include "emu/emu_plugin.h"
  *
- *   static EmuPeripheral* my_periph_create(const char *name, const char *config) {
+ *   static EmuPeripheral* my_periph_create(const char *name, const char
+ * *config) {
  *       // Create and return peripheral
  *   }
  *
@@ -63,11 +64,11 @@ extern "C" {
  *============================================================================*/
 
 #if defined(_WIN32) || defined(__CYGWIN__)
-    #define EMU_PLUGIN_EXPORT __declspec(dllexport)
+#define EMU_PLUGIN_EXPORT __declspec(dllexport)
 #elif defined(__GNUC__) && __GNUC__ >= 4
-    #define EMU_PLUGIN_EXPORT __attribute__((visibility("default")))
+#define EMU_PLUGIN_EXPORT __attribute__((visibility("default")))
 #else
-    #define EMU_PLUGIN_EXPORT
+#define EMU_PLUGIN_EXPORT
 #endif
 
 /*============================================================================
@@ -80,11 +81,11 @@ extern "C" {
  * Returned by emu_plugin_init() to identify the plugin.
  */
 typedef struct {
-    int api_version;            /**< Must be EMU_PLUGIN_API_VERSION */
-    const char *name;           /**< Plugin name (e.g., "STM32 Peripherals") */
-    const char *version;        /**< Version string (e.g., "1.0.0") */
-    const char *author;         /**< Author or vendor name */
-    const char *description;    /**< Brief description of plugin contents */
+  int api_version;         /**< Must be EMU_PLUGIN_API_VERSION */
+  const char *name;        /**< Plugin name (e.g., "STM32 Peripherals") */
+  const char *version;     /**< Version string (e.g., "1.0.0") */
+  const char *author;      /**< Author or vendor name */
+  const char *description; /**< Brief description of plugin contents */
 } EmuPluginInfo;
 
 /*============================================================================
@@ -97,41 +98,41 @@ typedef struct {
  * Each plugin exports an array of these, terminated by a NULL type_name.
  */
 typedef struct {
-    /**
-     * Type name used for registration.
-     * This is how the peripheral is referenced in YAML configs.
-     * Must be unique across all loaded plugins.
-     */
-    const char *type_name;
+  /**
+   * Type name used for registration.
+   * This is how the peripheral is referenced in YAML configs.
+   * Must be unique across all loaded plugins.
+   */
+  const char *type_name;
 
-    /**
-     * Human-readable description.
-     * Shown in peripheral listings and help text.
-     */
-    const char *description;
+  /**
+   * Human-readable description.
+   * Shown in peripheral listings and help text.
+   */
+  const char *description;
 
-    /**
-     * Factory function to create peripheral instances.
-     *
-     * @param name        Instance name (e.g., "USART1")
-     * @param config_json Configuration as JSON string (may be NULL or "{}")
-     * @return            New peripheral instance, or NULL on error
-     *
-     * The returned EmuPeripheral should have:
-     * - name and type fields set
-     * - context pointing to peripheral state
-     * - vtable with at least read/write functions
-     */
-    EmuPeripheral* (*create)(const char *name, const char *config_json);
+  /**
+   * Factory function to create peripheral instances.
+   *
+   * @param name        Instance name (e.g., "USART1")
+   * @param config_json Configuration as JSON string (may be NULL or "{}")
+   * @return            New peripheral instance, or NULL on error
+   *
+   * The returned EmuPeripheral should have:
+   * - name and type fields set
+   * - context pointing to peripheral state
+   * - vtable with at least read/write functions
+   */
+  EmuPeripheral *(*create)(const char *name, const char *config_json);
 
-    /**
-     * Destroy function for peripherals created by this factory.
-     * Called when the emulator is destroyed or peripheral is removed.
-     * May be NULL if create() returns static/pooled peripherals.
-     *
-     * @param periph      Peripheral to destroy
-     */
-    void (*destroy)(EmuPeripheral *periph);
+  /**
+   * Destroy function for peripherals created by this factory.
+   * Called when the emulator is destroyed or peripheral is removed.
+   * May be NULL if create() returns static/pooled peripherals.
+   *
+   * @param periph      Peripheral to destroy
+   */
+  void (*destroy)(EmuPeripheral *periph);
 
 } EmuPeripheralType;
 
@@ -142,12 +143,13 @@ typedef struct {
 /**
  * Plugin initialization function type.
  *
- * Every plugin must export a function with this signature named "emu_plugin_init".
+ * Every plugin must export a function with this signature named
+ * "emu_plugin_init".
  *
  * @param info_out  If non-NULL, set to point to plugin's EmuPluginInfo
  * @return          NULL-terminated array of EmuPeripheralType descriptors
  */
-typedef EmuPeripheralType* (*EmuPluginInitFn)(const EmuPluginInfo **info_out);
+typedef EmuPeripheralType *(*EmuPluginInitFn)(const EmuPluginInfo **info_out);
 
 /**
  * Expected symbol name for the plugin entry point.
@@ -164,8 +166,8 @@ typedef EmuPeripheralType* (*EmuPluginInitFn)(const EmuPluginInfo **info_out);
  * Usage:
  *   EMU_PLUGIN_DECLARE_INIT(my_init_function)
  */
-#define EMU_PLUGIN_DECLARE_INIT(fn) \
-    EMU_PLUGIN_EXPORT EmuPeripheralType* fn(const EmuPluginInfo **info_out)
+#define EMU_PLUGIN_DECLARE_INIT(fn)                                            \
+  EMU_PLUGIN_EXPORT EmuPeripheralType *fn(const EmuPluginInfo **info_out)
 
 /**
  * Define a simple peripheral with read/write callbacks.
@@ -173,12 +175,10 @@ typedef EmuPeripheralType* (*EmuPluginInitFn)(const EmuPluginInfo **info_out);
  * Usage:
  *   EMU_PLUGIN_SIMPLE_PERIPH(my_periph, "my_type", read_fn, write_fn)
  */
-#define EMU_PLUGIN_SIMPLE_PERIPH(name, type_str, read_fn, write_fn) \
-    static EmuPeripheral name = { \
-        .name = #name, \
-        .type = type_str, \
-        .vtable = { .read = read_fn, .write = write_fn } \
-    }
+#define EMU_PLUGIN_SIMPLE_PERIPH(name, type_str, read_fn, write_fn)            \
+  static EmuPeripheral name = {.name = #name,                                  \
+                               .type = type_str,                               \
+                               .vtable = {.read = read_fn, .write = write_fn}}
 
 #ifdef __cplusplus
 }

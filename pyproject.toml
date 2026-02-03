@@ -107,3 +107,7 @@ python_version = "3.13"
 warn_return_any = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "cffi.*"
+ignore_missing_imports = true

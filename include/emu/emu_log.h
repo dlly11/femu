@@ -2,8 +2,8 @@
  * @file emu_log.h
  * @brief Unified logging system for FEMU
  *
- * Provides a logging interface that routes C logs through a callback to Python's
- * logging module, enabling unified output with configurable verbosity.
+ * Provides a logging interface that routes C logs through a callback to
+ * Python's logging module, enabling unified output with configurable verbosity.
  *
  * Log Levels:
  *   - TRACE (0): Instruction-level detail with register changes
@@ -14,8 +14,8 @@
  *
  * Usage:
  *   EMU_LOG_INFO(EMU_LOG_CAT_EMULATOR, "Emulator initialized");
- *   EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "0x%08X: ADD R%d, R%d, R%d ; R%d: 0x%X -> 0x%X",
- *                 pc, rd, rn, rm, rd, old_val, new_val);
+ *   EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "0x%08X: ADD R%d, R%d, R%d ; R%d: 0x%X
+ * -> 0x%X", pc, rd, rn, rm, rd, old_val, new_val);
  */
 
 #ifndef EMU_LOG_H
@@ -36,12 +36,12 @@ extern "C" {
  * Log severity levels.
  */
 typedef enum {
-    EMU_LOG_TRACE = 0,    /**< Instruction-level detail with register changes */
-    EMU_LOG_DEBUG = 1,    /**< Internal state, function entry/exit */
-    EMU_LOG_INFO = 2,     /**< Normal operation milestones */
-    EMU_LOG_WARNING = 3,  /**< Recoverable issues */
-    EMU_LOG_ERROR = 4,    /**< Errors and failures */
-    EMU_LOG_LEVEL_COUNT = 5
+  EMU_LOG_TRACE = 0,   /**< Instruction-level detail with register changes */
+  EMU_LOG_DEBUG = 1,   /**< Internal state, function entry/exit */
+  EMU_LOG_INFO = 2,    /**< Normal operation milestones */
+  EMU_LOG_WARNING = 3, /**< Recoverable issues */
+  EMU_LOG_ERROR = 4,   /**< Errors and failures */
+  EMU_LOG_LEVEL_COUNT = 5
 } EmuLogLevel;
 
 /*============================================================================
@@ -52,15 +52,15 @@ typedef enum {
  * Log categories for different subsystems.
  */
 typedef enum {
-    EMU_LOG_CAT_DECODER = 0,    /**< Instruction decoding (femu.decoder) */
-    EMU_LOG_CAT_EXECUTOR = 1,   /**< Instruction execution (femu.executor) */
-    EMU_LOG_CAT_MEMORY = 2,     /**< Memory reads/writes (femu.memory) */
-    EMU_LOG_CAT_NVIC = 3,       /**< Interrupt handling (femu.nvic) */
-    EMU_LOG_CAT_MPU = 4,        /**< Memory protection (femu.mpu) */
-    EMU_LOG_CAT_PERIPHERAL = 5, /**< Peripheral I/O (femu.peripheral) */
-    EMU_LOG_CAT_GDB = 6,        /**< GDB server (femu.gdb) */
-    EMU_LOG_CAT_EMULATOR = 7,   /**< Top-level operations (femu.emulator) */
-    EMU_LOG_CAT_COUNT = 8
+  EMU_LOG_CAT_DECODER = 0,    /**< Instruction decoding (femu.decoder) */
+  EMU_LOG_CAT_EXECUTOR = 1,   /**< Instruction execution (femu.executor) */
+  EMU_LOG_CAT_MEMORY = 2,     /**< Memory reads/writes (femu.memory) */
+  EMU_LOG_CAT_NVIC = 3,       /**< Interrupt handling (femu.nvic) */
+  EMU_LOG_CAT_MPU = 4,        /**< Memory protection (femu.mpu) */
+  EMU_LOG_CAT_PERIPHERAL = 5, /**< Peripheral I/O (femu.peripheral) */
+  EMU_LOG_CAT_GDB = 6,        /**< GDB server (femu.gdb) */
+  EMU_LOG_CAT_EMULATOR = 7,   /**< Top-level operations (femu.emulator) */
+  EMU_LOG_CAT_COUNT = 8
 } EmuLogCategory;
 
 /*============================================================================
@@ -172,57 +172,63 @@ void emu_log_impl(int level, int category, const char *file, int line,
  * Log at TRACE level.
  *
  * Use for instruction-level detail with register changes.
- * Example: EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "ADD R0, R1, R2 ; R0: 0x5 -> 0xA");
+ * Example: EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "ADD R0, R1, R2 ; R0: 0x5 ->
+ * 0xA");
  */
-#define EMU_LOG_TRACE(cat, ...) \
-    do { \
-        if (emu_log_is_enabled(EMU_LOG_TRACE, (cat))) \
-            emu_log_impl(EMU_LOG_TRACE, (cat), __FILE__, __LINE__, __func__, __VA_ARGS__); \
-    } while (0)
+#define EMU_LOG_TRACE(cat, ...)                                                \
+  do {                                                                         \
+    if (emu_log_is_enabled(EMU_LOG_TRACE, (cat)))                              \
+      emu_log_impl(EMU_LOG_TRACE, (cat), __FILE__, __LINE__, __func__,         \
+                   __VA_ARGS__);                                               \
+  } while (0)
 
 /**
  * Log at DEBUG level.
  *
  * Use for internal state and function entry/exit.
  */
-#define EMU_LOG_DEBUG(cat, ...) \
-    do { \
-        if (emu_log_is_enabled(EMU_LOG_DEBUG, (cat))) \
-            emu_log_impl(EMU_LOG_DEBUG, (cat), __FILE__, __LINE__, __func__, __VA_ARGS__); \
-    } while (0)
+#define EMU_LOG_DEBUG(cat, ...)                                                \
+  do {                                                                         \
+    if (emu_log_is_enabled(EMU_LOG_DEBUG, (cat)))                              \
+      emu_log_impl(EMU_LOG_DEBUG, (cat), __FILE__, __LINE__, __func__,         \
+                   __VA_ARGS__);                                               \
+  } while (0)
 
 /**
  * Log at INFO level.
  *
  * Use for normal operation milestones.
  */
-#define EMU_LOG_INFO(cat, ...) \
-    do { \
-        if (emu_log_is_enabled(EMU_LOG_INFO, (cat))) \
-            emu_log_impl(EMU_LOG_INFO, (cat), __FILE__, __LINE__, __func__, __VA_ARGS__); \
-    } while (0)
+#define EMU_LOG_INFO(cat, ...)                                                 \
+  do {                                                                         \
+    if (emu_log_is_enabled(EMU_LOG_INFO, (cat)))                               \
+      emu_log_impl(EMU_LOG_INFO, (cat), __FILE__, __LINE__, __func__,          \
+                   __VA_ARGS__);                                               \
+  } while (0)
 
 /**
  * Log at WARNING level.
  *
  * Use for recoverable issues.
  */
-#define EMU_LOG_WARNING(cat, ...) \
-    do { \
-        if (emu_log_is_enabled(EMU_LOG_WARNING, (cat))) \
-            emu_log_impl(EMU_LOG_WARNING, (cat), __FILE__, __LINE__, __func__, __VA_ARGS__); \
-    } while (0)
+#define EMU_LOG_WARNING(cat, ...)                                              \
+  do {                                                                         \
+    if (emu_log_is_enabled(EMU_LOG_WARNING, (cat)))                            \
+      emu_log_impl(EMU_LOG_WARNING, (cat), __FILE__, __LINE__, __func__,       \
+                   __VA_ARGS__);                                               \
+  } while (0)
 
 /**
  * Log at ERROR level.
  *
  * Use for errors and failures.
  */
-#define EMU_LOG_ERROR(cat, ...) \
-    do { \
-        if (emu_log_is_enabled(EMU_LOG_ERROR, (cat))) \
-            emu_log_impl(EMU_LOG_ERROR, (cat), __FILE__, __LINE__, __func__, __VA_ARGS__); \
-    } while (0)
+#define EMU_LOG_ERROR(cat, ...)                                                \
+  do {                                                                         \
+    if (emu_log_is_enabled(EMU_LOG_ERROR, (cat)))                              \
+      emu_log_impl(EMU_LOG_ERROR, (cat), __FILE__, __LINE__, __func__,         \
+                   __VA_ARGS__);                                               \
+  } while (0)
 
 #else /* EMU_LOG_DISABLE_ALL */
 

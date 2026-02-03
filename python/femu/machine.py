@@ -4,7 +4,8 @@ Machine definition and YAML loader.
 The Machine class provides a high-level way to define complete emulated systems
 including CPU configuration, memory regions, and peripherals.
 
-Example using YAML:
+Example using YAML::
+
     # stm32l5.yaml
     machine:
       name: STM32L5
@@ -33,7 +34,8 @@ Example using YAML:
     machine.load_elf("firmware.elf")
     machine.run()
 
-Example using dict:
+Example using dict::
+
     machine = Machine.from_dict({
         "machine": {"name": "test", "arch": "armv8m"},
         "cpu": {"has_fpu": True},
@@ -402,7 +404,8 @@ class Machine:
         Returns:
             Machine instance
 
-        Example:
+        Example::
+
             machine = Machine.from_dict({
                 "machine": {"name": "test", "arch": "armv8m"},
                 "cpu": {"has_fpu": True},

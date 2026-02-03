@@ -249,9 +249,7 @@ class BaseEmulator(ABC):
     # =========================================================================
 
     @abstractmethod
-    def add_peripheral(
-        self, peripheral: PeripheralBase, base: int, size: int
-    ) -> None:
+    def add_peripheral(self, peripheral: PeripheralBase, base: int, size: int) -> None:
         """
         Add a peripheral to the emulator.
 

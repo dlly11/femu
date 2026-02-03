@@ -28,66 +28,66 @@ extern "C" {
  * Contains all information needed by the executor to run the instruction.
  */
 typedef struct {
-    /* Instruction classification */
-    InstructionType type;       /**< Major instruction category */
-    uint8_t op;                 /**< Specific operation (e.g., DataProcOp) */
-    
-    /* Register operands (ARMV8M_REG_NONE if not used) */
-    uint8_t rd;                 /**< Destination register */
-    uint8_t rn;                 /**< First source register */
-    uint8_t rm;                 /**< Second source register */
-    uint8_t rs;                 /**< Shift amount register (if reg-controlled) */
-    uint8_t rt;                 /**< Transfer register (for load/store) */
-    uint8_t rt2;                /**< Second transfer register (for LDRD/STRD) */
-    
-    /* Immediate value */
-    uint32_t imm;               /**< Immediate operand (zero-extended) */
-    
-    /* Shift specification */
-    ShiftType shift_type;       /**< Type of shift (LSL, LSR, ASR, ROR, RRX) */
-    uint8_t shift_amount;       /**< Shift amount (0-31) */
-    
-    /* Flags */
-    bool set_flags;             /**< Update APSR flags (N, Z, C, V)? */
-    bool is_32bit;              /**< Is this a 32-bit Thumb instruction? */
-    bool writeback;             /**< Write back to base register? */
-    bool pre_index;             /**< Pre-index addressing? (vs post-index) */
-    bool add;                   /**< Add offset? (vs subtract) */
-    bool wback;                 /**< Writeback to Rn? */
-    bool index;                 /**< Index addressing? */
-    bool is_signed;             /**< Signed load/extend? */
-    
-    /* Branch-specific */
-    int32_t branch_offset;      /**< Signed branch offset (PC-relative) */
-    bool link;                  /**< Save return address in LR? */
-    
-    /* Condition (for IT block or conditional branches) */
-    ConditionCode cond;         /**< Condition code (COND_AL if unconditional) */
-    
-    /* Load/store specific */
-    AccessSize access_size;     /**< BYTE, HALF, or WORD */
-    uint16_t register_list;     /**< Bitmask for LDM/STM (bit N = register N) */
-    
-    /* For IT instruction */
-    uint8_t it_mask;            /**< IT block mask */
-    uint8_t it_cond;            /**< IT block base condition */
-    
-    /* Special register (for MRS/MSR) */
-    uint8_t sysreg;             /**< Special register number */
-    
-    /* FPU fields */
-    uint8_t sd;                 /**< Destination S register (0-31) */
-    uint8_t sn;                 /**< First source S register */
-    uint8_t sm;                 /**< Second source S register */
-    uint8_t dd;                 /**< Destination D register (0-15) */
-    uint8_t dn;                 /**< First source D register */
-    uint8_t dm;                 /**< Second source D register */
-    bool is_double;             /**< true for F64, false for F32 */
+  /* Instruction classification */
+  InstructionType type; /**< Major instruction category */
+  uint8_t op;           /**< Specific operation (e.g., DataProcOp) */
 
-    /* Debug/diagnostic */
-    uint32_t encoding;          /**< Raw instruction encoding */
-    uint32_t pc;                /**< PC value of this instruction */
-    uint8_t size;               /**< Instruction size in bytes (2 or 4) */
+  /* Register operands (ARMV8M_REG_NONE if not used) */
+  uint8_t rd;  /**< Destination register */
+  uint8_t rn;  /**< First source register */
+  uint8_t rm;  /**< Second source register */
+  uint8_t rs;  /**< Shift amount register (if reg-controlled) */
+  uint8_t rt;  /**< Transfer register (for load/store) */
+  uint8_t rt2; /**< Second transfer register (for LDRD/STRD) */
+
+  /* Immediate value */
+  uint32_t imm; /**< Immediate operand (zero-extended) */
+
+  /* Shift specification */
+  ShiftType shift_type; /**< Type of shift (LSL, LSR, ASR, ROR, RRX) */
+  uint8_t shift_amount; /**< Shift amount (0-31) */
+
+  /* Flags */
+  bool set_flags; /**< Update APSR flags (N, Z, C, V)? */
+  bool is_32bit;  /**< Is this a 32-bit Thumb instruction? */
+  bool writeback; /**< Write back to base register? */
+  bool pre_index; /**< Pre-index addressing? (vs post-index) */
+  bool add;       /**< Add offset? (vs subtract) */
+  bool wback;     /**< Writeback to Rn? */
+  bool index;     /**< Index addressing? */
+  bool is_signed; /**< Signed load/extend? */
+
+  /* Branch-specific */
+  int32_t branch_offset; /**< Signed branch offset (PC-relative) */
+  bool link;             /**< Save return address in LR? */
+
+  /* Condition (for IT block or conditional branches) */
+  ConditionCode cond; /**< Condition code (COND_AL if unconditional) */
+
+  /* Load/store specific */
+  AccessSize access_size; /**< BYTE, HALF, or WORD */
+  uint16_t register_list; /**< Bitmask for LDM/STM (bit N = register N) */
+
+  /* For IT instruction */
+  uint8_t it_mask; /**< IT block mask */
+  uint8_t it_cond; /**< IT block base condition */
+
+  /* Special register (for MRS/MSR) */
+  uint8_t sysreg; /**< Special register number */
+
+  /* FPU fields */
+  uint8_t sd;     /**< Destination S register (0-31) */
+  uint8_t sn;     /**< First source S register */
+  uint8_t sm;     /**< Second source S register */
+  uint8_t dd;     /**< Destination D register (0-15) */
+  uint8_t dn;     /**< First source D register */
+  uint8_t dm;     /**< Second source D register */
+  bool is_double; /**< true for F64, false for F32 */
+
+  /* Debug/diagnostic */
+  uint32_t encoding; /**< Raw instruction encoding */
+  uint32_t pc;       /**< PC value of this instruction */
+  uint8_t size;      /**< Instruction size in bytes (2 or 4) */
 } DecodedInsn;
 
 /*============================================================================
@@ -100,15 +100,18 @@ typedef struct {
  * Decodes the instruction at the given memory location and fills in
  * the DecodedInsn structure with all information needed for execution.
  *
- * @param mem       Pointer to instruction bytes (must have at least 4 readable bytes)
+ * @param mem       Pointer to instruction bytes (must have at least 4 readable
+ * bytes)
  * @param pc        Current program counter value (address of this instruction)
  * @param insn      Output: decoded instruction structure
- * @return          Number of bytes consumed (2 or 4) on success, negative on error
+ * @return          Number of bytes consumed (2 or 4) on success, negative on
+ * error
  *
  * @retval 2        Successfully decoded 16-bit instruction
  * @retval 4        Successfully decoded 32-bit instruction
  * @retval ARMV8M_ERR_UNDEFINED_INSN   Undefined instruction encoding
- * @retval ARMV8M_ERR_UNPREDICTABLE    Unpredictable encoding (CONSTRAINED UNPREDICTABLE)
+ * @retval ARMV8M_ERR_UNPREDICTABLE    Unpredictable encoding (CONSTRAINED
+ * UNPREDICTABLE)
  *
  * @note The decoder does not track IT block state; the caller must do this
  *       and apply the condition code appropriately.
@@ -147,8 +150,8 @@ int armv8m_disasm(const DecodedInsn *insn, char *buf, size_t buf_size);
  * @return          true if this is the start of a 32-bit instruction
  */
 static inline bool armv8m_is_thumb32(uint16_t hw1) {
-    uint16_t op = (hw1 >> 11) & 0x1F;
-    return (op == 0x1D || op == 0x1E || op == 0x1F);
+  uint16_t op = (hw1 >> 11) & 0x1F;
+  return (op == 0x1D || op == 0x1E || op == 0x1F);
 }
 
 /**
@@ -158,7 +161,7 @@ static inline bool armv8m_is_thumb32(uint16_t hw1) {
  * @param op        Specific operation code
  * @return          Static string with mnemonic, or "???" if unknown
  */
-const char* armv8m_insn_mnemonic(InstructionType type, uint8_t op);
+const char *armv8m_insn_mnemonic(InstructionType type, uint8_t op);
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,81 @@
+# Doxyfile for FEMU
+# This configuration generates XML output for Sphinx/Breathe integration
+
+#---------------------------------------------------------------------------
+# Project related configuration options
+#---------------------------------------------------------------------------
+PROJECT_NAME           = "FEMU"
+PROJECT_NUMBER         = "0.1.0"
+PROJECT_BRIEF          = "Fast EMUlator - A lightweight, extensible CPU emulator"
+OUTPUT_DIRECTORY       = build/docs
+
+#---------------------------------------------------------------------------
+# Build related configuration options
+#---------------------------------------------------------------------------
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+
+#---------------------------------------------------------------------------
+# Input configuration
+#---------------------------------------------------------------------------
+INPUT                  = include/
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.c
+EXCLUDE_PATTERNS       = */tests/*
+
+#---------------------------------------------------------------------------
+# Source browsing options
+#---------------------------------------------------------------------------
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+#---------------------------------------------------------------------------
+# Output configuration
+#---------------------------------------------------------------------------
+# Generate XML for Breathe/Sphinx integration
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+XML_PROGRAMLISTING     = YES
+
+# Disable HTML - Sphinx will generate our HTML
+GENERATE_HTML          = NO
+
+# Disable LaTeX
+GENERATE_LATEX         = NO
+
+# Disable man pages
+GENERATE_MAN           = NO
+
+#---------------------------------------------------------------------------
+# Preprocessor configuration
+#---------------------------------------------------------------------------
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+
+#---------------------------------------------------------------------------
+# Diagram configuration
+#---------------------------------------------------------------------------
+HAVE_DOT               = YES
+DOT_NUM_THREADS        = 0
+# CLASS_DIAGRAMS is obsolete in Doxygen 1.15+
+COLLABORATION_GRAPH    = YES
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+
+#---------------------------------------------------------------------------
+# Warning configuration
+#---------------------------------------------------------------------------
+QUIET                  = NO
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO

@@ -208,6 +208,98 @@ def dev_list() -> None:
 
 
 # =============================================================================
+# Documentation Commands
+# =============================================================================
+
+
+@main.group()
+def docs() -> None:
+    """Documentation commands."""
+    pass
+
+
+@docs.command("build")
+@click.option("--clean", is_flag=True, help="Clean build directory first.")
+def docs_build(clean: bool) -> None:
+    """Build documentation locally."""
+    import shutil
+    import subprocess
+
+    from . import PROJECT_ROOT
+
+    docs_dir = PROJECT_ROOT / "docs"
+    build_dir = docs_dir / "_build"
+    doxygen_dir = PROJECT_ROOT / "build" / "docs"
+
+    if clean and build_dir.exists():
+        console.print("[yellow]Cleaning docs build directory...[/yellow]")
+        shutil.rmtree(build_dir)
+
+    # Ensure doxygen output directory exists
+    doxygen_dir.mkdir(parents=True, exist_ok=True)
+
+    # Run Doxygen first
+    console.print("[bold]Running Doxygen...[/bold]")
+    try:
+        subprocess.run(
+            ["doxygen", "Doxyfile"],
+            cwd=PROJECT_ROOT,
+            check=True,
+        )
+        console.print("[green]Doxygen complete[/green]")
+    except FileNotFoundError:
+        console.print("[yellow]Doxygen not found - skipping C API docs[/yellow]")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Doxygen failed:[/red] {e}")
+
+    # Run Sphinx
+    console.print("[bold]Running Sphinx...[/bold]")
+    try:
+        subprocess.run(
+            ["sphinx-build", "-b", "html", str(docs_dir), str(build_dir / "html")],
+            cwd=PROJECT_ROOT,
+            check=True,
+        )
+        console.print(f"[green]Documentation built at:[/green] {build_dir / 'html'}")
+    except FileNotFoundError:
+        console.print("[red]sphinx-build not found[/red]")
+        console.print("Install with: pip install sphinx")
+        raise SystemExit(1) from None
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Sphinx failed:[/red] {e}")
+        raise SystemExit(1) from None
+
+
+@docs.command("serve")
+@click.option("--port", type=int, default=8000, help="Port to serve on.")
+def docs_serve(port: int) -> None:
+    """Serve documentation locally."""
+    import http.server
+    import os
+    import socketserver
+
+    from . import PROJECT_ROOT
+
+    docs_html = PROJECT_ROOT / "docs" / "_build" / "html"
+
+    if not docs_html.exists():
+        console.print("[yellow]Documentation not built yet.[/yellow]")
+        console.print("Run: femu docs build")
+        raise SystemExit(1)
+
+    os.chdir(docs_html)
+    handler = http.server.SimpleHTTPRequestHandler
+
+    with socketserver.TCPServer(("", port), handler) as httpd:
+        console.print(f"[bold green]Serving docs at:[/bold green] http://localhost:{port}")
+        console.print("Press Ctrl+C to stop")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Stopped[/yellow]")
+
+
+# =============================================================================
 # Run Command (future)
 # =============================================================================
 

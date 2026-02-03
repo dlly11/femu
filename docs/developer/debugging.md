@@ -1,6 +1,6 @@
-# Debugging Guide
+# Debugging the Emulator
 
-This guide covers debugging techniques for FEMU, including debugging emulated firmware, the emulator itself, and using VS Code integration.
+This guide covers debugging the FEMU emulator itself (C and Python code), as opposed to debugging firmware running inside the emulator. For firmware debugging, see the [GDB Debugging](../user/gdb-debugging.md) guide.
 
 ## Prerequisites
 
@@ -12,65 +12,9 @@ nix develop
 femu build all
 ```
 
-## Debugging Emulated Firmware
+## Debugging C Code
 
-Debug ARM firmware running inside FEMU using GDB.
-
-### Starting the GDB Server
-
-```bash
-# Start emulator with GDB server on port 3333
-femu run tests/firmware/test_basic.elf --gdb-port 3333
-```
-
-The emulator will wait for a GDB connection before executing.
-
-### Connecting with GDB
-
-```bash
-# In another terminal
-arm-none-eabi-gdb tests/firmware/test_basic.elf
-(gdb) target remote :3333
-(gdb) break main
-(gdb) continue
-```
-
-### Common GDB Commands
-
-| Command | Description |
-|---------|-------------|
-| `target remote :3333` | Connect to FEMU GDB server |
-| `break main` | Set breakpoint at main |
-| `break *0x08000100` | Set breakpoint at address |
-| `continue` | Continue execution |
-| `stepi` | Step one instruction |
-| `nexti` | Step over one instruction |
-| `info registers` | Show all registers |
-| `x/10i $pc` | Disassemble 10 instructions at PC |
-| `x/10xw 0x20000000` | Examine 10 words at address |
-| `watch *0x20000000` | Set write watchpoint |
-| `rwatch *0x20000000` | Set read watchpoint |
-| `awatch *0x20000000` | Set access watchpoint |
-
-### Using Watchpoints
-
-Watchpoints halt execution when memory is accessed:
-
-```bash
-(gdb) target remote :3333
-(gdb) watch *0x20000000      # Break on write
-(gdb) rwatch *0x20000004     # Break on read
-(gdb) awatch *0x20000008     # Break on read or write
-(gdb) continue
-```
-
-When a watchpoint triggers, GDB shows the old and new values.
-
-## Debugging the Emulator (C Code)
-
-Debug the emulator's C implementation using GDB.
-
-### Method 1: Debug Test Executables
+### Debug Test Executables
 
 ```bash
 # Build tests
@@ -82,7 +26,7 @@ gdb ./build/src/arch/armv8m/decoder/test_decoder
 (gdb) run
 ```
 
-### Method 2: Debug via Python
+### Debug via Python
 
 The emulator C library is loaded by Python. To debug:
 
@@ -105,7 +49,9 @@ gdb python
 | `nvic_set_pending` | Interrupt pending |
 | `nvic_exception_entry` | Exception entry |
 
-### Memory Debugging with Valgrind
+## Memory Debugging
+
+### Valgrind
 
 ```bash
 # Check for memory errors
@@ -133,14 +79,16 @@ To disable sanitizers:
 femu build all --no-sanitizers
 ```
 
-## Debugging the Emulator (Python Code)
+## Debugging Python Code
 
 ### Using pdb
 
-```bash
+```python
 # Insert breakpoint in Python code
-# Add this line: import pdb; pdb.set_trace()
+import pdb; pdb.set_trace()
+```
 
+```bash
 # Run with verbose output
 python -m femu run tests/firmware/test_basic.elf -vvv
 ```
@@ -157,7 +105,7 @@ python -m femu run tests/firmware/test_basic.elf -vvv
 ### Setup
 
 1. Open the FEMU project in VS Code
-2. Install recommended extensions when prompted (or run `Extensions: Show Recommended Extensions`)
+2. Install recommended extensions when prompted
 3. Enter the Nix development shell: `nix develop`
 
 ### Debug Configurations
@@ -311,28 +259,6 @@ femu run firmware.elf --max-instructions 1000000 --stats
 ```
 
 ## Troubleshooting
-
-### GDB Connection Refused
-
-```bash
-# Check if server is running
-netstat -tlnp | grep 3333
-
-# Restart with explicit port
-femu run firmware.elf --gdb-port 3333
-```
-
-### Breakpoints Not Working
-
-- Ensure firmware is built with debug symbols (`-g`)
-- Check address matches loaded location
-- Verify GDB architecture: `(gdb) show architecture`
-
-### Cortex-Debug Issues
-
-- Check `arm-none-eabi-gdb` is in PATH
-- Verify GDB server started successfully
-- Check Output panel for errors
 
 ### Sanitizer False Positives
 

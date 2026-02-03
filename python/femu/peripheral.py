@@ -7,7 +7,8 @@ This module provides the foundation for implementing peripherals in the emulator
 - CPeripheral: Wrapper for C peripherals compiled into the library
 - PluginPeripheral: Peripherals loaded from shared library plugins
 
-Example Python peripheral:
+Example Python peripheral::
+
     from femu import Peripheral, PeripheralRegistry
 
     @PeripheralRegistry.register("my_uart")
@@ -84,7 +85,8 @@ class Peripheral(PeripheralBase):
     Subclass this to create peripherals in pure Python. Override the
     read() and write() methods at minimum.
 
-    Example:
+    Example::
+
         class MyTimer(Peripheral):
             def __init__(self, name: str = "timer", irq: int | None = None):
                 super().__init__(name, "my_timer")
@@ -295,7 +297,7 @@ class Peripheral(PeripheralBase):
 _ffi = cffi.get_ffi()
 
 
-@_ffi.callback("uint32_t(void*, uint32_t, uint8_t)")  # type: ignore[misc]
+@_ffi.callback("uint32_t(void*, uint32_t, uint8_t)")
 def _py_periph_read(ctx: CData, offset: int, size: int) -> int:
     """CFFI callback that routes to Python peripheral read()."""
     try:
@@ -307,7 +309,7 @@ def _py_periph_read(ctx: CData, offset: int, size: int) -> int:
         return 0
 
 
-@_ffi.callback("void(void*, uint32_t, uint32_t, uint8_t)")  # type: ignore[misc]
+@_ffi.callback("void(void*, uint32_t, uint32_t, uint8_t)")
 def _py_periph_write(ctx: CData, offset: int, value: int, size: int) -> None:
     """CFFI callback that routes to Python peripheral write()."""
     try:
@@ -317,7 +319,7 @@ def _py_periph_write(ctx: CData, offset: int, value: int, size: int) -> None:
         logger.error("Peripheral write error at offset 0x%x: %s", offset, e)
 
 
-@_ffi.callback("void(void*)")  # type: ignore[misc]
+@_ffi.callback("void(void*)")
 def _py_periph_reset(ctx: CData) -> None:
     """CFFI callback that routes to Python peripheral reset()."""
     try:
@@ -327,7 +329,7 @@ def _py_periph_reset(ctx: CData) -> None:
         logger.error("Peripheral reset error: %s", e)
 
 
-@_ffi.callback("void(void*, uint64_t)")  # type: ignore[misc]
+@_ffi.callback("void(void*, uint64_t)")
 def _py_periph_tick(ctx: CData, cycles: int) -> None:
     """CFFI callback that routes to Python peripheral tick()."""
     try:
@@ -337,7 +339,7 @@ def _py_periph_tick(ctx: CData, cycles: int) -> None:
         logger.error("Peripheral tick error: %s", e)
 
 
-@_ffi.callback("void(void*, EmuPeriphIRQCallback, void*)")  # type: ignore[misc]
+@_ffi.callback("void(void*, EmuPeriphIRQCallback, void*)")
 def _py_periph_set_irq_callback(ctx: CData, callback: CData, emu_ctx: CData) -> None:
     """CFFI callback that receives the IRQ callback from the emulator."""
     try:
@@ -395,8 +397,9 @@ class CPeripheral(PeripheralBase):
         """
         Create peripheral by calling a C factory function.
 
-        The factory function should have the signature:
-            EmuPeripheral* {factory_name}_create(const char *name, const char *config_json);
+        The factory function should have the signature::
+
+            EmuPeripheral* <factory_name>_create(const char *name, const char *config_json);
 
         Args:
             factory_name: Base name of factory function (e.g., "stm32_gpio")
@@ -459,7 +462,8 @@ class PluginPeripheral(PeripheralBase):
     Plugins are .so/.dll/.dylib files that export peripheral factories
     via the emu_plugin_init() entry point.
 
-    Example:
+    Example::
+
         # Load peripheral from plugin
         periph = PluginPeripheral.from_plugin(
             "./my_plugin.so",

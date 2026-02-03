@@ -1,5 +1,6 @@
 # Build artifacts
 build/
+_build/
 *.o
 *.a
 *.so
@@ -39,6 +40,7 @@ Thumbs.db
 result
 .direnv/
 .venv-installed
+.nix-shell-bin/
 
 # Test artifacts
 *.log

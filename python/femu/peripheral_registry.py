@@ -4,7 +4,8 @@ Peripheral type registry supporting Python, C, and plugin peripherals.
 The PeripheralRegistry provides a unified factory for creating peripherals
 regardless of their implementation (Python, C, or plugin).
 
-Example:
+Example::
+
     from femu import Peripheral, PeripheralRegistry
 
     # Register a Python peripheral using decorator
@@ -86,7 +87,8 @@ class PeripheralRegistry:
             name: Type name for the registry (used in YAML configs)
             description: Human-readable description
 
-        Example:
+        Example::
+
             @PeripheralRegistry.register("simple_uart", "Simple UART with TX/RX")
             class SimpleUART(Peripheral):
                 ...
@@ -136,8 +138,9 @@ class PeripheralRegistry:
         Register a C peripheral factory function.
 
         The factory function should be exported from the emulator library
-        with the signature:
-            EmuPeripheral* {factory_name}_create(const char *name, const char *config_json);
+        with the signature::
+
+            EmuPeripheral* <factory_name>_create(const char *name, const char *config_json);
 
         Args:
             type_name: Type name for the registry
@@ -166,7 +169,8 @@ class PeripheralRegistry:
         Returns:
             List of registered type names
 
-        Example:
+        Example::
+
             types = PeripheralRegistry.load_plugin("./vendor.so", prefix="vendor_")
             # Creates types like "vendor_uart", "vendor_gpio", etc.
         """

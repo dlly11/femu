@@ -24,24 +24,24 @@ extern "C" {
  * Memory region descriptor.
  */
 typedef struct {
-    uint64_t base;              /**< Base address */
-    uint64_t size;              /**< Size in bytes */
-    EmuMemRegionType type;      /**< Region type */
+  uint64_t base;         /**< Base address */
+  uint64_t size;         /**< Size in bytes */
+  EmuMemRegionType type; /**< Region type */
 
-    /* Backing storage (for RAM/ROM) */
-    uint8_t *data;              /**< Pointer to backing data (NULL for MMIO) */
+  /* Backing storage (for RAM/ROM) */
+  uint8_t *data; /**< Pointer to backing data (NULL for MMIO) */
 
-    /* MMIO callbacks (for MMIO regions) */
-    void *mmio_ctx;             /**< Context for MMIO callbacks */
-    uint64_t (*mmio_read)(void *ctx, uint64_t offset, uint8_t size);
-    void (*mmio_write)(void *ctx, uint64_t offset, uint64_t value, uint8_t size);
+  /* MMIO callbacks (for MMIO regions) */
+  void *mmio_ctx; /**< Context for MMIO callbacks */
+  uint64_t (*mmio_read)(void *ctx, uint64_t offset, uint8_t size);
+  void (*mmio_write)(void *ctx, uint64_t offset, uint64_t value, uint8_t size);
 } EmuMemRegion;
 
 /*============================================================================
  * Page Table for Fast Lookup
  *============================================================================*/
 
-#define EMU_PAGE_SHIFT 12               /* 4KB pages */
+#define EMU_PAGE_SHIFT 12 /* 4KB pages */
 #define EMU_PAGE_SIZE (1U << EMU_PAGE_SHIFT)
 #define EMU_PAGE_MASK (EMU_PAGE_SIZE - 1)
 
@@ -49,15 +49,16 @@ typedef struct {
  * Maximum addressable memory for page table (16MB by default).
  * Adjust EMU_PAGE_TABLE_SIZE for larger address spaces.
  */
-#define EMU_PAGE_TABLE_MAX_ADDR 0x01000000  /* 16MB */
-#define EMU_PAGE_TABLE_SIZE (EMU_PAGE_TABLE_MAX_ADDR >> EMU_PAGE_SHIFT)  /* 4096 entries */
+#define EMU_PAGE_TABLE_MAX_ADDR 0x01000000 /* 16MB */
+#define EMU_PAGE_TABLE_SIZE                                                    \
+  (EMU_PAGE_TABLE_MAX_ADDR >> EMU_PAGE_SHIFT) /* 4096 entries */
 
 /**
  * Page table entry for fast region lookup.
  */
 typedef struct {
-    EmuMemRegion *region;   /**< Pointer to region (NULL if unmapped) */
-    uint8_t *data_base;     /**< Pre-computed data pointer for fast RAM access */
+  EmuMemRegion *region; /**< Pointer to region (NULL if unmapped) */
+  uint8_t *data_base;   /**< Pre-computed data pointer for fast RAM access */
 } EmuPageEntry;
 
 /*============================================================================
@@ -70,22 +71,22 @@ typedef struct {
  * Memory system context.
  */
 typedef struct {
-    EmuMemRegion regions[EMU_MEM_MAX_REGIONS];
-    int num_regions;
+  EmuMemRegion regions[EMU_MEM_MAX_REGIONS];
+  int num_regions;
 
-    /* Page table for O(1) region lookup */
-    EmuPageEntry *page_table;       /**< Page table (NULL if not allocated) */
-    uint32_t page_table_size;       /**< Number of entries in page table */
-    bool page_table_valid;          /**< True if page table is up-to-date */
+  /* Page table for O(1) region lookup */
+  EmuPageEntry *page_table; /**< Page table (NULL if not allocated) */
+  uint32_t page_table_size; /**< Number of entries in page table */
+  bool page_table_valid;    /**< True if page table is up-to-date */
 
-    /* MPU/MMU callbacks (optional, NULL if no protection unit) */
-    void *mpu_ctx;
-    bool (*mpu_check)(void *ctx, uint64_t addr, uint64_t size,
-                      bool is_write, bool privileged);
+  /* MPU/MMU callbacks (optional, NULL if no protection unit) */
+  void *mpu_ctx;
+  bool (*mpu_check)(void *ctx, uint64_t addr, uint64_t size, bool is_write,
+                    bool privileged);
 
-    /* Fault callback (called on access faults) */
-    void *fault_ctx;
-    void (*on_fault)(void *ctx, uint64_t addr, bool is_write, int fault_type);
+  /* Fault callback (called on access faults) */
+  void *fault_ctx;
+  void (*on_fault)(void *ctx, uint64_t addr, bool is_write, int fault_type);
 } EmuMemorySystem;
 
 /*============================================================================
@@ -117,7 +118,8 @@ int emu_mem_add_region(EmuMemorySystem *mem, const EmuMemRegion *region);
  * @param data      Backing storage (must remain valid)
  * @return          EMU_OK or error code
  */
-int emu_mem_add_ram(EmuMemorySystem *mem, uint64_t base, uint64_t size, uint8_t *data);
+int emu_mem_add_ram(EmuMemorySystem *mem, uint64_t base, uint64_t size,
+                    uint8_t *data);
 
 /**
  * Add a ROM region.
@@ -128,7 +130,8 @@ int emu_mem_add_ram(EmuMemorySystem *mem, uint64_t base, uint64_t size, uint8_t 
  * @param data      Backing storage (must remain valid)
  * @return          EMU_OK or error code
  */
-int emu_mem_add_rom(EmuMemorySystem *mem, uint64_t base, uint64_t size, const uint8_t *data);
+int emu_mem_add_rom(EmuMemorySystem *mem, uint64_t base, uint64_t size,
+                    const uint8_t *data);
 
 /**
  * Add an MMIO region.
@@ -141,10 +144,10 @@ int emu_mem_add_rom(EmuMemorySystem *mem, uint64_t base, uint64_t size, const ui
  * @param write_cb  Write callback
  * @return          EMU_OK or error code
  */
-int emu_mem_add_mmio(EmuMemorySystem *mem, uint64_t base, uint64_t size,
-                     void *ctx,
-                     uint64_t (*read_cb)(void *ctx, uint64_t offset, uint8_t size),
-                     void (*write_cb)(void *ctx, uint64_t offset, uint64_t value, uint8_t size));
+int emu_mem_add_mmio(
+    EmuMemorySystem *mem, uint64_t base, uint64_t size, void *ctx,
+    uint64_t (*read_cb)(void *ctx, uint64_t offset, uint8_t size),
+    void (*write_cb)(void *ctx, uint64_t offset, uint64_t value, uint8_t size));
 
 /**
  * Read from memory.
@@ -169,8 +172,8 @@ uint64_t emu_mem_read(EmuMemorySystem *mem, uint64_t addr, uint8_t size,
  * @param privileged True if privileged access
  * @param fault     Set to true if fault occurred
  */
-void emu_mem_write(EmuMemorySystem *mem, uint64_t addr, uint64_t value, uint8_t size,
-                   bool privileged, bool *fault);
+void emu_mem_write(EmuMemorySystem *mem, uint64_t addr, uint64_t value,
+                   uint8_t size, bool privileged, bool *fault);
 
 /**
  * Get direct pointer to memory (for instruction fetch).
@@ -181,7 +184,8 @@ void emu_mem_write(EmuMemorySystem *mem, uint64_t addr, uint64_t value, uint8_t 
  * @param size      Required size
  * @return          Pointer to memory or NULL
  */
-const uint8_t *emu_mem_get_ptr(EmuMemorySystem *mem, uint64_t addr, uint64_t size);
+const uint8_t *emu_mem_get_ptr(EmuMemorySystem *mem, uint64_t addr,
+                               uint64_t size);
 
 /**
  * Load data into memory.
@@ -192,7 +196,8 @@ const uint8_t *emu_mem_get_ptr(EmuMemorySystem *mem, uint64_t addr, uint64_t siz
  * @param size      Size in bytes
  * @return          EMU_OK or error code
  */
-int emu_mem_load(EmuMemorySystem *mem, uint64_t addr, const uint8_t *data, uint64_t size);
+int emu_mem_load(EmuMemorySystem *mem, uint64_t addr, const uint8_t *data,
+                 uint64_t size);
 
 /**
  * Find region containing address.
@@ -201,7 +206,8 @@ int emu_mem_load(EmuMemorySystem *mem, uint64_t addr, const uint8_t *data, uint6
  * @param addr      Address to find
  * @return          Region pointer or NULL if not found
  */
-const EmuMemRegion *emu_mem_find_region(const EmuMemorySystem *mem, uint64_t addr);
+const EmuMemRegion *emu_mem_find_region(const EmuMemorySystem *mem,
+                                        uint64_t addr);
 
 /**
  * Set MPU/MMU check callback.
@@ -223,7 +229,8 @@ void emu_mem_set_mpu(EmuMemorySystem *mem, void *ctx,
  */
 void emu_mem_set_fault_callback(EmuMemorySystem *mem, void *ctx,
                                 void (*fault_cb)(void *ctx, uint64_t addr,
-                                                 bool is_write, int fault_type));
+                                                 bool is_write,
+                                                 int fault_type));
 
 /**
  * Initialize page table for fast memory lookup.

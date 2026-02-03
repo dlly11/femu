@@ -11,11 +11,11 @@
 #ifndef ARMV8M_EMULATOR_H
 #define ARMV8M_EMULATOR_H
 
-#include "arch/armv8m/armv8m_types.h"
 #include "arch/armv8m/armv8m_executor.h"
-#include "emu/emu_memory.h"
-#include "arch/armv8m/armv8m_nvic.h"
 #include "arch/armv8m/armv8m_mpu.h"
+#include "arch/armv8m/armv8m_nvic.h"
+#include "arch/armv8m/armv8m_types.h"
+#include "emu/emu_memory.h"
 #include "emu/emu_peripheral.h"
 
 #ifdef __cplusplus
@@ -36,22 +36,22 @@ extern "C" {
  * Emulator configuration.
  */
 typedef struct {
-    /* Feature flags */
-    bool has_fpu;               /**< Enable FPU */
-    bool has_dsp;               /**< Enable DSP extension */
-    bool has_trustzone;         /**< Enable TrustZone */
+  /* Feature flags */
+  bool has_fpu;       /**< Enable FPU */
+  bool has_dsp;       /**< Enable DSP extension */
+  bool has_trustzone; /**< Enable TrustZone */
 
-    /* MPU configuration */
-    int num_mpu_regions;        /**< Number of MPU regions (0 = no MPU) */
+  /* MPU configuration */
+  int num_mpu_regions; /**< Number of MPU regions (0 = no MPU) */
 
-    /* NVIC configuration */
-    int num_irqs;               /**< Number of external IRQs (max 240) */
+  /* NVIC configuration */
+  int num_irqs; /**< Number of external IRQs (max 240) */
 
-    /* Default memory configuration (can be overridden) */
-    uint32_t default_flash_base; /**< Default flash base address */
-    uint32_t default_flash_size; /**< Default flash size */
-    uint32_t default_ram_base;   /**< Default RAM base address */
-    uint32_t default_ram_size;   /**< Default RAM size */
+  /* Default memory configuration (can be overridden) */
+  uint32_t default_flash_base; /**< Default flash base address */
+  uint32_t default_flash_size; /**< Default flash size */
+  uint32_t default_ram_base;   /**< Default RAM base address */
+  uint32_t default_ram_size;   /**< Default RAM size */
 } EmulatorConfig;
 
 /*============================================================================
@@ -70,59 +70,59 @@ typedef struct {
  * Watchpoint type - matches GDB Z packet types.
  */
 typedef enum {
-    WATCHPOINT_WRITE = 2,       /**< Write watchpoint (Z2) */
-    WATCHPOINT_READ = 3,        /**< Read watchpoint (Z3) */
-    WATCHPOINT_ACCESS = 4,      /**< Access watchpoint - read or write (Z4) */
+  WATCHPOINT_WRITE = 2,  /**< Write watchpoint (Z2) */
+  WATCHPOINT_READ = 3,   /**< Read watchpoint (Z3) */
+  WATCHPOINT_ACCESS = 4, /**< Access watchpoint - read or write (Z4) */
 } WatchpointType;
 
 /**
  * Watchpoint descriptor.
  */
 typedef struct {
-    uint32_t addr;              /**< Watched address */
-    uint32_t size;              /**< Size of watched region */
-    WatchpointType type;        /**< Type of watchpoint */
-    bool active;                /**< Whether this slot is in use */
+  uint32_t addr;       /**< Watched address */
+  uint32_t size;       /**< Size of watched region */
+  WatchpointType type; /**< Type of watchpoint */
+  bool active;         /**< Whether this slot is in use */
 } Watchpoint;
 
 /**
  * Emulator context - integrates all modules.
  */
 typedef struct {
-    /* Core modules */
-    Executor exec;              /**< CPU executor (includes CPUState) */
-    EmuMemorySystem mem;           /**< Memory subsystem */
-    NVIC nvic;                  /**< Interrupt controller */
-    MPU mpu;                    /**< Memory protection unit */
+  /* Core modules */
+  Executor exec;       /**< CPU executor (includes CPUState) */
+  EmuMemorySystem mem; /**< Memory subsystem */
+  NVIC nvic;           /**< Interrupt controller */
+  MPU mpu;             /**< Memory protection unit */
 
-    /* Peripherals */
-    EmuPeripheral *peripherals[EMU_MAX_PERIPHERALS];
-    int num_peripherals;
+  /* Peripherals */
+  EmuPeripheral *peripherals[EMU_MAX_PERIPHERALS];
+  int num_peripherals;
 
-    /* Emulator state */
-    EmuState state;        /**< Current execution state */
-    int last_error;             /**< Last error code */
+  /* Emulator state */
+  EmuState state; /**< Current execution state */
+  int last_error; /**< Last error code */
 
-    /* Memory backing storage */
-    uint8_t *flash_data;        /**< Flash backing memory (allocated) */
-    uint32_t flash_base;        /**< Flash base address */
-    uint32_t flash_size;        /**< Flash size */
-    uint8_t *ram_data;          /**< RAM backing memory (allocated) */
-    uint32_t ram_base;          /**< RAM base address */
-    uint32_t ram_size;          /**< RAM size */
+  /* Memory backing storage */
+  uint8_t *flash_data; /**< Flash backing memory (allocated) */
+  uint32_t flash_base; /**< Flash base address */
+  uint32_t flash_size; /**< Flash size */
+  uint8_t *ram_data;   /**< RAM backing memory (allocated) */
+  uint32_t ram_base;   /**< RAM base address */
+  uint32_t ram_size;   /**< RAM size */
 
-    /* Breakpoints */
-    uint32_t breakpoints[EMU_MAX_BREAKPOINTS];
-    int num_breakpoints;
+  /* Breakpoints */
+  uint32_t breakpoints[EMU_MAX_BREAKPOINTS];
+  int num_breakpoints;
 
-    /* Watchpoints */
-    Watchpoint watchpoints[EMU_MAX_WATCHPOINTS];
-    int num_watchpoints;
-    uint32_t watchpoint_hit_addr;   /**< Address that triggered watchpoint */
-    WatchpointType watchpoint_hit_type; /**< Type of access that triggered */
+  /* Watchpoints */
+  Watchpoint watchpoints[EMU_MAX_WATCHPOINTS];
+  int num_watchpoints;
+  uint32_t watchpoint_hit_addr;       /**< Address that triggered watchpoint */
+  WatchpointType watchpoint_hit_type; /**< Type of access that triggered */
 
-    /* Stop request flag (for external stop) */
-    volatile bool stop_requested;
+  /* Stop request flag (for external stop) */
+  volatile bool stop_requested;
 } Emulator;
 
 /*============================================================================
@@ -192,7 +192,8 @@ int armv8m_emu_add_ram(Emulator *emu, uint32_t base, uint32_t size);
  * @param size      Size in bytes
  * @return          ARMV8M_OK or error code
  */
-int armv8m_emu_load(Emulator *emu, uint32_t addr, const uint8_t *data, uint32_t size);
+int armv8m_emu_load(Emulator *emu, uint32_t addr, const uint8_t *data,
+                    uint32_t size);
 
 /*============================================================================
  * Execution API
@@ -313,7 +314,8 @@ int armv8m_emu_get_last_error(const Emulator *emu);
  * @param fault     Set to true if fault occurred
  * @return          Value read
  */
-uint32_t armv8m_emu_read_mem(const Emulator *emu, uint32_t addr, uint8_t size, bool *fault);
+uint32_t armv8m_emu_read_mem(const Emulator *emu, uint32_t addr, uint8_t size,
+                             bool *fault);
 
 /**
  * Write to memory (bypasses MPU for debugging).
@@ -324,7 +326,8 @@ uint32_t armv8m_emu_read_mem(const Emulator *emu, uint32_t addr, uint8_t size, b
  * @param size      Access size (1, 2, or 4)
  * @param fault     Set to true if fault occurred
  */
-void armv8m_emu_write_mem(Emulator *emu, uint32_t addr, uint32_t value, uint8_t size, bool *fault);
+void armv8m_emu_write_mem(Emulator *emu, uint32_t addr, uint32_t value,
+                          uint8_t size, bool *fault);
 
 /**
  * Read a block of memory.
@@ -335,7 +338,8 @@ void armv8m_emu_write_mem(Emulator *emu, uint32_t addr, uint32_t value, uint8_t 
  * @param size      Number of bytes to read
  * @return          Number of bytes read successfully
  */
-uint32_t armv8m_emu_read_block(const Emulator *emu, uint32_t addr, uint8_t *data, uint32_t size);
+uint32_t armv8m_emu_read_block(const Emulator *emu, uint32_t addr,
+                               uint8_t *data, uint32_t size);
 
 /**
  * Write a block of memory.
@@ -346,7 +350,8 @@ uint32_t armv8m_emu_read_block(const Emulator *emu, uint32_t addr, uint8_t *data
  * @param size      Number of bytes to write
  * @return          Number of bytes written successfully
  */
-uint32_t armv8m_emu_write_block(Emulator *emu, uint32_t addr, const uint8_t *data, uint32_t size);
+uint32_t armv8m_emu_write_block(Emulator *emu, uint32_t addr,
+                                const uint8_t *data, uint32_t size);
 
 /*============================================================================
  * Breakpoint API
@@ -396,10 +401,12 @@ void armv8m_emu_clear_breakpoints(Emulator *emu);
  * @param emu       Emulator
  * @param addr      Watch address
  * @param size      Size of watched region (1, 2, or 4 bytes)
- * @param type      Watchpoint type (WATCHPOINT_WRITE, WATCHPOINT_READ, WATCHPOINT_ACCESS)
+ * @param type      Watchpoint type (WATCHPOINT_WRITE, WATCHPOINT_READ,
+ * WATCHPOINT_ACCESS)
  * @return          ARMV8M_OK or error code
  */
-int armv8m_emu_add_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type);
+int armv8m_emu_add_watchpoint(Emulator *emu, uint32_t addr, uint32_t size,
+                              WatchpointType type);
 
 /**
  * Remove a watchpoint.
@@ -410,7 +417,8 @@ int armv8m_emu_add_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, Watch
  * @param type      Watchpoint type
  * @return          ARMV8M_OK or error code
  */
-int armv8m_emu_remove_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, WatchpointType type);
+int armv8m_emu_remove_watchpoint(Emulator *emu, uint32_t addr, uint32_t size,
+                                 WatchpointType type);
 
 /**
  * Check if address has a watchpoint of given type.
@@ -421,7 +429,9 @@ int armv8m_emu_remove_watchpoint(Emulator *emu, uint32_t addr, uint32_t size, Wa
  * @param is_write  True if checking for write access
  * @return          Pointer to matching watchpoint, or NULL
  */
-const Watchpoint *armv8m_emu_check_watchpoint(const Emulator *emu, uint32_t addr, uint32_t size, bool is_write);
+const Watchpoint *armv8m_emu_check_watchpoint(const Emulator *emu,
+                                              uint32_t addr, uint32_t size,
+                                              bool is_write);
 
 /**
  * Clear all watchpoints.
@@ -459,7 +469,8 @@ WatchpointType armv8m_emu_get_watchpoint_hit_type(const Emulator *emu);
  * @param size      Address space size
  * @return          ARMV8M_OK or error code
  */
-int armv8m_emu_add_peripheral(Emulator *emu, EmuPeripheral *periph, uint32_t base, uint32_t size);
+int armv8m_emu_add_peripheral(Emulator *emu, EmuPeripheral *periph,
+                              uint32_t base, uint32_t size);
 
 /*============================================================================
  * Special Register Access (for GDB)

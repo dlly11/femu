@@ -4,7 +4,8 @@ Unified logging system for FEMU.
 This module provides a logging bridge between C code and Python's logging module,
 enabling unified output with configurable verbosity.
 
-Usage:
+Usage::
+
     from femu import configure_logging, LogLevel, LogCategory
 
     # Basic logging to stderr
@@ -155,7 +156,7 @@ _callback_handle = None
 _log_file_handle: TextIO | None = None
 
 
-@_ffi.callback("void(void*, int, int, const char*, int, const char*, const char*)")  # type: ignore[misc]
+@_ffi.callback("void(void*, int, int, const char*, int, const char*, const char*)")
 def _c_log_callback(
     ctx: object,
     level: int,
@@ -230,12 +231,14 @@ def configure_logging(
 
     Args:
         level: Global minimum log level
-        category_levels: Per-category level overrides (e.g., {LogCategory.EXECUTOR: LogLevel.TRACE})
+        category_levels: Per-category level overrides
+            (e.g., ``{LogCategory.EXECUTOR: LogLevel.TRACE}``)
         log_file: Path to log file (None for stderr only)
         json_format: Use JSON output format
         stream: Output stream (defaults to stderr if log_file is None)
 
-    Example:
+    Example::
+
         # Basic logging to stderr
         configure_logging(level=LogLevel.DEBUG)
 

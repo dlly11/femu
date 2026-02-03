@@ -27,6 +27,8 @@
             cffi
             click
             rich
+            pyyaml
+            pyelftools
 
             # Testing
             pytest
@@ -38,6 +40,13 @@
             ruff
             pip
             build # For building wheels
+
+            # Documentation
+            sphinx
+            sphinx-autodoc-typehints
+            myst-parser
+            furo
+            breathe
           ]
         );
 
@@ -72,6 +81,7 @@
 
             # Documentation
             doxygen
+            graphviz # For Doxygen diagrams
 
             # Utilities
             git
@@ -107,12 +117,17 @@
             # CppUTest paths
             export CPPUTEST_HOME=$PWD/lib/cpputest
 
-            # Install Python package in development mode
-            if [ ! -f "$PWD/.venv-installed" ]; then
-              echo "Installing Python package in development mode..."
-              pip install -e "$PWD" --quiet 2>/dev/null || true
-              touch "$PWD/.venv-installed"
-            fi
+            # Add Python package to PYTHONPATH for development
+            export PYTHONPATH="$PWD/python:$PYTHONPATH"
+
+            # Create wrapper script for femu command
+            mkdir -p "$PWD/.nix-shell-bin"
+            cat > "$PWD/.nix-shell-bin/femu" << 'WRAPPER'
+#!/usr/bin/env bash
+exec python -m femu.cli "$@"
+WRAPPER
+            chmod +x "$PWD/.nix-shell-bin/femu"
+            export PATH="$PWD/.nix-shell-bin:$PATH"
 
             echo "╔══════════════════════════════════════════════════════════════╗"
             echo "║  Quick Start                                                 ║"
@@ -127,9 +142,11 @@
             echo "║    CC=gcc CXX=g++ femu build all                             ║"
             echo "╠══════════════════════════════════════════════════════════════╣"
             echo "║  Static Analysis:                                            ║"
-            echo "║    cmake --build build --target cppcheck                     ║"
-            echo "║    cmake --build build --target clang-tidy                   ║"
-            echo "║    cmake --build build --target analyze                      ║"
+            echo "║    femu build analyze                                        ║"
+            echo "╠══════════════════════════════════════════════════════════════╣"
+            echo "║  Documentation:                                              ║"
+            echo "║    femu docs build             Build documentation           ║"
+            echo "║    femu docs serve             Serve docs locally            ║"
             echo "╚══════════════════════════════════════════════════════════════╝"
             echo ""
           '';

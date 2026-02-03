@@ -83,6 +83,10 @@ femu test python                  # Run Python tests only
 femu dev status                   # Show module status
 femu dev context <module>         # Show AI context for module
 femu dev validate <module>        # Validate implementation
+
+# Documentation
+femu docs build                   # Build documentation
+femu docs serve                   # Serve docs locally
 ```
 
 ## Building with Different Compilers
@@ -113,23 +117,35 @@ femu build analyze --tool=clang-tidy
 femu/
 ├── docs/                     # Documentation
 │   ├── ARCHITECTURE.md       # System design (READ THIS FIRST)
-│   └── AI_DEVELOPMENT.md     # AI development guide
-├── include/                  # Public C headers
-│   ├── armv8m_types.h        # Shared types
-│   ├── armv8m_decoder.h      # Decoder interface
-│   ├── armv8m_executor.h     # Executor interface
-│   ├── armv8m_memory.h       # Memory interface
-│   ├── armv8m_nvic.h         # NVIC interface
-│   └── armv8m_mpu.h          # MPU interface
-├── src/core/                 # C simulation core
-│   ├── decoder/              # Instruction decoder
-│   ├── executor/             # Instruction executor
-│   ├── memory/               # Memory subsystem
-│   ├── nvic/                 # Interrupt controller
-│   └── mpu/                  # Memory protection
+│   ├── AI_DEVELOPMENT.md     # AI development guide
+│   ├── PLUGINS.md            # Peripheral development
+│   ├── MACHINES.md           # Machine configuration
+│   └── DEBUGGING.md          # GDB debugging guide
+├── include/
+│   ├── emu/                  # Architecture-agnostic interfaces
+│   │   ├── emu_types.h       # Core type definitions
+│   │   ├── emu_memory.h      # Memory interface
+│   │   └── emu_peripheral.h  # Peripheral VTable
+│   └── arch/armv8m/          # ARMv8-M specific headers
+│       ├── armv8m_types.h    # ARMv8-M types
+│       ├── armv8m_decoder.h  # Decoder interface
+│       ├── armv8m_executor.h # Executor interface
+│       ├── armv8m_nvic.h     # NVIC interface
+│       ├── armv8m_mpu.h      # MPU interface
+│       └── armv8m_emulator.h # Main emulator API
+├── src/
+│   ├── core/memory/          # Shared memory subsystem
+│   └── arch/armv8m/          # ARMv8-M implementation
+│       ├── decoder/          # Instruction decoder
+│       ├── executor/         # Instruction executor
+│       ├── nvic/             # Interrupt controller
+│       └── mpu/              # Memory protection
 ├── lib/cpputest/             # CppUTest testing framework
-├── python/femu/              # Python package (CLI, tools)
-└── python/tests/             # Python tests
+├── python/femu/              # Python package
+│   ├── cli.py                # Main CLI
+│   ├── gdb_server.py         # GDB RSP server
+│   └── peripherals/          # Python peripherals
+└── tests/                    # Integration tests
 ```
 
 ## Development
@@ -190,13 +206,14 @@ See [docs/AI_DEVELOPMENT.md](docs/AI_DEVELOPMENT.md) for the full guide, or read
 
 ## Module Status
 
-| Module   | Status     | Description            |
-| -------- | ---------- | ---------------------- |
-| decoder  | Ready      | Instruction decoder    |
-| executor | Pending    | Instruction executor   |
-| memory   | Pending    | Memory subsystem       |
-| nvic     | Pending    | Interrupt controller   |
-| mpu      | Pending    | Memory protection      |
+| Module   | Status   | Description                 |
+| -------- | -------- | --------------------------- |
+| decoder  | Complete | Thumb-2 instruction decoder |
+| executor | Complete | Instruction execution       |
+| memory   | Complete | Memory subsystem            |
+| nvic     | Complete | Interrupt controller        |
+| mpu      | Complete | Memory protection unit      |
+| emulator | Complete | Main emulator glue          |
 
 ## License
 

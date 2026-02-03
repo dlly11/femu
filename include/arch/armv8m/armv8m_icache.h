@@ -19,7 +19,7 @@ extern "C" {
  * Constants
  *============================================================================*/
 
-#define INSN_CACHE_SIZE 4096  /* Must be power of 2 */
+#define INSN_CACHE_SIZE 4096 /* Must be power of 2 */
 
 /*============================================================================
  * Instruction Cache Structures
@@ -29,19 +29,19 @@ extern "C" {
  * Single entry in the instruction cache.
  */
 typedef struct {
-    uint32_t pc;            /**< PC of cached instruction */
-    uint32_t generation;    /**< Cache generation (for invalidation) */
-    DecodedInsn insn;       /**< Cached decoded instruction */
+  uint32_t pc;         /**< PC of cached instruction */
+  uint32_t generation; /**< Cache generation (for invalidation) */
+  DecodedInsn insn;    /**< Cached decoded instruction */
 } InsnCacheEntry;
 
 /**
  * Instruction cache context.
  */
 typedef struct {
-    InsnCacheEntry entries[INSN_CACHE_SIZE];
-    uint32_t generation;    /**< Current generation (incremented on invalidate) */
-    uint64_t hits;          /**< Cache hit counter */
-    uint64_t misses;        /**< Cache miss counter */
+  InsnCacheEntry entries[INSN_CACHE_SIZE];
+  uint32_t generation; /**< Current generation (incremented on invalidate) */
+  uint64_t hits;       /**< Cache hit counter */
+  uint64_t misses;     /**< Cache miss counter */
 } InsnCache;
 
 /*============================================================================
@@ -71,7 +71,8 @@ const DecodedInsn *armv8m_icache_lookup(InsnCache *cache, uint32_t pc);
  * @param pc        Program counter
  * @param insn      Decoded instruction to cache
  */
-void armv8m_icache_insert(InsnCache *cache, uint32_t pc, const DecodedInsn *insn);
+void armv8m_icache_insert(InsnCache *cache, uint32_t pc,
+                          const DecodedInsn *insn);
 
 /**
  * Invalidate entire cache.
@@ -89,7 +90,8 @@ void armv8m_icache_invalidate(InsnCache *cache);
  * @param start     Start address
  * @param size      Size of range in bytes
  */
-void armv8m_icache_invalidate_range(InsnCache *cache, uint32_t start, uint32_t size);
+void armv8m_icache_invalidate_range(InsnCache *cache, uint32_t start,
+                                    uint32_t size);
 
 /**
  * Get cache statistics.
@@ -98,7 +100,8 @@ void armv8m_icache_invalidate_range(InsnCache *cache, uint32_t start, uint32_t s
  * @param hits      Output: number of hits
  * @param misses    Output: number of misses
  */
-void armv8m_icache_get_stats(const InsnCache *cache, uint64_t *hits, uint64_t *misses);
+void armv8m_icache_get_stats(const InsnCache *cache, uint64_t *hits,
+                             uint64_t *misses);
 
 /**
  * Reset cache statistics.

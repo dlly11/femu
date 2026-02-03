@@ -94,6 +94,7 @@ endif()
 # Find static analysis tools
 find_program(CPPCHECK cppcheck)
 find_program(CLANG_TIDY clang-tidy)
+find_program(RUN_CLANG_TIDY run-clang-tidy)
 
 # Add cppcheck target
 if(CPPCHECK)
@@ -131,7 +132,21 @@ else()
 endif()
 
 # Add clang-tidy target (requires compile_commands.json)
-if(CLANG_TIDY)
+# Note: For best results, configure with CC=clang CXX=clang++ so that
+# compile_commands.json has clang-compatible flags and system paths.
+# We prefer run-clang-tidy as it handles system includes properly.
+if(RUN_CLANG_TIDY)
+    add_custom_target(clang-tidy
+        COMMAND ${RUN_CLANG_TIDY}
+            -p ${CMAKE_BINARY_DIR}
+            -config-file=${CMAKE_SOURCE_DIR}/.clang-tidy
+            ${CMAKE_SOURCE_DIR}/src/core/*/*.c
+            ${CMAKE_SOURCE_DIR}/src/arch/*/*.c
+            ${CMAKE_SOURCE_DIR}/src/arch/*/*/*.c
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Running clang-tidy static analysis"
+    )
+elseif(CLANG_TIDY)
     add_custom_target(clang-tidy
         COMMAND ${CLANG_TIDY}
             -p ${CMAKE_BINARY_DIR}
@@ -153,8 +168,25 @@ add_custom_target(analyze
 if(CPPCHECK)
     add_dependencies(analyze cppcheck)
 endif()
-if(CLANG_TIDY)
+if(RUN_CLANG_TIDY OR CLANG_TIDY)
     add_dependencies(analyze clang-tidy)
+endif()
+
+# =============================================================================
+# Documentation
+# =============================================================================
+
+find_package(Doxygen)
+
+if(DOXYGEN_FOUND)
+    add_custom_target(doxygen
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Doxyfile
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating Doxygen XML documentation"
+    )
+    message(STATUS "Doxygen found - 'doxygen' target available")
+else()
+    message(STATUS "Doxygen not found - documentation target disabled")
 endif()
 
 # =============================================================================
@@ -291,7 +323,9 @@ if(CPPCHECK)
 else()
     message(STATUS "║    cppcheck:     Not found")
 endif()
-if(CLANG_TIDY)
+if(RUN_CLANG_TIDY)
+    message(STATUS "║    clang-tidy:   Found (run-clang-tidy)")
+elseif(CLANG_TIDY)
     message(STATUS "║    clang-tidy:   Found")
 else()
     message(STATUS "║    clang-tidy:   Not found")

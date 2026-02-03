@@ -10,7 +10,5 @@ jobs:
           submodules: recursive
       - uses: DeterminateSystems/nix-installer-action@v14
       - uses: DeterminateSystems/magic-nix-cache-action@v8
-      - name: Configure (for compile_commands.json)
-        run: nix develop --command femu build configure
       - name: Run linters
         run: nix develop --command python scripts/ci/lint.py

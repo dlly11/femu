@@ -22,29 +22,29 @@ extern "C" {
  * NVIC Constants
  *============================================================================*/
 
-#define NVIC_MAX_EXTERNAL_IRQS  240     /**< Max external interrupts */
-#define NVIC_NUM_EXCEPTIONS     16      /**< System exceptions (Reset..SysTick) */
-#define NVIC_PRIORITY_BITS      3       /**< Priority bits implemented (8 levels) */
-#define NVIC_PRIORITY_LEVELS    (1 << NVIC_PRIORITY_BITS)
+#define NVIC_MAX_EXTERNAL_IRQS 240 /**< Max external interrupts */
+#define NVIC_NUM_EXCEPTIONS 16     /**< System exceptions (Reset..SysTick) */
+#define NVIC_PRIORITY_BITS 3       /**< Priority bits implemented (8 levels) */
+#define NVIC_PRIORITY_LEVELS (1 << NVIC_PRIORITY_BITS)
 
 /* NVIC Register Offsets (from 0xE000E100) */
-#define NVIC_ISER_BASE      0x000   /**< Interrupt Set Enable */
-#define NVIC_ICER_BASE      0x080   /**< Interrupt Clear Enable */
-#define NVIC_ISPR_BASE      0x100   /**< Interrupt Set Pending */
-#define NVIC_ICPR_BASE      0x180   /**< Interrupt Clear Pending */
-#define NVIC_IABR_BASE      0x200   /**< Interrupt Active Bit */
-#define NVIC_IPR_BASE       0x300   /**< Interrupt Priority */
+#define NVIC_ISER_BASE 0x000 /**< Interrupt Set Enable */
+#define NVIC_ICER_BASE 0x080 /**< Interrupt Clear Enable */
+#define NVIC_ISPR_BASE 0x100 /**< Interrupt Set Pending */
+#define NVIC_ICPR_BASE 0x180 /**< Interrupt Clear Pending */
+#define NVIC_IABR_BASE 0x200 /**< Interrupt Active Bit */
+#define NVIC_IPR_BASE 0x300  /**< Interrupt Priority */
 
 /* System Handler Registers (from 0xE000ED00) */
-#define SCB_ICSR        0x04    /**< Interrupt Control State */
-#define SCB_VTOR        0x08    /**< Vector Table Offset */
-#define SCB_AIRCR       0x0C    /**< Application Interrupt/Reset Control */
-#define SCB_SCR         0x10    /**< System Control */
-#define SCB_CCR         0x14    /**< Configuration and Control */
-#define SCB_SHPR1       0x18    /**< System Handler Priority 1 */
-#define SCB_SHPR2       0x1C    /**< System Handler Priority 2 */
-#define SCB_SHPR3       0x20    /**< System Handler Priority 3 */
-#define SCB_SHCSR       0x24    /**< System Handler Control and State */
+#define SCB_ICSR 0x04  /**< Interrupt Control State */
+#define SCB_VTOR 0x08  /**< Vector Table Offset */
+#define SCB_AIRCR 0x0C /**< Application Interrupt/Reset Control */
+#define SCB_SCR 0x10   /**< System Control */
+#define SCB_CCR 0x14   /**< Configuration and Control */
+#define SCB_SHPR1 0x18 /**< System Handler Priority 1 */
+#define SCB_SHPR2 0x1C /**< System Handler Priority 2 */
+#define SCB_SHPR3 0x20 /**< System Handler Priority 3 */
+#define SCB_SHCSR 0x24 /**< System Handler Control and State */
 
 /*============================================================================
  * NVIC State
@@ -54,32 +54,32 @@ extern "C" {
  * NVIC context.
  */
 typedef struct {
-    /* Interrupt state (one bit per IRQ) */
-    uint32_t enabled[8];        /**< ISER: enabled interrupts */
-    uint32_t pending[8];        /**< ISPR: pending interrupts */
-    uint32_t active[8];         /**< IABR: active interrupts */
+  /* Interrupt state (one bit per IRQ) */
+  uint32_t enabled[8]; /**< ISER: enabled interrupts */
+  uint32_t pending[8]; /**< ISPR: pending interrupts */
+  uint32_t active[8];  /**< IABR: active interrupts */
 
-    /* Priority (one byte per IRQ, only upper bits used) */
-    uint8_t priority[NVIC_MAX_EXTERNAL_IRQS];
+  /* Priority (one byte per IRQ, only upper bits used) */
+  uint8_t priority[NVIC_MAX_EXTERNAL_IRQS];
 
-    /* System exception priorities */
-    uint8_t shpr[12];           /**< Exception 4-15 priorities */
+  /* System exception priorities */
+  uint8_t shpr[12]; /**< Exception 4-15 priorities */
 
-    /* System Control Block registers */
-    uint32_t vtor;              /**< Vector table offset */
-    uint32_t aircr;             /**< AIRCR */
-    uint32_t scr;               /**< SCR */
-    uint32_t ccr;               /**< CCR */
-    uint32_t shcsr;             /**< SHCSR */
+  /* System Control Block registers */
+  uint32_t vtor;  /**< Vector table offset */
+  uint32_t aircr; /**< AIRCR */
+  uint32_t scr;   /**< SCR */
+  uint32_t ccr;   /**< CCR */
+  uint32_t shcsr; /**< SHCSR */
 
-    /* Derived state */
-    int basepri_max;            /**< Effective BASEPRI mask */
-    int num_irqs;               /**< Number of implemented IRQs */
-    int prigroup;               /**< Priority grouping (from AIRCR) */
+  /* Derived state */
+  int basepri_max; /**< Effective BASEPRI mask */
+  int num_irqs;    /**< Number of implemented IRQs */
+  int prigroup;    /**< Priority grouping (from AIRCR) */
 
-    /* Pending exception tracking */
-    int highest_pending;        /**< Highest priority pending exception (-1 if none) */
-    bool need_rescan;           /**< Flag to rescan pending priorities */
+  /* Pending exception tracking */
+  int highest_pending; /**< Highest priority pending exception (-1 if none) */
+  bool need_rescan;    /**< Flag to rescan pending priorities */
 } NVIC;
 
 /*============================================================================
@@ -187,8 +187,8 @@ void armv8m_nvic_set_exception_priority(NVIC *nvic, int exc, uint8_t priority);
  * @return          Exception number to take, or -1 if none
  */
 int armv8m_nvic_get_pending_exception(NVIC *nvic, uint8_t basepri,
-                                       uint8_t primask, uint8_t faultmask,
-                                       int current_pri);
+                                      uint8_t primask, uint8_t faultmask,
+                                      int current_pri);
 
 /**
  * Acknowledge exception entry (mark as active).
@@ -224,7 +224,8 @@ uint32_t armv8m_nvic_read(NVIC *nvic, uint32_t offset, uint8_t size);
  * @param value     Value to write
  * @param size      Access size
  */
-void armv8m_nvic_write(NVIC *nvic, uint32_t offset, uint32_t value, uint8_t size);
+void armv8m_nvic_write(NVIC *nvic, uint32_t offset, uint32_t value,
+                       uint8_t size);
 
 /**
  * Read System Control Block register.
@@ -244,7 +245,8 @@ uint32_t armv8m_scb_read(NVIC *nvic, uint32_t offset, uint8_t size);
  * @param value     Value to write
  * @param size      Access size
  */
-void armv8m_scb_write(NVIC *nvic, uint32_t offset, uint32_t value, uint8_t size);
+void armv8m_scb_write(NVIC *nvic, uint32_t offset, uint32_t value,
+                      uint8_t size);
 
 #ifdef __cplusplus
 }

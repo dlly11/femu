@@ -9,8 +9,8 @@
 #ifndef ARMV8M_DECODER_VTABLE_H
 #define ARMV8M_DECODER_VTABLE_H
 
-#include "emu/emu_decoder.h"
 #include "arch/armv8m/armv8m_decoder.h"
+#include "emu/emu_decoder.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,8 +26,8 @@ extern "C" {
  * Embeds EmuDecoder as first member for safe casting.
  */
 typedef struct {
-    EmuDecoder base;            /**< Base EmuDecoder (must be first) */
-    DecodedInsn current_insn;   /**< Current decoded instruction storage */
+  EmuDecoder base;          /**< Base EmuDecoder (must be first) */
+  DecodedInsn current_insn; /**< Current decoded instruction storage */
 } ARMv8MDecoder;
 
 /*============================================================================
@@ -55,7 +55,7 @@ void armv8m_decoder_vtable_init(ARMv8MDecoder *dec);
  * @return          ARMv8MDecoder pointer
  */
 static inline ARMv8MDecoder *armv8m_decoder_from_base(EmuDecoder *dec) {
-    return (ARMv8MDecoder *)dec;
+  return (ARMv8MDecoder *)dec;
 }
 
 /**
@@ -64,8 +64,9 @@ static inline ARMv8MDecoder *armv8m_decoder_from_base(EmuDecoder *dec) {
  * @param dec       Const EmuDecoder pointer
  * @return          Const ARMv8MDecoder pointer
  */
-static inline const ARMv8MDecoder *armv8m_decoder_from_base_const(const EmuDecoder *dec) {
-    return (const ARMv8MDecoder *)dec;
+static inline const ARMv8MDecoder *
+armv8m_decoder_from_base_const(const EmuDecoder *dec) {
+  return (const ARMv8MDecoder *)dec;
 }
 
 #ifdef __cplusplus

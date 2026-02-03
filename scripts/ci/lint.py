@@ -15,10 +15,15 @@ os.chdir(PROJECT_ROOT)
 def main() -> None:
     results = []
 
-    # C/C++ static analysis
-    from femu.build import run_analysis
+    # C/C++ static analysis (cppcheck only - doesn't need compile_commands.json)
+    from femu.build import configure, run_analysis
 
-    analysis_passed = run_analysis()
+    build_dir = PROJECT_ROOT / "build"
+    if not build_dir.exists():
+        configure()
+
+    # Run cppcheck only (clang-tidy has issues with Nix system headers)
+    analysis_passed = run_analysis(tool="cppcheck")
     results.append(0 if analysis_passed else 1)
 
     # Python linting

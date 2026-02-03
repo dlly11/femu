@@ -38,6 +38,8 @@ The shell automatically installs the `femu` CLI tool.
 | `valgrind`          | Memory analysis             |
 | `cppcheck`          | C/C++ static analysis       |
 | `clang-tidy`        | Clang static analyzer       |
+| `doxygen`           | C documentation             |
+| `sphinx-build`      | Python/unified documentation|
 
 ### Environment Variables
 
@@ -99,113 +101,110 @@ femu dev validate <module>              # Validate module implementation
 femu dev validate-all                   # Validate all implemented modules
 ```
 
-### Run Commands (Future)
+### Documentation Commands
 
 ```bash
+femu docs build                         # Build documentation locally
+femu docs build --clean                 # Clean build first
+femu docs serve                         # Serve docs at localhost:8000
+```
+
+### Run Commands
+
+```bash
+femu run firmware.elf                   # Run firmware
 femu run firmware.elf --gdb-port 3333   # Run with GDB server
-```
-
-## Building with Different Compilers
-
-The project supports both GCC and Clang:
-
-```bash
-# Via CLI option
-femu build all --compiler=gcc
-femu build all --compiler=clang
-
-# Via environment variables
-CC=clang CXX=clang++ femu build all
-
-# Clean rebuild with different compiler
-femu build clean && femu build all --compiler=clang
-```
-
-## Static Analysis
-
-### Running Analysis
-
-```bash
-# Run all analyzers
-femu build analyze
-
-# Run specific analyzer
-femu build analyze --tool=cppcheck
-femu build analyze --tool=clang-tidy
-
-# Via CMake directly
-cmake --build build --target cppcheck
-cmake --build build --target clang-tidy
-cmake --build build --target analyze
-```
-
-### What Gets Checked
-
-- **cppcheck**: General static analysis, undefined behavior, memory leaks
-- **clang-tidy**: Modern C++ checks, readability, performance, bug-prone patterns
-
-Configuration file: `.clang-tidy`
-
-## Dynamic Analysis (Sanitizers)
-
-Debug builds automatically enable:
-
-- **AddressSanitizer (ASan)**: Buffer overflows, use-after-free, memory leaks
-- **UndefinedBehaviorSanitizer (UBSan)**: Integer overflow, null pointer dereference
-
-```bash
-# Build with sanitizers (default for Debug)
-femu build all
-
-# Build without sanitizers
-femu build all --no-sanitizers
-
-# Release builds never have sanitizers
-femu build all --build-type=Release
+femu run firmware.elf -v                # Verbose output
+femu run firmware.elf --trace executor  # Trace specific module
 ```
 
 ## Architecture Overview
 
 - **Python control plane** - CLI, GDB server, configuration
-- **C/C++ simulation core** - CPU interpreter, memory, NVIC
-- **Multi-language peripherals** - Python (prototyping), C/Rust (performance)
+- **C simulation core** - CPU interpreter, memory, NVIC, MPU
+- **Multi-language peripherals** - Python (prototyping), C/Rust (future)
+
+The codebase uses an **architecture-agnostic design**:
+
+- `include/emu/` - Generic interfaces (emu_types.h, emu_memory.h, etc.)
+- `include/arch/armv8m/` - ARMv8-M specific headers
+- `src/core/` - Shared implementations (memory)
+- `src/arch/armv8m/` - ARMv8-M specific implementations
 
 ## Project Structure
 
 ```text
+femu/
 ├── .clang-tidy               # clang-tidy configuration
 ├── CMakeLists.txt            # Root CMake build
+├── Doxyfile                  # Doxygen configuration
 ├── flake.nix                 # Nix development environment
 ├── docs/
 │   ├── ARCHITECTURE.md       # System design (READ FIRST)
-│   └── AI_DEVELOPMENT.md     # AI workflow guide
-├── include/                  # Public C headers (interfaces)
-│   ├── armv8m_types.h        # Shared types
-│   ├── armv8m_decoder.h      # Decoder interface
-│   ├── armv8m_executor.h     # Executor interface
-│   ├── armv8m_memory.h       # Memory interface
-│   ├── armv8m_nvic.h         # NVIC interface
-│   ├── armv8m_mpu.h          # MPU interface
-│   └── peripheral_interface.h
-├── src/core/                 # C simulation core (implementations)
-│   ├── decoder/
-│   │   ├── README.md         # Implementation guide
-│   │   ├── CMakeLists.txt    # Module build config
-│   │   └── tests/            # CppUTest tests
-│   ├── executor/
-│   ├── memory/
-│   ├── nvic/
-│   └── mpu/
-├── lib/cpputest/             # CppUTest testing framework (submodule)
-├── python/femu/              # Python package (CLI, tools)
-│   ├── __init__.py           # Package init
-│   ├── cli.py                # Main CLI entry point
-│   ├── build.py              # Build system integration
+│   ├── AI_DEVELOPMENT.md     # AI workflow guide
+│   ├── PLUGINS.md            # Peripheral development
+│   ├── MACHINES.md           # Machine configuration
+│   └── DEBUGGING.md          # GDB debugging guide
+├── include/
+│   ├── emu/                  # Architecture-agnostic interfaces
+│   │   ├── emu_types.h       # Core type definitions
+│   │   ├── emu_memory.h      # Memory interface
+│   │   ├── emu_peripheral.h  # Peripheral VTable
+│   │   ├── emu_decoder.h     # Decoder interface
+│   │   ├── emu_executor.h    # Executor interface
+│   │   └── emu_emulator.h    # Emulator interface
+│   └── arch/armv8m/          # ARMv8-M specific headers
+│       ├── armv8m_types.h    # ARMv8-M types
+│       ├── armv8m_decoder.h  # Decoder interface
+│       ├── armv8m_executor.h # Executor interface
+│       ├── armv8m_nvic.h     # NVIC interface
+│       ├── armv8m_mpu.h      # MPU interface
+│       └── armv8m_emulator.h # Main emulator API
+├── src/
+│   ├── emu/                  # Generic logging
+│   │   └── emu_log.c
+│   ├── core/                 # Architecture-agnostic core
+│   │   ├── memory/           # Memory subsystem
+│   │   └── emulator/         # Emulator base
+│   └── arch/armv8m/          # ARMv8-M implementation
+│       ├── decoder/          # Instruction decoder
+│       │   ├── README.md
+│       │   ├── decoder.c
+│       │   ├── decode_thumb16.c
+│       │   ├── decode_thumb32*.c
+│       │   └── tests/
+│       ├── executor/         # Instruction executor
+│       │   ├── README.md
+│       │   ├── executor.c
+│       │   ├── exec_*.c
+│       │   └── tests/
+│       ├── nvic/             # Interrupt controller
+│       │   ├── README.md
+│       │   ├── nvic.c
+│       │   └── tests/
+│       ├── mpu/              # Memory protection
+│       │   ├── README.md
+│       │   ├── mpu.c
+│       │   └── tests/
+│       ├── armv8m_emulator.c # Main emulator
+│       └── armv8m_cpu.c      # CPU state
+├── lib/cpputest/             # CppUTest (submodule)
+├── python/femu/              # Python package
+│   ├── cli.py                # Main CLI
+│   ├── emulator.py           # Python emulator wrapper
+│   ├── gdb_server.py         # GDB RSP server
+│   ├── peripheral.py         # Peripheral base class
+│   ├── arch/                 # Architecture bindings
+│   │   └── armv8m.py
+│   ├── peripherals/          # Built-in peripherals
+│   │   ├── uart.py
+│   │   └── gpio.py
 │   └── dev/                  # Development tools
 │       ├── session.py        # AI session helpers
 │       ├── validate.py       # Module validation
 │       └── test.py           # Test runners
-└── python/tests/             # Python tests
+└── tests/                    # Integration tests
+    └── firmware/             # ARM firmware tests
 ```
 
 ## Module Development
@@ -223,18 +222,22 @@ Each module is implementable in a single AI session without requiring context fr
    ```
 
 2. **Read the required files** (in order):
+
    - `docs/ARCHITECTURE.md` (Parts 5 and 9)
-   - `include/armv8m_<module>.h` (interface definition)
-   - `src/core/<module>/README.md` (implementation guidance)
-   - `include/armv8m_types.h` (shared types)
+   - `include/arch/armv8m/armv8m_<module>.h` (interface)
+   - `src/arch/armv8m/<module>/README.md` (guidance)
+   - `include/arch/armv8m/armv8m_types.h` (shared types)
+   - `include/emu/emu_types.h` (generic types)
 
 3. **Implement the module**:
-   - Create `src/core/<module>/<module>.c`
+
+   - Create/edit `src/arch/armv8m/<module>/<module>.c`
    - Match the header interface exactly
    - Handle all errors with return codes
 
 4. **Write tests**:
-   - Edit `src/core/<module>/tests/test_<module>.cpp`
+
+   - Edit `src/arch/armv8m/<module>/tests/test_<module>.cpp`
    - Test each public function
    - Include edge cases
 
@@ -251,21 +254,16 @@ Each module is implementable in a single AI session without requiring context fr
    femu build analyze
    ```
 
-7. **Validate**:
-
-   ```bash
-   femu dev validate <module>
-   ```
-
 ### What to Read Per Module
 
-| Module   | Header File           | README Location              |
-| -------- | --------------------- | ---------------------------- |
-| decoder  | `armv8m_decoder.h`    | `src/core/decoder/README.md` |
-| executor | `armv8m_executor.h`   | `src/core/executor/README.md`|
-| memory   | `armv8m_memory.h`     | `src/core/memory/README.md`  |
-| nvic     | `armv8m_nvic.h`       | `src/core/nvic/README.md`    |
-| mpu      | `armv8m_mpu.h`        | `src/core/mpu/README.md`     |
+| Module   | Header File                              | README Location                      |
+| -------- | ---------------------------------------- | ------------------------------------ |
+| decoder  | `include/arch/armv8m/armv8m_decoder.h`   | `src/arch/armv8m/decoder/README.md`  |
+| executor | `include/arch/armv8m/armv8m_executor.h`  | `src/arch/armv8m/executor/README.md` |
+| memory   | `include/emu/emu_memory.h`               | `src/core/memory/README.md`          |
+| nvic     | `include/arch/armv8m/armv8m_nvic.h`      | `src/arch/armv8m/nvic/README.md`     |
+| mpu      | `include/arch/armv8m/armv8m_mpu.h`       | `src/arch/armv8m/mpu/README.md`      |
+| emulator | `include/arch/armv8m/armv8m_emulator.h`  | `src/arch/armv8m/README.md`          |
 
 ### What NOT to Read
 
@@ -275,27 +273,28 @@ Each module is implementable in a single AI session without requiring context fr
 
 ## Module Status
 
-| Module   | Status  | Description                                |
-| -------- | ------- | ------------------------------------------ |
-| decoder  | Ready   | Instruction decoder (Thumb to DecodedInsn) |
-| executor | Pending | Instruction executor                       |
-| memory   | Pending | Memory subsystem                           |
-| nvic     | Pending | Interrupt controller                       |
-| mpu      | Pending | Memory protection                          |
+| Module   | Status   | Description                    |
+| -------- | -------- | ------------------------------ |
+| decoder  | Complete | Thumb-2 instruction decoder    |
+| executor | Complete | Instruction execution engine   |
+| memory   | Complete | Memory subsystem               |
+| nvic     | Complete | Interrupt controller           |
+| mpu      | Complete | Memory protection unit         |
+| emulator | Complete | Main emulator glue layer       |
 
 ## Testing
 
 ### C Tests (CppUTest)
 
-Tests use CppUTest framework. Test files are in `src/core/<module>/tests/`.
+Tests use CppUTest framework. Test files are in `src/arch/armv8m/<module>/tests/`.
 
 ```cpp
 #include "CppUTest/TestHarness.h"
 #include "CppUTest/CommandLineTestRunner.h"
 
 extern "C" {
-#include "armv8m_decoder.h"
-#include "armv8m_types.h"
+#include "arch/armv8m/armv8m_decoder.h"
+#include "arch/armv8m/armv8m_types.h"
 }
 
 TEST_GROUP(DecoderTest)
@@ -331,7 +330,7 @@ femu test c
 
 # Specific module tests
 femu test c --filter=decoder
-femu test c --filter=memory
+femu test c --filter=executor
 
 # Verbose output
 femu test c -v
@@ -366,15 +365,6 @@ typedef struct DecodedInsn DecodedInsn;
 6. Test each public function with CppUTest
 7. Sanitizers must report no issues
 
-## File Size Limits
-
-| File Type      | Max Lines             |
-| -------------- | --------------------- |
-| Header         | 150                   |
-| README         | 200                   |
-| Implementation | 600 (split if larger) |
-| Test file      | 400                   |
-
 ## Common Pitfalls
 
 - Thumb instructions are little-endian in memory
@@ -391,10 +381,10 @@ typedef struct DecodedInsn DecodedInsn;
 femu build all
 
 # Run tests under GDB
-gdb ./build/src/core/decoder/test_decoder
+gdb ./build/src/arch/armv8m/decoder/test_decoder
 
 # Run with Valgrind
-valgrind --leak-check=full ./build/src/core/decoder/test_decoder
+valgrind --leak-check=full ./build/src/arch/armv8m/decoder/test_decoder
 
 # Sanitizer output is automatic in Debug builds
 ```

@@ -9,10 +9,10 @@
 #ifndef ARMV8M_EXECUTOR_VTABLE_H
 #define ARMV8M_EXECUTOR_VTABLE_H
 
-#include "emu/emu_executor.h"
-#include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_cpu.h"
 #include "arch/armv8m/armv8m_decoder_vtable.h"
+#include "arch/armv8m/armv8m_executor.h"
+#include "emu/emu_executor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,10 +28,10 @@ extern "C" {
  * Embeds EmuExecutor as first member for safe casting.
  */
 typedef struct {
-    EmuExecutor base;           /**< Base EmuExecutor (must be first) */
-    Executor exec;              /**< ARMv8-M executor */
-    ARMv8MCPU cpu_wrapper;      /**< CPU vtable wrapper */
-    ARMv8MDecoder dec_wrapper;  /**< Decoder vtable wrapper */
+  EmuExecutor base;          /**< Base EmuExecutor (must be first) */
+  Executor exec;             /**< ARMv8-M executor */
+  ARMv8MCPU cpu_wrapper;     /**< CPU vtable wrapper */
+  ARMv8MDecoder dec_wrapper; /**< Decoder vtable wrapper */
 } ARMv8MExecutorWrapper;
 
 /*============================================================================
@@ -58,8 +58,9 @@ void armv8m_executor_vtable_init(ARMv8MExecutorWrapper *wrapper);
  * @param exec      EmuExecutor pointer (must be ARMv8MExecutorWrapper)
  * @return          ARMv8MExecutorWrapper pointer
  */
-static inline ARMv8MExecutorWrapper *armv8m_executor_from_base(EmuExecutor *exec) {
-    return (ARMv8MExecutorWrapper *)exec;
+static inline ARMv8MExecutorWrapper *
+armv8m_executor_from_base(EmuExecutor *exec) {
+  return (ARMv8MExecutorWrapper *)exec;
 }
 
 /**
@@ -68,8 +69,9 @@ static inline ARMv8MExecutorWrapper *armv8m_executor_from_base(EmuExecutor *exec
  * @param exec      Const EmuExecutor pointer
  * @return          Const ARMv8MExecutorWrapper pointer
  */
-static inline const ARMv8MExecutorWrapper *armv8m_executor_from_base_const(const EmuExecutor *exec) {
-    return (const ARMv8MExecutorWrapper *)exec;
+static inline const ARMv8MExecutorWrapper *
+armv8m_executor_from_base_const(const EmuExecutor *exec) {
+  return (const ARMv8MExecutorWrapper *)exec;
 }
 
 #ifdef __cplusplus

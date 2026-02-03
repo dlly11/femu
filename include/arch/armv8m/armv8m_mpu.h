@@ -22,55 +22,56 @@ extern "C" {
  * MPU Constants
  *============================================================================*/
 
-#define MPU_MAX_REGIONS     16      /**< Maximum MPU regions */
+#define MPU_MAX_REGIONS 16 /**< Maximum MPU regions */
 
 /* MPU Register Offsets (from 0xE000ED90) */
-#define MPU_TYPE        0x00    /**< MPU Type Register */
-#define MPU_CTRL        0x04    /**< MPU Control Register */
-#define MPU_RNR         0x08    /**< MPU Region Number Register */
-#define MPU_RBAR        0x0C    /**< MPU Region Base Address Register */
-#define MPU_RLAR        0x10    /**< MPU Region Limit Address Register */
-#define MPU_RBAR_A1     0x14    /**< Alias 1 of RBAR */
-#define MPU_RLAR_A1     0x18    /**< Alias 1 of RLAR */
-#define MPU_RBAR_A2     0x1C    /**< Alias 2 of RBAR */
-#define MPU_RLAR_A2     0x20    /**< Alias 2 of RLAR */
-#define MPU_RBAR_A3     0x24    /**< Alias 3 of RBAR */
-#define MPU_RLAR_A3     0x28    /**< Alias 3 of RLAR */
-#define MPU_MAIR0       0x30    /**< Memory Attribute Indirection Register 0 */
-#define MPU_MAIR1       0x34    /**< Memory Attribute Indirection Register 1 */
+#define MPU_TYPE 0x00    /**< MPU Type Register */
+#define MPU_CTRL 0x04    /**< MPU Control Register */
+#define MPU_RNR 0x08     /**< MPU Region Number Register */
+#define MPU_RBAR 0x0C    /**< MPU Region Base Address Register */
+#define MPU_RLAR 0x10    /**< MPU Region Limit Address Register */
+#define MPU_RBAR_A1 0x14 /**< Alias 1 of RBAR */
+#define MPU_RLAR_A1 0x18 /**< Alias 1 of RLAR */
+#define MPU_RBAR_A2 0x1C /**< Alias 2 of RBAR */
+#define MPU_RLAR_A2 0x20 /**< Alias 2 of RLAR */
+#define MPU_RBAR_A3 0x24 /**< Alias 3 of RBAR */
+#define MPU_RLAR_A3 0x28 /**< Alias 3 of RLAR */
+#define MPU_MAIR0 0x30   /**< Memory Attribute Indirection Register 0 */
+#define MPU_MAIR1 0x34   /**< Memory Attribute Indirection Register 1 */
 
 /* MPU_CTRL bits */
-#define MPU_CTRL_ENABLE     (1U << 0)   /**< MPU enable */
-#define MPU_CTRL_HFNMIENA   (1U << 1)   /**< Enable for HardFault/NMI */
-#define MPU_CTRL_PRIVDEFENA (1U << 2)   /**< Enable privileged default map */
+#define MPU_CTRL_ENABLE (1U << 0)     /**< MPU enable */
+#define MPU_CTRL_HFNMIENA (1U << 1)   /**< Enable for HardFault/NMI */
+#define MPU_CTRL_PRIVDEFENA (1U << 2) /**< Enable privileged default map */
 
 /* MPU_RBAR bits */
-#define MPU_RBAR_XN         (1U << 0)   /**< Execute Never */
-#define MPU_RBAR_AP_SHIFT   1           /**< Access Permission shift */
-#define MPU_RBAR_AP_MASK    0x3         /**< Access Permission mask */
-#define MPU_RBAR_SH_SHIFT   3           /**< Shareability shift */
-#define MPU_RBAR_SH_MASK    0x3         /**< Shareability mask */
-#define MPU_RBAR_BASE_MASK  0xFFFFFFE0  /**< Base address mask (32-byte aligned) */
+#define MPU_RBAR_XN (1U << 0) /**< Execute Never */
+#define MPU_RBAR_AP_SHIFT 1   /**< Access Permission shift */
+#define MPU_RBAR_AP_MASK 0x3  /**< Access Permission mask */
+#define MPU_RBAR_SH_SHIFT 3   /**< Shareability shift */
+#define MPU_RBAR_SH_MASK 0x3  /**< Shareability mask */
+#define MPU_RBAR_BASE_MASK                                                     \
+  0xFFFFFFE0 /**< Base address mask (32-byte aligned) */
 
 /* MPU_RLAR bits */
-#define MPU_RLAR_EN         (1U << 0)   /**< Region enable */
-#define MPU_RLAR_ATTRINDX_SHIFT 1       /**< Attribute index shift */
-#define MPU_RLAR_ATTRINDX_MASK  0x7     /**< Attribute index mask */
-#define MPU_RLAR_LIMIT_MASK 0xFFFFFFE0  /**< Limit address mask */
+#define MPU_RLAR_EN (1U << 0)          /**< Region enable */
+#define MPU_RLAR_ATTRINDX_SHIFT 1      /**< Attribute index shift */
+#define MPU_RLAR_ATTRINDX_MASK 0x7     /**< Attribute index mask */
+#define MPU_RLAR_LIMIT_MASK 0xFFFFFFE0 /**< Limit address mask */
 
 /* Access Permissions */
 typedef enum {
-    MPU_AP_RW_PRIV = 0,     /**< Privileged R/W, Unprivileged none */
-    MPU_AP_RW_ALL = 1,      /**< Privileged R/W, Unprivileged R/W */
-    MPU_AP_RO_PRIV = 2,     /**< Privileged RO, Unprivileged none */
-    MPU_AP_RO_ALL = 3,      /**< Privileged RO, Unprivileged RO */
+  MPU_AP_RW_PRIV = 0, /**< Privileged R/W, Unprivileged none */
+  MPU_AP_RW_ALL = 1,  /**< Privileged R/W, Unprivileged R/W */
+  MPU_AP_RO_PRIV = 2, /**< Privileged RO, Unprivileged none */
+  MPU_AP_RO_ALL = 3,  /**< Privileged RO, Unprivileged RO */
 } MPUAccessPerm;
 
 /* Shareability */
 typedef enum {
-    MPU_SH_NONE = 0,        /**< Non-shareable */
-    MPU_SH_OUTER = 2,       /**< Outer shareable */
-    MPU_SH_INNER = 3,       /**< Inner shareable */
+  MPU_SH_NONE = 0,  /**< Non-shareable */
+  MPU_SH_OUTER = 2, /**< Outer shareable */
+  MPU_SH_INNER = 3, /**< Inner shareable */
 } MPUShareability;
 
 /*============================================================================
@@ -81,8 +82,8 @@ typedef enum {
  * MPU region configuration.
  */
 typedef struct {
-    uint32_t rbar;          /**< Region Base Address Register value */
-    uint32_t rlar;          /**< Region Limit Address Register value */
+  uint32_t rbar; /**< Region Base Address Register value */
+  uint32_t rlar; /**< Region Limit Address Register value */
 } MPURegion;
 
 /*============================================================================
@@ -93,22 +94,22 @@ typedef struct {
  * MPU context.
  */
 typedef struct {
-    /* Regions */
-    MPURegion regions[MPU_MAX_REGIONS];
-    int num_regions;        /**< Number of implemented regions */
+  /* Regions */
+  MPURegion regions[MPU_MAX_REGIONS];
+  int num_regions; /**< Number of implemented regions */
 
-    /* Control */
-    uint32_t ctrl;          /**< MPU_CTRL register */
-    uint32_t rnr;           /**< Currently selected region */
+  /* Control */
+  uint32_t ctrl; /**< MPU_CTRL register */
+  uint32_t rnr;  /**< Currently selected region */
 
-    /* Memory Attributes */
-    uint32_t mair0;         /**< MAIR0 */
-    uint32_t mair1;         /**< MAIR1 */
+  /* Memory Attributes */
+  uint32_t mair0; /**< MAIR0 */
+  uint32_t mair1; /**< MAIR1 */
 
-    /* Derived state */
-    bool enabled;           /**< MPU is enabled */
-    bool privdefena;        /**< Privileged default memory map enabled */
-    bool hfnmiena;          /**< MPU enabled during HardFault/NMI */
+  /* Derived state */
+  bool enabled;    /**< MPU is enabled */
+  bool privdefena; /**< Privileged default memory map enabled */
+  bool hfnmiena;   /**< MPU enabled during HardFault/NMI */
 } MPU;
 
 /*============================================================================
@@ -116,17 +117,17 @@ typedef struct {
  *============================================================================*/
 
 typedef enum {
-    MPU_FAULT_NONE = 0,
-    MPU_FAULT_IACCVIOL,     /**< Instruction access violation */
-    MPU_FAULT_DACCVIOL,     /**< Data access violation */
-    MPU_FAULT_MUNSTKERR,    /**< MemManage on unstacking */
-    MPU_FAULT_MSTKERR,      /**< MemManage on stacking */
+  MPU_FAULT_NONE = 0,
+  MPU_FAULT_IACCVIOL,  /**< Instruction access violation */
+  MPU_FAULT_DACCVIOL,  /**< Data access violation */
+  MPU_FAULT_MUNSTKERR, /**< MemManage on unstacking */
+  MPU_FAULT_MSTKERR,   /**< MemManage on stacking */
 } MPUFaultType;
 
 typedef struct {
-    MPUFaultType type;
-    uint32_t addr;          /**< Faulting address */
-    bool addr_valid;        /**< Address is valid */
+  MPUFaultType type;
+  uint32_t addr;   /**< Faulting address */
+  bool addr_valid; /**< Address is valid */
 } MPUFaultInfo;
 
 /*============================================================================
@@ -158,7 +159,8 @@ void armv8m_mpu_reset(MPU *mpu);
  * @param is_fetch          true for instruction fetch
  * @param privileged        true for privileged access
  * @param in_hardfault_nmi  true if executing in HardFault or NMI handler
- * @param fault             Filled with fault info if access denied (may be NULL)
+ * @param fault             Filled with fault info if access denied (may be
+ * NULL)
  * @return                  true if access permitted, false if denied
  */
 bool armv8m_mpu_check(const MPU *mpu, uint32_t addr, uint32_t size,
@@ -179,11 +181,9 @@ bool armv8m_mpu_check(const MPU *mpu, uint32_t addr, uint32_t size,
  * @param enable    Enable the region
  * @return          ARMV8M_OK or error code
  */
-int armv8m_mpu_configure_region(MPU *mpu, int region,
-                                 uint32_t base, uint32_t limit,
-                                 MPUAccessPerm ap, bool xn,
-                                 MPUShareability sh, int attr_idx,
-                                 bool enable);
+int armv8m_mpu_configure_region(MPU *mpu, int region, uint32_t base,
+                                uint32_t limit, MPUAccessPerm ap, bool xn,
+                                MPUShareability sh, int attr_idx, bool enable);
 
 /**
  * Enable/disable MPU.
@@ -223,7 +223,8 @@ void armv8m_mpu_write(MPU *mpu, uint32_t offset, uint32_t value, uint8_t size);
  * @param privileged Privileged access
  * @return          Memory attribute byte from MAIR
  */
-uint8_t armv8m_mpu_get_attributes(const MPU *mpu, uint32_t addr, bool privileged);
+uint8_t armv8m_mpu_get_attributes(const MPU *mpu, uint32_t addr,
+                                  bool privileged);
 
 #ifdef __cplusplus
 }
