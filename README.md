@@ -34,7 +34,7 @@ You'll need:
 - ARM cross-compiler (`arm-none-eabi-gcc`)
 - CMake 3.16+
 - Python 3.10+ with click, rich, pytest
-- cppcheck and clang-tidy (optional, for static analysis)
+- cppcheck (optional, for static analysis)
 
 Then install the package:
 
@@ -54,7 +54,7 @@ femu build all
 # Run tests
 femu test all
 
-# Run with GDB server (once implemented)
+# Run with GDB server
 femu run firmware.elf --gdb-port 3333
 
 # Connect GDB
@@ -103,24 +103,19 @@ CC=clang CXX=clang++ femu build all
 ## Static Analysis
 
 ```bash
-# Run all analyzers
+# Run cppcheck
 femu build analyze
-
-# Run specific analyzer
-femu build analyze --tool=cppcheck
-femu build analyze --tool=clang-tidy
 ```
 
 ## Project Structure
 
 ```text
 femu/
-├── docs/                     # Documentation
-│   ├── ARCHITECTURE.md       # System design (READ THIS FIRST)
-│   ├── AI_DEVELOPMENT.md     # AI development guide
-│   ├── PLUGINS.md            # Peripheral development
-│   ├── MACHINES.md           # Machine configuration
-│   └── DEBUGGING.md          # GDB debugging guide
+├── docs/                     # Documentation (Sphinx)
+│   ├── user/                 # User guides
+│   ├── developer/            # Developer guides
+│   ├── architecture/         # Architecture documentation
+│   └── api/                  # API reference
 ├── include/
 │   ├── emu/                  # Architecture-agnostic interfaces
 │   │   ├── emu_types.h       # Core type definitions
@@ -163,8 +158,8 @@ The Nix environment provides:
 | `python3`           | Python runtime + CLI           |
 | `pytest`            | Python testing                 |
 | `cppcheck`          | Static analysis                |
-| `clang-tidy`        | Clang static analyzer          |
 | `gdb` + `valgrind`  | Debugging                      |
+| `sphinx`            | Documentation generation       |
 
 ### Environment Variables
 
@@ -202,7 +197,7 @@ femu dev status
 femu dev validate decoder
 ```
 
-See [docs/AI_DEVELOPMENT.md](docs/AI_DEVELOPMENT.md) for the full guide, or read `claude.md` for Claude Code specific instructions.
+See the [Developer Guide](docs/developer/ai-development.md) for the full AI development workflow, or read `claude.md` for Claude Code specific instructions.
 
 ## Module Status
 
