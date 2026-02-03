@@ -48,8 +48,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from .arch.armv8m import ARMv8MConfig, ARMv8MEmulator
+from .arch.armv8m import ARMv8MConfig
+from .arch.base import BaseEmulator, EmulatorState
+from .elf_loader import ElfInfo
 from .emulator import ArchType, create_emulator
 from .peripheral import PeripheralBase, PluginPeripheral
 from .peripheral_registry import PeripheralRegistry
@@ -127,10 +130,10 @@ class MemoryRegion:
     size: int
 
     @classmethod
-    def from_dict(cls, data: dict) -> MemoryRegion:
+    def from_dict(cls, data: dict[str, Any]) -> MemoryRegion:
         """Create from dictionary."""
         return cls(
-            type=data["type"].lower(),
+            type=str(data["type"]).lower(),
             base=_parse_address(data["base"]),
             size=_parse_size(data["size"]),
         )
@@ -144,15 +147,15 @@ class PeripheralDef:
     name: str
     base: int
     size: int
-    config: dict = field(default_factory=dict)
+    config: dict[str, str | int | bool] = field(default_factory=dict)
     plugin: str | None = None  # Explicit plugin path (optional)
 
     @classmethod
-    def from_dict(cls, data: dict) -> PeripheralDef:
+    def from_dict(cls, data: dict[str, Any]) -> PeripheralDef:
         """Create from dictionary."""
         return cls(
-            type=data["type"],
-            name=data["name"],
+            type=str(data["type"]),
+            name=str(data["name"]),
             base=_parse_address(data["base"]),
             size=_parse_size(data["size"]),
             config=data.get("config", {}),
@@ -171,14 +174,14 @@ class CPUConfig:
     num_irqs: int = 32
 
     @classmethod
-    def from_dict(cls, data: dict) -> CPUConfig:
+    def from_dict(cls, data: dict[str, Any]) -> CPUConfig:
         """Create from dictionary."""
         return cls(
-            has_fpu=data.get("has_fpu", False),
-            has_dsp=data.get("has_dsp", False),
-            has_trustzone=data.get("has_trustzone", False),
-            num_mpu_regions=data.get("num_mpu_regions", 8),
-            num_irqs=data.get("num_irqs", 32),
+            has_fpu=bool(data.get("has_fpu", False)),
+            has_dsp=bool(data.get("has_dsp", False)),
+            has_trustzone=bool(data.get("has_trustzone", False)),
+            num_mpu_regions=int(data.get("num_mpu_regions", 8)),
+            num_irqs=int(data.get("num_irqs", 32)),
         )
 
 
@@ -195,7 +198,7 @@ class MachineDef:
     plugin_dirs: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: dict, base_path: Path | None = None) -> MachineDef:
+    def from_dict(cls, data: dict[str, Any], base_path: Path | None = None) -> MachineDef:
         """
         Create from dictionary.
 
@@ -203,28 +206,37 @@ class MachineDef:
             data: Configuration dictionary
             base_path: Base path for resolving relative plugin paths
         """
-        machine_data = data.get("machine", {})
+        machine_data: dict[str, Any] = data.get("machine", {})
+        cpu_data: dict[str, Any] = data.get("cpu", {})
+        memory_list: list[dict[str, Any]] = data.get("memory", [])
+        periph_list: list[dict[str, Any]] = data.get("peripherals", [])
 
         # Parse plugins section
-        plugins = data.get("plugins", [])
-        plugin_dirs = data.get("plugin_dirs", [])
+        plugins_raw: list[str] = data.get("plugins", [])
+        plugin_dirs_raw: list[str] = data.get("plugin_dirs", [])
 
         # Resolve relative paths if base_path provided
+        plugins: list[str]
+        plugin_dirs: list[str]
         if base_path:
             plugins = [
-                str((base_path / p).resolve()) if not Path(p).is_absolute() else p for p in plugins
+                str((base_path / p).resolve()) if not Path(p).is_absolute() else p
+                for p in plugins_raw
             ]
             plugin_dirs = [
                 str((base_path / d).resolve()) if not Path(d).is_absolute() else d
-                for d in plugin_dirs
+                for d in plugin_dirs_raw
             ]
+        else:
+            plugins = plugins_raw
+            plugin_dirs = plugin_dirs_raw
 
         return cls(
-            name=machine_data.get("name", "unnamed"),
-            arch=machine_data.get("arch", "armv8m"),
-            cpu=CPUConfig.from_dict(data.get("cpu", {})),
-            memory=[MemoryRegion.from_dict(m) for m in data.get("memory", [])],
-            peripherals=[PeripheralDef.from_dict(p) for p in data.get("peripherals", [])],
+            name=str(machine_data.get("name", "unnamed")),
+            arch=str(machine_data.get("arch", "armv8m")),
+            cpu=CPUConfig.from_dict(cpu_data),
+            memory=[MemoryRegion.from_dict(m) for m in memory_list],
+            peripherals=[PeripheralDef.from_dict(p) for p in periph_list],
             plugins=plugins,
             plugin_dirs=plugin_dirs,
         )
@@ -291,7 +303,7 @@ class Machine:
             except Exception as e:
                 raise RuntimeError(f"Failed to load plugins from {plugin_dir}: {e}") from e
 
-    def _create_emulator(self) -> ARMv8MEmulator:
+    def _create_emulator(self) -> BaseEmulator:
         """Create emulator with appropriate configuration."""
         cpu = self._def.cpu
 
@@ -358,7 +370,7 @@ class Machine:
         """
         # Import yaml here to make it optional
         try:
-            import yaml
+            import yaml  # type: ignore[import-untyped]
         except ImportError as e:
             raise ImportError(
                 "PyYAML is required to load YAML files. Install it with: pip install pyyaml"
@@ -379,7 +391,7 @@ class Machine:
         return cls(definition)
 
     @classmethod
-    def from_dict(cls, config: dict, base_path: Path | None = None) -> Machine:
+    def from_dict(cls, config: dict[str, Any], base_path: Path | None = None) -> Machine:
         """
         Create machine from dictionary.
 
@@ -419,7 +431,7 @@ class Machine:
         return self._def.arch
 
     @property
-    def emu(self) -> ARMv8MEmulator:
+    def emu(self) -> BaseEmulator:
         """Underlying emulator instance."""
         return self._emu
 
@@ -467,7 +479,7 @@ class Machine:
     # Delegated Emulator Methods
     # =========================================================================
 
-    def load_elf(self, path: str | Path):
+    def load_elf(self, path: str | Path) -> ElfInfo:
         """
         Load ELF firmware file.
 
@@ -528,7 +540,7 @@ class Machine:
         return self._emu.cycles
 
     @property
-    def state(self):
+    def state(self) -> EmulatorState:
         """Emulator state."""
         return self._emu.state
 

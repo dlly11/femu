@@ -30,6 +30,7 @@ Example:
 from __future__ import annotations
 
 import platform
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -75,7 +76,9 @@ class PeripheralRegistry:
     # ==========================================================================
 
     @classmethod
-    def register(cls, name: str, description: str = ""):
+    def register(
+        cls, name: str, description: str = ""
+    ) -> Callable[[type[Peripheral]], type[Peripheral]]:
         """
         Decorator to register a Python peripheral class.
 
@@ -182,7 +185,8 @@ class PeripheralRegistry:
                 )
 
             cls._plugin_types[full_name] = (path_str, type_name)
-            cls._descriptions[full_name] = type_def.get("description", "")
+            # description is always a string in practice
+            cls._descriptions[full_name] = str(type_def.get("description", ""))
             registered.append(full_name)
 
         return registered
@@ -233,7 +237,11 @@ class PeripheralRegistry:
 
     @classmethod
     def create(
-        cls, type_name: str, name: str, config: dict | None = None, **kwargs
+        cls,
+        type_name: str,
+        name: str,
+        config: dict[str, str | int | bool] | None = None,
+        **kwargs: str | int | bool,
     ) -> PeripheralBase:
         """
         Create a peripheral instance by type name.
@@ -259,7 +267,8 @@ class PeripheralRegistry:
         # Check Python types first (most common case)
         if type_name in cls._python_types:
             periph_class = cls._python_types[type_name]
-            return periph_class(name=name, **merged_config)
+            # Config dict is passed as kwargs to peripheral constructor
+            return periph_class(name=name, **merged_config)  # type: ignore[arg-type]
 
         # Check C types
         if type_name in cls._c_types:

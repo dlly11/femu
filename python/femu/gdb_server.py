@@ -27,7 +27,7 @@ from .emulator import EmulatorState
 from .logging import LogCategory, get_logger
 
 if TYPE_CHECKING:
-    from .emulator import Emulator
+    from .arch.base import BaseEmulator
 
 logger = get_logger(LogCategory.GDB)
 
@@ -48,7 +48,7 @@ class GDBServer:
     # R0-R12, SP, LR, PC, xPSR (17 registers)
     NUM_CORE_REGS = 17
 
-    def __init__(self, emulator: Emulator, port: int = 3333, host: str = "127.0.0.1"):
+    def __init__(self, emulator: BaseEmulator, port: int = 3333, host: str = "127.0.0.1"):
         """
         Initialize GDB server.
 
@@ -336,7 +336,7 @@ class GDBServer:
         result += self._to_le_hex(self.emu.pc)
 
         # xPSR (CPSR in GDB parlance)
-        result += self._to_le_hex(self.emu.xpsr)
+        result += self._to_le_hex(self.emu.status)
 
         return result
 
@@ -365,7 +365,7 @@ class GDBServer:
 
             # xPSR
             if offset + 8 <= len(data):
-                self.emu.xpsr = self._from_le_hex(data[offset : offset + 8])
+                self.emu.status = self._from_le_hex(data[offset : offset + 8])
 
             return "OK"
         except Exception as e:
@@ -386,7 +386,7 @@ class GDBServer:
             elif reg_num == 15:
                 val = self.emu.pc
             elif reg_num == 25:  # xPSR/CPSR
-                val = self.emu.xpsr
+                val = self.emu.status
             elif 26 <= reg_num <= 57:  # FPU S0-S31
                 val = self.emu.get_fpu_reg(reg_num - 26)
             elif reg_num == 58:  # FPSCR
@@ -415,7 +415,7 @@ class GDBServer:
             elif reg_num == 15:
                 self.emu.pc = val
             elif reg_num == 25:
-                self.emu.xpsr = val
+                self.emu.status = val
             elif 26 <= reg_num <= 57:
                 self.emu.set_fpu_reg(reg_num - 26, val)
             elif reg_num == 58:

@@ -349,7 +349,7 @@ class TestPeripheralIntegration:
 
         # Load and run firmware
         emu.load_elf(firmware_path)
-        cycles = emu.run(max_cycles=100000)
+        emu.run(max_cycles=100000)
 
         # Check firmware completed successfully
         assert emu.state == EmulatorState.BREAKPOINT, f"Unexpected state: {emu.state}"
@@ -461,7 +461,7 @@ class TestPeripheralIntegration:
 
         # Load and run firmware
         emu.load_elf(firmware_path)
-        cycles = emu.run(max_cycles=10000)
+        emu.run(max_cycles=10000)
 
         # Check firmware completed
         assert emu.state == EmulatorState.BREAKPOINT, f"Unexpected state: {emu.state}"

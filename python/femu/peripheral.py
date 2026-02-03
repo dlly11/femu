@@ -33,9 +33,10 @@ import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, cast
 
 from . import _emulator_cffi as cffi
+from ._cffi_types import CData, PeripheralStruct
 from .logging import LogCategory, get_logger
 
 if TYPE_CHECKING:
@@ -54,7 +55,7 @@ class PeripheralBase(ABC):
 
     @property
     @abstractmethod
-    def c_struct(self) -> Any:
+    def c_struct(self) -> PeripheralStruct:
         """Return the underlying EmuPeripheral C struct pointer."""
         ...
 
@@ -119,7 +120,7 @@ class Peripheral(PeripheralBase):
     # Class-level storage to prevent garbage collection of instances
     # that have been passed to C code
     _instances: dict[int, Peripheral] = {}
-    _handles: dict[int, Any] = {}
+    _handles: dict[int, CData] = {}
 
     def __init__(self, name: str, peripheral_type: str):
         """
@@ -136,8 +137,8 @@ class Peripheral(PeripheralBase):
         self._emu: ARMv8MEmulator | None = None
 
         # C IRQ callback (set by emulator when peripheral is added)
-        self._c_irq_callback: Any = None
-        self._c_emu_ctx: Any = None
+        self._c_irq_callback: CData | None = None
+        self._c_emu_ctx: CData | None = None
 
         # Create persistent handle for C callbacks
         self._handle = self._ffi.new_handle(self)
@@ -163,15 +164,15 @@ class Peripheral(PeripheralBase):
         # Don't set destroy - prevent C from freeing Python object
         self._c_periph.vtable.destroy = self._ffi.NULL
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Clean up instance tracking."""
         Peripheral._instances.pop(id(self), None)
         Peripheral._handles.pop(id(self), None)
 
     @property
-    def c_struct(self) -> Any:
+    def c_struct(self) -> PeripheralStruct:
         """Return the underlying EmuPeripheral C struct pointer."""
-        return self._c_periph
+        return cast(PeripheralStruct, self._c_periph)
 
     @property
     def name(self) -> str:
@@ -246,7 +247,8 @@ class Peripheral(PeripheralBase):
         """
         # Use C callback if available (set by emulator when peripheral is added)
         if self._c_irq_callback is not None and self._c_emu_ctx is not None:
-            self._c_irq_callback(self._c_emu_ctx, irq, 1)
+            # CFFI function pointer is callable at runtime
+            self._c_irq_callback(self._c_emu_ctx, irq, 1)  # type: ignore[operator]
         elif self._irq_callback:
             self._irq_callback(irq, 1)
 
@@ -259,7 +261,8 @@ class Peripheral(PeripheralBase):
         """
         # Use C callback if available
         if self._c_irq_callback is not None and self._c_emu_ctx is not None:
-            self._c_irq_callback(self._c_emu_ctx, irq, 0)
+            # CFFI function pointer is callable at runtime
+            self._c_irq_callback(self._c_emu_ctx, irq, 0)  # type: ignore[operator]
         elif self._irq_callback:
             self._irq_callback(irq, 0)
 
@@ -292,11 +295,11 @@ class Peripheral(PeripheralBase):
 _ffi = cffi.get_ffi()
 
 
-@_ffi.callback("uint32_t(void*, uint32_t, uint8_t)")
-def _py_periph_read(ctx, offset, size):
+@_ffi.callback("uint32_t(void*, uint32_t, uint8_t)")  # type: ignore[misc]
+def _py_periph_read(ctx: CData, offset: int, size: int) -> int:
     """CFFI callback that routes to Python peripheral read()."""
     try:
-        periph = _ffi.from_handle(ctx)
+        periph: Peripheral = _ffi.from_handle(ctx)
         result = periph.read(offset, size)
         return result & 0xFFFFFFFF
     except Exception as e:
@@ -304,41 +307,41 @@ def _py_periph_read(ctx, offset, size):
         return 0
 
 
-@_ffi.callback("void(void*, uint32_t, uint32_t, uint8_t)")
-def _py_periph_write(ctx, offset, value, size):
+@_ffi.callback("void(void*, uint32_t, uint32_t, uint8_t)")  # type: ignore[misc]
+def _py_periph_write(ctx: CData, offset: int, value: int, size: int) -> None:
     """CFFI callback that routes to Python peripheral write()."""
     try:
-        periph = _ffi.from_handle(ctx)
+        periph: Peripheral = _ffi.from_handle(ctx)
         periph.write(offset, value, size)
     except Exception as e:
         logger.error("Peripheral write error at offset 0x%x: %s", offset, e)
 
 
-@_ffi.callback("void(void*)")
-def _py_periph_reset(ctx):
+@_ffi.callback("void(void*)")  # type: ignore[misc]
+def _py_periph_reset(ctx: CData) -> None:
     """CFFI callback that routes to Python peripheral reset()."""
     try:
-        periph = _ffi.from_handle(ctx)
+        periph: Peripheral = _ffi.from_handle(ctx)
         periph.reset()
     except Exception as e:
         logger.error("Peripheral reset error: %s", e)
 
 
-@_ffi.callback("void(void*, uint64_t)")
-def _py_periph_tick(ctx, cycles):
+@_ffi.callback("void(void*, uint64_t)")  # type: ignore[misc]
+def _py_periph_tick(ctx: CData, cycles: int) -> None:
     """CFFI callback that routes to Python peripheral tick()."""
     try:
-        periph = _ffi.from_handle(ctx)
+        periph: Peripheral = _ffi.from_handle(ctx)
         periph.tick(cycles)
     except Exception as e:
         logger.error("Peripheral tick error: %s", e)
 
 
-@_ffi.callback("void(void*, EmuPeriphIRQCallback, void*)")
-def _py_periph_set_irq_callback(ctx, callback, emu_ctx):
+@_ffi.callback("void(void*, EmuPeriphIRQCallback, void*)")  # type: ignore[misc]
+def _py_periph_set_irq_callback(ctx: CData, callback: CData, emu_ctx: CData) -> None:
     """CFFI callback that receives the IRQ callback from the emulator."""
     try:
-        periph = _ffi.from_handle(ctx)
+        periph: Peripheral = _ffi.from_handle(ctx)
         # Store the callback and context for later use
         periph._c_irq_callback = callback
         periph._c_emu_ctx = emu_ctx
@@ -365,8 +368,12 @@ class CPeripheral(PeripheralBase):
     """
 
     def __init__(
-        self, c_periph_ptr: Any, name: str, peripheral_type: str, keep_alive: list | None = None
-    ):
+        self,
+        c_periph_ptr: CData,
+        name: str,
+        peripheral_type: str,
+        keep_alive: list[CData] | None = None,
+    ) -> None:
         """
         Initialize C peripheral wrapper.
 
@@ -379,10 +386,12 @@ class CPeripheral(PeripheralBase):
         self._c_periph = c_periph_ptr
         self._name = name
         self._peripheral_type = peripheral_type
-        self._keep_alive = keep_alive or []
+        self._keep_alive: list[CData] = keep_alive or []
 
     @classmethod
-    def from_factory(cls, factory_name: str, name: str, config: dict | None = None) -> CPeripheral:
+    def from_factory(
+        cls, factory_name: str, name: str, config: dict[str, str | int | bool] | None = None
+    ) -> CPeripheral:
         """
         Create peripheral by calling a C factory function.
 
@@ -423,9 +432,9 @@ class CPeripheral(PeripheralBase):
         return cls(c_periph, name, factory_name, keep_alive=[name_buf, config_buf])
 
     @property
-    def c_struct(self) -> Any:
+    def c_struct(self) -> PeripheralStruct:
         """Return the underlying EmuPeripheral C struct pointer."""
-        return self._c_periph
+        return cast(PeripheralStruct, self._c_periph)
 
     @property
     def name(self) -> str:
@@ -466,17 +475,19 @@ class PluginPeripheral(PeripheralBase):
     """
 
     # Cache of loaded plugins: path -> (lib, types_dict, info)
-    _loaded_plugins: dict[str, tuple[Any, dict[str, Any], dict]] = {}
+    _loaded_plugins: dict[
+        str, tuple[CData, dict[str, dict[str, CData | str | None]], dict[str, str | int]]
+    ] = {}
 
     def __init__(
         self,
-        c_periph_ptr: Any,
-        destroy_fn: Any,
+        c_periph_ptr: CData,
+        destroy_fn: CData | None,
         name: str,
         peripheral_type: str,
         plugin_path: str,
-        keep_alive: list | None = None,
-    ):
+        keep_alive: list[CData] | None = None,
+    ) -> None:
         """
         Initialize plugin peripheral.
 
@@ -493,10 +504,10 @@ class PluginPeripheral(PeripheralBase):
         self._name = name
         self._peripheral_type = peripheral_type
         self._plugin_path = plugin_path
-        self._keep_alive = keep_alive or []
+        self._keep_alive: list[CData] = keep_alive or []
         self._destroyed = False
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Call plugin's destroy function if provided."""
         if self._destroyed:
             return
@@ -509,13 +520,14 @@ class PluginPeripheral(PeripheralBase):
             and self._c_periph != ffi.NULL
         ):
             try:
-                self._destroy_fn(self._c_periph)
+                # CFFI function pointer is callable at runtime
+                self._destroy_fn(self._c_periph)  # type: ignore[operator]
             except Exception:
                 pass  # Ignore errors during cleanup
             self._destroyed = True
 
     @classmethod
-    def load_plugin(cls, plugin_path: str | Path) -> dict[str, Any]:
+    def load_plugin(cls, plugin_path: str | Path) -> dict[str, dict[str, CData | str | None]]:
         """
         Load a plugin and return its peripheral types.
 
@@ -598,7 +610,11 @@ class PluginPeripheral(PeripheralBase):
 
     @classmethod
     def from_plugin(
-        cls, plugin_path: str | Path, type_name: str, name: str, config: dict | None = None
+        cls,
+        plugin_path: str | Path,
+        type_name: str,
+        name: str,
+        config: dict[str, str | int | bool] | None = None,
     ) -> PluginPeripheral:
         """
         Create a peripheral from a plugin.
@@ -629,14 +645,18 @@ class PluginPeripheral(PeripheralBase):
         name_buf = ffi.new("char[]", name.encode("utf-8"))
         config_buf = ffi.new("char[]", json.dumps(config or {}).encode("utf-8"))
 
-        c_periph = type_def["create"](name_buf, config_buf)
+        # CFFI function pointer is callable at runtime
+        create_fn = type_def["create"]
+        c_periph = create_fn(name_buf, config_buf)  # type: ignore[misc, operator]
 
         if c_periph == ffi.NULL:
             raise RuntimeError(f"Plugin factory for '{type_name}' returned NULL")
 
+        # destroy is CData | None (not str)
+        destroy_fn = cast("CData | None", type_def["destroy"])
         return cls(
             c_periph,
-            type_def["destroy"],
+            destroy_fn,
             name,
             type_name,
             path_str,
@@ -644,7 +664,7 @@ class PluginPeripheral(PeripheralBase):
         )
 
     @classmethod
-    def get_plugin_info(cls, plugin_path: str | Path) -> dict:
+    def get_plugin_info(cls, plugin_path: str | Path) -> dict[str, str | int | list[str]]:
         """
         Get metadata about a loaded plugin.
 
@@ -661,7 +681,7 @@ class PluginPeripheral(PeripheralBase):
 
         _, types, info = cls._loaded_plugins[path_str]
 
-        result = dict(info)
+        result: dict[str, str | int | list[str]] = dict(info)
         result["peripheral_types"] = list(types.keys())
         result["path"] = path_str
         return result
@@ -682,9 +702,9 @@ class PluginPeripheral(PeripheralBase):
         cls._loaded_plugins.pop(path_str, None)
 
     @property
-    def c_struct(self) -> Any:
+    def c_struct(self) -> PeripheralStruct:
         """Return the underlying EmuPeripheral C struct pointer."""
-        return self._c_periph
+        return cast(PeripheralStruct, self._c_periph)
 
     @property
     def name(self) -> str:
@@ -707,8 +727,10 @@ class PluginPeripheral(PeripheralBase):
 # =============================================================================
 
 __all__ = [
-    "PeripheralBase",
-    "Peripheral",
+    "CData",
     "CPeripheral",
+    "Peripheral",
+    "PeripheralBase",
+    "PeripheralStruct",
     "PluginPeripheral",
 ]

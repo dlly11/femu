@@ -101,7 +101,7 @@ class ElfInfo:
 
         lowest = min(self.segments, key=lambda s: s.vaddr)
         if len(lowest.data) >= 4:
-            return struct.unpack("<I", lowest.data[0:4])[0]
+            return int(struct.unpack("<I", lowest.data[0:4])[0])
         return None
 
     @property
@@ -116,7 +116,7 @@ class ElfInfo:
 
         lowest = min(self.segments, key=lambda s: s.vaddr)
         if len(lowest.data) >= 8:
-            return struct.unpack("<I", lowest.data[4:8])[0]
+            return int(struct.unpack("<I", lowest.data[4:8])[0])
         return None
 
     @property
@@ -320,7 +320,7 @@ def load_elf(path: str | Path) -> ElfInfo:
     )
 
 
-def suggest_memory_config(elf: ElfInfo) -> dict:
+def suggest_memory_config(elf: ElfInfo) -> dict[str, int]:
     """
     Suggest memory configuration based on ELF segments.
 

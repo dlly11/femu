@@ -49,14 +49,14 @@ TRACE = 5
 logging.addLevelName(TRACE, "TRACE")
 
 
-def _trace(self, message, *args, **kwargs):
+def _trace(self: logging.Logger, message: str, *args: object) -> None:
     """Log at TRACE level."""
     if self.isEnabledFor(TRACE):
-        self._log(TRACE, message, args, **kwargs)
+        self._log(TRACE, message, args)
 
 
 # Add trace method to Logger class
-logging.Logger.trace = _trace
+logging.Logger.trace = _trace  # type: ignore[attr-defined]
 
 
 # =============================================================================
@@ -75,7 +75,7 @@ class LogLevel(IntEnum):
 
 
 # Map C log levels to Python logging levels
-_LEVEL_MAP = {
+_LEVEL_MAP: dict[int, int] = {
     LogLevel.TRACE: TRACE,
     LogLevel.DEBUG: logging.DEBUG,
     LogLevel.INFO: logging.INFO,
@@ -103,7 +103,7 @@ class LogCategory(IntEnum):
 
 
 # Map C category indices to logger names
-_CATEGORY_NAMES = {
+_CATEGORY_NAMES: dict[int, str] = {
     LogCategory.DECODER: "decoder",
     LogCategory.EXECUTOR: "executor",
     LogCategory.MEMORY: "memory",
@@ -155,8 +155,16 @@ _callback_handle = None
 _log_file_handle: TextIO | None = None
 
 
-@_ffi.callback("void(void*, int, int, const char*, int, const char*, const char*)")
-def _c_log_callback(ctx, level, category, file_ptr, line, func_ptr, msg_ptr):
+@_ffi.callback("void(void*, int, int, const char*, int, const char*, const char*)")  # type: ignore[misc]
+def _c_log_callback(
+    ctx: object,
+    level: int,
+    category: int,
+    file_ptr: object,
+    line: int,
+    func_ptr: object,
+    msg_ptr: object,
+) -> None:
     """
     C log callback that routes messages to Python logging.
 
@@ -271,6 +279,7 @@ def configure_logging(
     root_logger.handlers.clear()
 
     # Create formatter
+    formatter: logging.Formatter
     if json_format:
         formatter = JSONFormatter()
     else:

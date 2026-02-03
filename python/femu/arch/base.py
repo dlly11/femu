@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..elf_loader import ElfInfo
+    from ..peripheral import PeripheralBase
 
 
 class ArchType(IntEnum):
@@ -244,6 +245,50 @@ class BaseEmulator(ABC):
         pass
 
     # =========================================================================
+    # Peripherals
+    # =========================================================================
+
+    @abstractmethod
+    def add_peripheral(
+        self, peripheral: PeripheralBase, base: int, size: int
+    ) -> None:
+        """
+        Add a peripheral to the emulator.
+
+        Args:
+            peripheral: Peripheral instance to add
+            base: Base address for MMIO region
+            size: Size of MMIO region in bytes
+        """
+        pass
+
+    # =========================================================================
+    # Common Register Aliases
+    # =========================================================================
+
+    @property
+    @abstractmethod
+    def sp(self) -> int:
+        """Stack pointer."""
+        pass
+
+    @sp.setter
+    @abstractmethod
+    def sp(self, value: int) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def lr(self) -> int:
+        """Link register (return address)."""
+        pass
+
+    @lr.setter
+    @abstractmethod
+    def lr(self, value: int) -> None:
+        pass
+
+    # =========================================================================
     # Breakpoints
     # =========================================================================
 
@@ -268,6 +313,44 @@ class BaseEmulator(ABC):
         pass
 
     # =========================================================================
+    # Watchpoints
+    # =========================================================================
+
+    @abstractmethod
+    def add_watchpoint(self, addr: int, size: int, wp_type: int) -> None:
+        """
+        Add a watchpoint at address.
+
+        Args:
+            addr: Memory address to watch
+            size: Size of memory region in bytes
+            wp_type: Watchpoint type (2=write, 3=read, 4=access)
+        """
+        pass
+
+    @abstractmethod
+    def remove_watchpoint(self, addr: int, size: int, wp_type: int) -> None:
+        """Remove a watchpoint."""
+        pass
+
+    @abstractmethod
+    def clear_watchpoints(self) -> None:
+        """Remove all watchpoints."""
+        pass
+
+    @property
+    @abstractmethod
+    def watchpoint_hit_addr(self) -> int:
+        """Address that triggered the last watchpoint hit."""
+        pass
+
+    @property
+    @abstractmethod
+    def watchpoint_hit_type(self) -> int:
+        """Type of the last watchpoint hit."""
+        pass
+
+    # =========================================================================
     # Special/Architecture-Specific Registers
     # =========================================================================
 
@@ -280,6 +363,44 @@ class BaseEmulator(ABC):
     def set_special_reg(self, reg_id: int, value: int) -> None:
         """Set architecture-specific special register."""
         pass
+
+    # =========================================================================
+    # FPU Registers (Optional - default raises NotImplementedError)
+    # =========================================================================
+
+    def get_fpu_reg(self, reg: int) -> int:
+        """
+        Get FPU register value.
+
+        Override in architectures with FPU support.
+        """
+        raise NotImplementedError(f"{self.arch_name} does not support FPU registers")
+
+    def set_fpu_reg(self, reg: int, value: int) -> None:
+        """
+        Set FPU register value.
+
+        Override in architectures with FPU support.
+        """
+        raise NotImplementedError(f"{self.arch_name} does not support FPU registers")
+
+    @property
+    def fpscr(self) -> int:
+        """
+        FPU status/control register.
+
+        Override in architectures with FPU support.
+        """
+        raise NotImplementedError(f"{self.arch_name} does not support FPU registers")
+
+    @fpscr.setter
+    def fpscr(self, value: int) -> None:
+        raise NotImplementedError(f"{self.arch_name} does not support FPU registers")
+
+    @property
+    def has_fpu(self) -> bool:
+        """Whether this emulator instance has FPU support."""
+        return False
 
     # =========================================================================
     # Utilities

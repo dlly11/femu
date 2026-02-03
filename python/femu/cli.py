@@ -47,9 +47,18 @@ def build_configure(
     build_type: str, clean: bool, compiler: str | None, no_sanitizers: bool
 ) -> None:
     """Configure the CMake build."""
-    from .build import configure
+    from typing import cast
 
-    configure(build_type=build_type, clean=clean, compiler=compiler, sanitizers=not no_sanitizers)
+    from .build import Compiler, configure
+
+    # Cast compiler to Literal type (click.Choice validates the value)
+    typed_compiler = cast(Compiler | None, compiler)
+    configure(
+        build_type=build_type,
+        clean=clean,
+        compiler=typed_compiler,
+        sanitizers=not no_sanitizers,
+    )
 
 
 @build.command("compile")
@@ -71,9 +80,13 @@ def build_compile(jobs: int | None, target: str | None) -> None:
 @click.option("--no-sanitizers", is_flag=True, help="Disable sanitizers in Debug builds.")
 def build_all(build_type: str, jobs: int | None, compiler: str | None, no_sanitizers: bool) -> None:
     """Configure and compile the project."""
-    from .build import compile_project, configure
+    from typing import cast
 
-    configure(build_type=build_type, compiler=compiler, sanitizers=not no_sanitizers)
+    from .build import Compiler, compile_project, configure
+
+    # Cast compiler to Literal type (click.Choice validates the value)
+    typed_compiler = cast(Compiler | None, compiler)
+    configure(build_type=build_type, compiler=typed_compiler, sanitizers=not no_sanitizers)
     compile_project(jobs=jobs)
 
 
@@ -256,7 +269,7 @@ def run_emulator(
     )
 
     try:
-        from .emulator import Emulator
+        from .emulator import create_emulator
         from .gdb_server import GDBServer
     except OSError as e:
         console.print(f"[red]Error loading emulator library:[/red] {e}")
@@ -264,7 +277,7 @@ def run_emulator(
         raise SystemExit(1) from None
 
     try:
-        emu = Emulator()
+        emu = create_emulator()
         elf = emu.load_elf(firmware)
 
         if verbose:

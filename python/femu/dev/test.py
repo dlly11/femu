@@ -4,6 +4,7 @@ Test runner for FEMU.
 Runs C tests (CppUTest) and Python tests (pytest).
 """
 
+import os
 import subprocess
 import sys
 
@@ -69,7 +70,7 @@ def run_python_tests(verbose: bool = False, expression: str | None = None) -> bo
         result = subprocess.run(
             cmd,
             cwd=PROJECT_ROOT,
-            env={**subprocess.os.environ, **env},
+            env={**os.environ, **env},
         )
         success = result.returncode == 0
     except Exception as e:

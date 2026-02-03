@@ -110,7 +110,7 @@ class ARMv8MEmulator(BaseEmulator):
         self._elf_info: ElfInfo | None = None
         self._peripherals: list[PeripheralBase] = []
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Clean up emulator resources."""
         if hasattr(self, "_cleanup"):
             self._cleanup()
@@ -194,7 +194,7 @@ class ARMv8MEmulator(BaseEmulator):
     def get_reg(self, reg: int) -> int:
         if not 0 <= reg < 16:
             raise ValueError(f"Invalid register number: {reg}")
-        return self._lib.armv8m_emu_get_reg(self._emu_ptr, reg)
+        return int(self._lib.armv8m_emu_get_reg(self._emu_ptr, reg))
 
     def set_reg(self, reg: int, value: int) -> None:
         if not 0 <= reg < 16:
@@ -203,7 +203,7 @@ class ARMv8MEmulator(BaseEmulator):
 
     @property
     def pc(self) -> int:
-        return self._lib.armv8m_emu_get_pc(self._emu_ptr)
+        return int(self._lib.armv8m_emu_get_pc(self._emu_ptr))
 
     @pc.setter
     def pc(self, value: int) -> None:
@@ -230,7 +230,7 @@ class ARMv8MEmulator(BaseEmulator):
     @property
     def xpsr(self) -> int:
         """Program status register (ARM-specific alias for status)."""
-        return self._lib.armv8m_emu_get_xpsr(self._emu_ptr)
+        return int(self._lib.armv8m_emu_get_xpsr(self._emu_ptr))
 
     @xpsr.setter
     def xpsr(self, value: int) -> None:
@@ -247,7 +247,7 @@ class ARMv8MEmulator(BaseEmulator):
 
     @property
     def cycles(self) -> int:
-        return self._lib.armv8m_emu_get_cycles(self._emu_ptr)
+        return int(self._lib.armv8m_emu_get_cycles(self._emu_ptr))
 
     @property
     def state(self) -> EmulatorState:
@@ -255,7 +255,7 @@ class ARMv8MEmulator(BaseEmulator):
 
     @property
     def last_error(self) -> int:
-        return self._lib.armv8m_emu_get_last_error(self._emu_ptr)
+        return int(self._lib.armv8m_emu_get_last_error(self._emu_ptr))
 
     # =========================================================================
     # Memory Access
@@ -271,7 +271,7 @@ class ARMv8MEmulator(BaseEmulator):
         if fault[0]:
             raise MemoryFaultError(addr, "Memory read fault")
 
-        return value
+        return int(value)
 
     def write_mem(self, addr: int, value: int, size: int = 4) -> None:
         if size not in (1, 2, 4):
@@ -289,7 +289,7 @@ class ARMv8MEmulator(BaseEmulator):
         return bytes(buf[0:read])
 
     def write_bytes(self, addr: int, data: bytes) -> int:
-        return self._lib.armv8m_emu_write_block(self._emu_ptr, addr, data, len(data))
+        return int(self._lib.armv8m_emu_write_block(self._emu_ptr, addr, data, len(data)))
 
     # =========================================================================
     # Breakpoints
@@ -304,7 +304,7 @@ class ARMv8MEmulator(BaseEmulator):
         self._lib.armv8m_emu_remove_breakpoint(self._emu_ptr, addr)
 
     def has_breakpoint(self, addr: int) -> bool:
-        return self._lib.armv8m_emu_has_breakpoint(self._emu_ptr, addr)
+        return bool(self._lib.armv8m_emu_has_breakpoint(self._emu_ptr, addr))
 
     def clear_breakpoints(self) -> None:
         self._lib.armv8m_emu_clear_breakpoints(self._emu_ptr)
@@ -349,19 +349,19 @@ class ARMv8MEmulator(BaseEmulator):
     @property
     def watchpoint_hit_addr(self) -> int:
         """Address that triggered the last watchpoint hit."""
-        return self._lib.armv8m_emu_get_watchpoint_hit_addr(self._emu_ptr)
+        return int(self._lib.armv8m_emu_get_watchpoint_hit_addr(self._emu_ptr))
 
     @property
     def watchpoint_hit_type(self) -> int:
         """Type of access that triggered the last watchpoint (READ or WRITE)."""
-        return self._lib.armv8m_emu_get_watchpoint_hit_type(self._emu_ptr)
+        return int(self._lib.armv8m_emu_get_watchpoint_hit_type(self._emu_ptr))
 
     # =========================================================================
     # Special Registers
     # =========================================================================
 
     def get_special_reg(self, reg_id: int) -> int:
-        return self._lib.armv8m_emu_get_special_reg(self._emu_ptr, reg_id)
+        return int(self._lib.armv8m_emu_get_special_reg(self._emu_ptr, reg_id))
 
     def set_special_reg(self, reg_id: int, value: int) -> None:
         self._lib.armv8m_emu_set_special_reg(self._emu_ptr, reg_id, value & 0xFFFFFFFF)
@@ -370,7 +370,7 @@ class ARMv8MEmulator(BaseEmulator):
         """Get FPU register (S0-S31) as uint32."""
         if not 0 <= reg < 32:
             raise ValueError(f"Invalid FPU register: {reg}")
-        return self._lib.armv8m_emu_get_fpu_reg(self._emu_ptr, reg)
+        return int(self._lib.armv8m_emu_get_fpu_reg(self._emu_ptr, reg))
 
     def set_fpu_reg(self, reg: int, value: int) -> None:
         """Set FPU register (S0-S31)."""
@@ -381,7 +381,7 @@ class ARMv8MEmulator(BaseEmulator):
     @property
     def fpscr(self) -> int:
         """FPU status/control register."""
-        return self._lib.armv8m_emu_get_fpscr(self._emu_ptr)
+        return int(self._lib.armv8m_emu_get_fpscr(self._emu_ptr))
 
     @fpscr.setter
     def fpscr(self, value: int) -> None:

@@ -5,6 +5,8 @@ Helps AI assistants understand which files to read for each module
 and provides context for development sessions.
 """
 
+from typing import TypedDict
+
 from rich.console import Console
 from rich.table import Table
 
@@ -12,8 +14,32 @@ from .. import PROJECT_ROOT
 
 console = Console()
 
+
+class ModuleInfo(TypedDict):
+    """Type definition for module information."""
+
+    description: str
+    header: str
+    readme: str
+    impl_dir: str
+    deps: list[str]
+    impl_files: list[str]
+    test_files: list[str]
+
+
+class PeripheralInfo(TypedDict, total=False):
+    """Type definition for peripheral information."""
+
+    description: str
+    languages: list[str]
+    c_dir: str
+    python_file: str
+    rust_file: str
+    deps: list[str]
+
+
 # Module definitions
-MODULES: dict[str, dict] = {
+MODULES: dict[str, ModuleInfo] = {
     "decoder": {
         "description": "Instruction decoder - Thumb to DecodedInsn",
         "header": "include/armv8m_decoder.h",
@@ -72,7 +98,7 @@ MODULES: dict[str, dict] = {
 }
 
 # Peripheral modules
-PERIPHERALS: dict[str, dict] = {
+PERIPHERALS: dict[str, PeripheralInfo] = {
     "uart": {
         "description": "UART peripheral (STM32-style)",
         "languages": ["c", "python"],
@@ -122,7 +148,7 @@ def show_context(module: str) -> None:
         console.print(f"Available peripherals: {', '.join(PERIPHERALS.keys())}")
 
 
-def _show_module_context(name: str, module: dict) -> None:
+def _show_module_context(name: str, module: ModuleInfo) -> None:
     """Show context for a core module."""
     console.print()
     console.rule(f"[bold blue]AI CONTEXT FOR: {name}[/bold blue]")
@@ -166,7 +192,7 @@ def _show_module_context(name: str, module: dict) -> None:
     console.print()
 
 
-def _show_peripheral_context(name: str, periph: dict) -> None:
+def _show_peripheral_context(name: str, periph: PeripheralInfo) -> None:
     """Show context for a peripheral module."""
     console.print()
     console.rule(f"[bold blue]AI CONTEXT FOR PERIPHERAL: {name}[/bold blue]")

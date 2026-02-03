@@ -8,11 +8,15 @@ For high-level usage, see emulator.py.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from cffi import FFI
 
+from ._cffi_types import CData, ConfigStruct, EmulatorLib, PeripheralStruct
+
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from cffi import FFI as FFI_Type
 
 # Create FFI instance
@@ -263,7 +267,7 @@ EMU_LOG_CAT_GDB = 6
 EMU_LOG_CAT_EMULATOR = 7
 
 # Cache for library instance
-_lib = None
+_lib: EmulatorLib | None = None
 
 
 def _find_library() -> Path:
@@ -310,7 +314,7 @@ def get_ffi() -> FFI_Type:
     return _ffi
 
 
-def get_lib():
+def get_lib() -> EmulatorLib:
     """
     Get the loaded library instance.
 
@@ -329,7 +333,7 @@ def get_lib():
                 f"Emulator library not found at {lib_path}. "
                 "Please build the project first with 'femu build all'."
             )
-        _lib = _ffi.dlopen(str(lib_path))
+        _lib = cast(EmulatorLib, _ffi.dlopen(str(lib_path)))
 
     return _lib
 
@@ -351,25 +355,25 @@ def get_emulator_size() -> int:
     return 8192
 
 
-def create_emulator():
+def create_emulator() -> tuple[CData, Callable[[], None], CData]:
     """
     Create a new emulator instance.
 
     Returns:
-        A tuple of (emulator pointer, cleanup function)
+        A tuple of (emulator pointer, cleanup function, buffer to keep alive)
     """
     # Allocate memory for emulator struct
     emu = _ffi.new("char[]", get_emulator_size())
     emu_ptr = _ffi.cast("Emulator *", emu)
 
-    def cleanup():
+    def cleanup() -> None:
         lib = get_lib()
         lib.armv8m_emu_destroy(emu_ptr)
 
     return emu_ptr, cleanup, emu  # Return emu to prevent GC
 
 
-def create_config() -> tuple:
+def create_config() -> tuple[ConfigStruct, CData]:
     """
     Create a new EmulatorConfig.
 
@@ -378,10 +382,10 @@ def create_config() -> tuple:
     """
     config = _ffi.new("EmulatorConfig *")
     get_lib().armv8m_emu_default_config(config)
-    return config, config
+    return cast(ConfigStruct, config), config
 
 
-def create_peripheral() -> tuple:
+def create_peripheral() -> tuple[PeripheralStruct, CData]:
     """
     Create a new EmuPeripheral structure.
 
@@ -389,10 +393,10 @@ def create_peripheral() -> tuple:
         A tuple of (peripheral pointer, buffer to keep alive)
     """
     periph = _ffi.new("EmuPeripheral *")
-    return periph, periph
+    return cast(PeripheralStruct, periph), periph
 
 
-def load_plugin_library(path: str):
+def load_plugin_library(path: str) -> EmulatorLib:
     """
     Load a plugin shared library.
 
@@ -405,7 +409,7 @@ def load_plugin_library(path: str):
     Raises:
         OSError: If the library cannot be loaded
     """
-    return _ffi.dlopen(path)
+    return cast(EmulatorLib, _ffi.dlopen(path))
 
 
 # Plugin API version constant
