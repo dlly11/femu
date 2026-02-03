@@ -577,8 +577,8 @@ TEST_GROUP(TZ_Exception)
         exec.mem.get_ptr = mock_mem_get_ptr;
 
         /* Set up vector table */
-        for (int i = 0; i < 256; i++) {
-            uint32_t addr = (uint32_t)(i * 4);
+        for (uint32_t i = 0; i < 256; i++) {
+            uint32_t addr = i * 4;
             uint32_t handler = 0x1001 + i * 0x100;  /* Dummy handlers */
             mock_memory[addr] = (uint8_t)(handler & 0xFF);
             mock_memory[addr + 1] = (uint8_t)((handler >> 8) & 0xFF);

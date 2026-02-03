@@ -1,0 +1,27 @@
+name: Build
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: DeterminateSystems/nix-installer-action@v14
+      - uses: DeterminateSystems/magic-nix-cache-action@v8
+      - name: Build emulator
+        run: nix develop --command python scripts/ci/build.py --compiler=${{ matrix.compiler }}
+      - name: Build ARM firmware
+        run: nix develop --command make -C tests/firmware all
+      - name: Package wheel (GCC Release only)
+        if: matrix.compiler == 'gcc'
+        run: nix develop --command python scripts/ci/package.py
+      - uses: actions/upload-artifact@v4
+        if: matrix.compiler == 'gcc'
+        with:
+          name: wheel
+          path: dist/*.whl

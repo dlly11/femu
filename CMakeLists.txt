@@ -167,6 +167,13 @@ if(EXISTS ${CPPUTEST_DIR}/CMakeLists.txt)
     set(TESTS OFF CACHE BOOL "Disable CppUTest tests")
     set(CPPUTEST_TESTS OFF CACHE BOOL "Disable CppUTest tests")
     set(CPPUTEST_EXTENSIONS ON CACHE BOOL "Enable CppUTest extensions")
+
+    # Disable memory leak detection when using Clang with sanitizers
+    # to avoid duplicate symbol warnings
+    if(CMAKE_C_COMPILER_ID STREQUAL "Clang" AND ENABLE_SANITIZERS)
+        set(CPPUTEST_MEM_LEAK_DETECTION_DISABLED ON CACHE BOOL "Disable CppUTest memory leak detection")
+    endif()
+
     add_subdirectory(${CPPUTEST_DIR} ${CMAKE_BINARY_DIR}/cpputest)
 else()
     message(FATAL_ERROR "CppUTest not found at ${CPPUTEST_DIR}. Run: git submodule update --init")

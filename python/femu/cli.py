@@ -331,5 +331,57 @@ def run_emulator(
         raise SystemExit(1) from None
 
 
+# =============================================================================
+# CI Commands
+# =============================================================================
+
+
+@main.group()
+def ci() -> None:
+    """Run CI workflows locally."""
+    pass
+
+
+@ci.command("build")
+def ci_build() -> None:
+    """Run build workflow locally."""
+    import subprocess
+
+    subprocess.run(["act", "-j", "build", "-W", ".github/workflows/build.yml"])
+
+
+@ci.command("test")
+def ci_test() -> None:
+    """Run test workflow locally."""
+    import subprocess
+
+    subprocess.run(["act", "-j", "test", "-W", ".github/workflows/test.yml"])
+
+
+@ci.command("lint")
+def ci_lint() -> None:
+    """Run lint workflow locally."""
+    import subprocess
+
+    subprocess.run(["act", "-j", "lint", "-W", ".github/workflows/lint.yml"])
+
+
+@ci.command("format")
+def ci_format() -> None:
+    """Run format workflow locally."""
+    import subprocess
+
+    subprocess.run(["act", "-j", "format", "-W", ".github/workflows/format.yml"])
+
+
+@ci.command("all")
+def ci_all() -> None:
+    """Run all CI workflows locally."""
+    import subprocess
+
+    for workflow in ["build", "test", "lint", "format"]:
+        subprocess.run(["act", "-j", workflow, "-W", f".github/workflows/{workflow}.yml"])
+
+
 if __name__ == "__main__":
     main()

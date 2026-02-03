@@ -16,15 +16,15 @@
 /**
  * Check if address is unaligned for the given access size.
  */
-static bool is_unaligned(uint32_t addr, uint8_t size)
+static bool is_unaligned(uint32_t addr, AccessSize size)
 {
-    return (addr & (size - 1)) != 0;
+    return (addr & ((uint32_t)size - 1)) != 0;
 }
 
 /**
  * Read from memory with proper access context.
  */
-static uint32_t mem_read(Executor *exec, uint32_t addr, uint8_t size, bool *fault)
+static uint32_t mem_read(Executor *exec, uint32_t addr, AccessSize size, bool *fault)
 {
     *fault = false;
 
@@ -33,11 +33,11 @@ static uint32_t mem_read(Executor *exec, uint32_t addr, uint8_t size, bool *faul
         return 0;
     }
 
-    uint32_t value = exec->mem.read(exec->mem.ctx, addr, size, fault);
+    uint32_t value = exec->mem.read(exec->mem.ctx, addr, (uint8_t)size, fault);
     if (*fault) {
-        EMU_LOG_DEBUG(EMU_LOG_CAT_MEMORY, "Read fault at 0x%08X size=%d", addr, size);
+        EMU_LOG_DEBUG(EMU_LOG_CAT_MEMORY, "Read fault at 0x%08X size=%d", addr, (int)size);
     } else {
-        EMU_LOG_TRACE(EMU_LOG_CAT_MEMORY, "Read 0x%08X size=%d -> 0x%X", addr, size, value);
+        EMU_LOG_TRACE(EMU_LOG_CAT_MEMORY, "Read 0x%08X size=%d -> 0x%X", addr, (int)size, value);
     }
     return value;
 }
@@ -45,7 +45,7 @@ static uint32_t mem_read(Executor *exec, uint32_t addr, uint8_t size, bool *faul
 /**
  * Write to memory with proper access context.
  */
-static void mem_write(Executor *exec, uint32_t addr, uint32_t value, uint8_t size, bool *fault)
+static void mem_write(Executor *exec, uint32_t addr, uint32_t value, AccessSize size, bool *fault)
 {
     *fault = false;
 
@@ -54,11 +54,11 @@ static void mem_write(Executor *exec, uint32_t addr, uint32_t value, uint8_t siz
         return;
     }
 
-    exec->mem.write(exec->mem.ctx, addr, value, size, fault);
+    exec->mem.write(exec->mem.ctx, addr, value, (uint8_t)size, fault);
     if (*fault) {
-        EMU_LOG_DEBUG(EMU_LOG_CAT_MEMORY, "Write fault at 0x%08X size=%d value=0x%X", addr, size, value);
+        EMU_LOG_DEBUG(EMU_LOG_CAT_MEMORY, "Write fault at 0x%08X size=%d value=0x%X", addr, (int)size, value);
     } else {
-        EMU_LOG_TRACE(EMU_LOG_CAT_MEMORY, "Write 0x%08X size=%d <- 0x%X", addr, size, value);
+        EMU_LOG_TRACE(EMU_LOG_CAT_MEMORY, "Write 0x%08X size=%d <- 0x%X", addr, (int)size, value);
     }
 }
 
@@ -461,7 +461,7 @@ int exec_load_exclusive(Executor *exec, const DecodedInsn *insn)
     }
 
     /* Determine access size (byte, halfword, or word) */
-    uint8_t size = insn->access_size;
+    AccessSize size = insn->access_size;
     if (size == 0) {
         size = ACCESS_WORD;  /* Default to word for LDREX */
     }
@@ -506,7 +506,7 @@ int exec_store_exclusive(Executor *exec, const DecodedInsn *insn)
     }
 
     /* Determine access size (byte, halfword, or word) */
-    uint8_t size = insn->access_size;
+    AccessSize size = insn->access_size;
     if (size == 0) {
         size = ACCESS_WORD;  /* Default to word for STREX */
     }
@@ -574,7 +574,7 @@ int exec_load_acquire(Executor *exec, const DecodedInsn *insn)
     bool fault = false;
 
     /* Determine access size */
-    uint8_t size = insn->access_size;
+    AccessSize size = insn->access_size;
     if (size == 0) {
         size = ACCESS_WORD;
     }
@@ -616,7 +616,7 @@ int exec_store_release(Executor *exec, const DecodedInsn *insn)
     bool fault = false;
 
     /* Determine access size */
-    uint8_t size = insn->access_size;
+    AccessSize size = insn->access_size;
     if (size == 0) {
         size = ACCESS_WORD;
     }

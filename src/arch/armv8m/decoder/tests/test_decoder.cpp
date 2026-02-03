@@ -40,22 +40,23 @@ extern "C" {
 static const uint32_t TEST_PC = TEST_PC;
 
 /* Common register indices for readability (use uint8_t to avoid CHECK_EQUAL ambiguity) */
-static const uint8_t REG_R0 = 0;
-static const uint8_t REG_R1 = 1;
-static const uint8_t REG_R2 = 2;
-static const uint8_t REG_R3 = 3;
-static const uint8_t REG_R4 = 4;
-static const uint8_t REG_R5 = 5;
-static const uint8_t REG_R6 = 6;
-static const uint8_t REG_R7 = 7;
-static const uint8_t REG_R8 = 8;
-static const uint8_t REG_R9 = 9;
-static const uint8_t REG_R10 = 10;
-static const uint8_t REG_R11 = 11;
-static const uint8_t REG_R12 = 12;
-static const uint8_t REG_SP = 13;
-static const uint8_t REG_LR = 14;
-static const uint8_t REG_PC = 15;
+/* Some may be unused but kept for future tests */
+[[maybe_unused]] static const uint8_t REG_R0 = 0;
+[[maybe_unused]] static const uint8_t REG_R1 = 1;
+[[maybe_unused]] static const uint8_t REG_R2 = 2;
+[[maybe_unused]] static const uint8_t REG_R3 = 3;
+[[maybe_unused]] static const uint8_t REG_R4 = 4;
+[[maybe_unused]] static const uint8_t REG_R5 = 5;
+[[maybe_unused]] static const uint8_t REG_R6 = 6;
+[[maybe_unused]] static const uint8_t REG_R7 = 7;
+[[maybe_unused]] static const uint8_t REG_R8 = 8;
+[[maybe_unused]] static const uint8_t REG_R9 = 9;
+[[maybe_unused]] static const uint8_t REG_R10 = 10;
+[[maybe_unused]] static const uint8_t REG_R11 = 11;
+[[maybe_unused]] static const uint8_t REG_R12 = 12;
+[[maybe_unused]] static const uint8_t REG_SP = 13;
+[[maybe_unused]] static const uint8_t REG_LR = 14;
+[[maybe_unused]] static const uint8_t REG_PC = 15;
 
 /*============================================================================
  * Test Group: Decoder Initialization

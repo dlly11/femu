@@ -11,6 +11,7 @@ def _emulator_available() -> bool:
     """Check if the emulator library is available."""
     try:
         from femu import _emulator_cffi as cffi
+
         cffi.get_lib()
         return True
     except OSError:
@@ -76,15 +77,23 @@ class TestPeripheralRegistry:
         class TypeA(Peripheral):
             def __init__(self, name: str = "a"):
                 super().__init__(name, "type_a")
-            def read(self, offset, size): return 0
-            def write(self, offset, value, size): pass
+
+            def read(self, offset, size):
+                return 0
+
+            def write(self, offset, value, size):
+                pass
 
         @PeripheralRegistry.register("type_b")
         class TypeB(Peripheral):
             def __init__(self, name: str = "b"):
                 super().__init__(name, "type_b")
-            def read(self, offset, size): return 0
-            def write(self, offset, value, size): pass
+
+            def read(self, offset, size):
+                return 0
+
+            def write(self, offset, value, size):
+                pass
 
         types = PeripheralRegistry.list_types()
         names = [t.name for t in types]
@@ -105,8 +114,8 @@ class TestBuiltinPeripherals:
         uart.write(uart.REG_CTRL, uart.CTRL_EN | uart.CTRL_TE, 4)
 
         # Write characters
-        uart.write(uart.REG_DATA, ord('H'), 4)
-        uart.write(uart.REG_DATA, ord('i'), 4)
+        uart.write(uart.REG_DATA, ord("H"), 4)
+        uart.write(uart.REG_DATA, ord("i"), 4)
 
         assert uart.get_output() == "Hi"
         assert uart.output_length == 2
@@ -125,10 +134,10 @@ class TestBuiltinPeripherals:
         assert status & uart.STATUS_RXNE
 
         # Read characters
-        assert uart.read(uart.REG_DATA, 4) == ord('T')
-        assert uart.read(uart.REG_DATA, 4) == ord('e')
-        assert uart.read(uart.REG_DATA, 4) == ord('s')
-        assert uart.read(uart.REG_DATA, 4) == ord('t')
+        assert uart.read(uart.REG_DATA, 4) == ord("T")
+        assert uart.read(uart.REG_DATA, 4) == ord("e")
+        assert uart.read(uart.REG_DATA, 4) == ord("s")
+        assert uart.read(uart.REG_DATA, 4) == ord("t")
 
         # Buffer should be empty now
         assert not uart.has_input
@@ -192,15 +201,17 @@ class TestMachine:
         """Test creating Machine from dict."""
         from femu import Machine
 
-        machine = Machine.from_dict({
-            "machine": {"name": "test", "arch": "armv8m"},
-            "cpu": {"has_fpu": True},
-            "memory": [
-                {"type": "flash", "base": 0x08000000, "size": "64K"},
-                {"type": "ram", "base": 0x20000000, "size": "32K"},
-            ],
-            "peripherals": []
-        })
+        machine = Machine.from_dict(
+            {
+                "machine": {"name": "test", "arch": "armv8m"},
+                "cpu": {"has_fpu": True},
+                "memory": [
+                    {"type": "flash", "base": 0x08000000, "size": "64K"},
+                    {"type": "ram", "base": 0x20000000, "size": "32K"},
+                ],
+                "peripherals": [],
+            }
+        )
 
         assert machine.name == "test"
         assert machine.arch == "armv8m"
@@ -208,7 +219,7 @@ class TestMachine:
 
     def test_machine_memory_parsing(self):
         """Test memory size parsing in Machine."""
-        from femu.machine import _parse_size, _parse_address
+        from femu.machine import _parse_address, _parse_size
 
         assert _parse_size("64K") == 64 * 1024
         assert _parse_size("1M") == 1024 * 1024
@@ -236,16 +247,18 @@ class TestMachine:
             def write(self, offset: int, value: int, size: int) -> None:
                 self._state = value & 0xFF
 
-        machine = Machine.from_dict({
-            "machine": {"name": "led_test", "arch": "armv8m"},
-            "cpu": {},
-            "memory": [
-                {"type": "ram", "base": 0x20000000, "size": "32K"},
-            ],
-            "peripherals": [
-                {"type": "test_led", "name": "LED1", "base": 0x40000000, "size": 0x100}
-            ]
-        })
+        machine = Machine.from_dict(
+            {
+                "machine": {"name": "led_test", "arch": "armv8m"},
+                "cpu": {},
+                "memory": [
+                    {"type": "ram", "base": 0x20000000, "size": "32K"},
+                ],
+                "peripherals": [
+                    {"type": "test_led", "name": "LED1", "base": 0x40000000, "size": 0x100}
+                ],
+            }
+        )
 
         assert "LED1" in machine.peripheral_names
         led = machine.get_peripheral("LED1")
@@ -256,10 +269,7 @@ class TestMachine:
 class TestPeripheralIntegration:
     """Integration tests for peripherals with the emulator."""
 
-    @pytest.mark.skipif(
-        not _emulator_available(),
-        reason="Emulator library not built"
-    )
+    @pytest.mark.skipif(not _emulator_available(), reason="Emulator library not built")
     def test_peripheral_registration(self):
         """Test peripheral registration with emulator."""
         from femu import ARMv8MEmulator, Peripheral, PeripheralRegistry
@@ -289,14 +299,12 @@ class TestPeripheralIntegration:
 
         assert len(emu.peripherals) == 1
 
-    @pytest.mark.skipif(
-        not _emulator_available(),
-        reason="Emulator library not built"
-    )
+    @pytest.mark.skipif(not _emulator_available(), reason="Emulator library not built")
     def test_peripheral_mmio_with_firmware(self):
         """Test peripheral MMIO read/write via actual firmware execution."""
         from pathlib import Path
-        from femu import ARMv8MEmulator, Peripheral, EmulatorState
+
+        from femu import ARMv8MEmulator, EmulatorState, Peripheral
 
         # Path to test firmware
         firmware_path = Path(__file__).parent / "firmware" / "test_peripheral.elf"
@@ -355,7 +363,11 @@ class TestPeripheralIntegration:
         # Verify peripheral received writes
         # Firmware writes: 0xAABBCCDD to offset 0x04, 0x42 to offset 0x08
         assert len(periph.writes) >= 2, f"Expected at least 2 writes, got {len(periph.writes)}"
-        assert (0x04, 0xAABBCCDD, 4) in periph.writes, f"Missing write to offset 0x04: {periph.writes}"
+        assert (
+            0x04,
+            0xAABBCCDD,
+            4,
+        ) in periph.writes, f"Missing write to offset 0x04: {periph.writes}"
         assert (0x08, 0x42, 4) in periph.writes, f"Missing write to offset 0x08: {periph.writes}"
 
         # Verify tick was called (should be called every cycle)
@@ -371,10 +383,7 @@ class TestPeripheralIntegration:
         assert result_0x04 == 0xAABBCCDD, f"Read from 0x04 mismatch: got 0x{result_0x04:08x}"
         assert done_marker == 0xC0FFEE42, f"Done marker mismatch: got 0x{done_marker:08x}"
 
-    @pytest.mark.skipif(
-        not _emulator_available(),
-        reason="Emulator library not built"
-    )
+    @pytest.mark.skipif(not _emulator_available(), reason="Emulator library not built")
     def test_peripheral_reset(self):
         """Test that peripheral reset() is called on emulator reset."""
         from femu import ARMv8MEmulator, Peripheral
@@ -408,14 +417,12 @@ class TestPeripheralIntegration:
         emu.reset()
         assert periph.reset_count == 2, f"Expected 2 reset calls, got {periph.reset_count}"
 
-    @pytest.mark.skipif(
-        not _emulator_available(),
-        reason="Emulator library not built"
-    )
+    @pytest.mark.skipif(not _emulator_available(), reason="Emulator library not built")
     def test_peripheral_irq(self):
         """Test peripheral IRQ triggering via firmware execution."""
         from pathlib import Path
-        from femu import ARMv8MEmulator, Peripheral, EmulatorState
+
+        from femu import ARMv8MEmulator, EmulatorState, Peripheral
 
         # Path to test firmware
         firmware_path = Path(__file__).parent / "firmware" / "test_irq.elf"

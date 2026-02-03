@@ -37,6 +37,7 @@
             mypy
             ruff
             pip
+            build # For building wheels
           ]
         );
 
@@ -67,7 +68,7 @@
 
             # Static analysis tools
             cppcheck
-            clang-tools  # includes clang-tidy, clang-format
+            clang-tools # includes clang-tidy, clang-format
 
             # Documentation
             doxygen
@@ -75,11 +76,15 @@
             # Utilities
             git
             which
+
+            # CI tools
+            act # GitHub Actions local runner
+            pre-commit # Pre-commit hook framework
           ];
 
           shellHook = ''
             echo "╔══════════════════════════════════════════════════════════════╗"
-            echo "║              FEMU Development Environment                     ║"
+            echo "║              FEMU Development Environment                    ║"
             echo "╚══════════════════════════════════════════════════════════════╝"
             echo ""
             echo "Compilers:"
@@ -110,21 +115,21 @@
             fi
 
             echo "╔══════════════════════════════════════════════════════════════╗"
-            echo "║  Quick Start                                                  ║"
+            echo "║  Quick Start                                                 ║"
             echo "╠══════════════════════════════════════════════════════════════╣"
-            echo "║  femu build all              Build the project                ║"
-            echo "║  femu test all               Run all tests                    ║"
-            echo "║  femu dev status             Show module status               ║"
-            echo "║  femu dev context <module>   AI context for module            ║"
+            echo "║  femu build all              Build the project               ║"
+            echo "║  femu test all               Run all tests                   ║"
+            echo "║  femu dev status             Show module status              ║"
+            echo "║  femu dev context <module>   AI context for module           ║"
             echo "╠══════════════════════════════════════════════════════════════╣"
-            echo "║  Build with different compilers:                              ║"
-            echo "║    CC=clang CXX=clang++ femu build all                        ║"
-            echo "║    CC=gcc CXX=g++ femu build all                              ║"
+            echo "║  Build with different compilers:                             ║"
+            echo "║    CC=clang CXX=clang++ femu build all                       ║"
+            echo "║    CC=gcc CXX=g++ femu build all                             ║"
             echo "╠══════════════════════════════════════════════════════════════╣"
-            echo "║  Static Analysis:                                             ║"
-            echo "║    cmake --build build --target cppcheck                      ║"
-            echo "║    cmake --build build --target clang-tidy                    ║"
-            echo "║    cmake --build build --target analyze                       ║"
+            echo "║  Static Analysis:                                            ║"
+            echo "║    cmake --build build --target cppcheck                     ║"
+            echo "║    cmake --build build --target clang-tidy                   ║"
+            echo "║    cmake --build build --target analyze                      ║"
             echo "╚══════════════════════════════════════════════════════════════╝"
             echo ""
           '';

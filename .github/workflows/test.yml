@@ -1,0 +1,21 @@
+name: Test
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: DeterminateSystems/nix-installer-action@v14
+      - uses: DeterminateSystems/magic-nix-cache-action@v8
+      - name: Build
+        run: nix develop --command python scripts/ci/build.py --compiler=${{ matrix.compiler }}
+      - name: Build firmware
+        run: nix develop --command make -C tests/firmware all
+      - name: Run tests
+        run: nix develop --command python scripts/ci/test.py
