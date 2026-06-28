@@ -39,6 +39,48 @@ bool armv8m_blocks_is_terminator(InstructionType type) {
   case INSN_BXNS:
   case INSN_BLXNS:
     return true;
+  /* Remaining instruction types do not terminate a block. Listed explicitly so
+   * -Wswitch-enum forces every new InstructionType to be classified here. */
+  case INSN_UNDEFINED:
+  case INSN_DATA_PROC_IMM:
+  case INSN_DATA_PROC_REG:
+  case INSN_DATA_PROC_SHIFTED:
+  case INSN_MULTIPLY:
+  case INSN_DIVIDE:
+  case INSN_SATURATE:
+  case INSN_SAT_ARITH:
+  case INSN_PARALLEL:
+  case INSN_PACK:
+  case INSN_BITFIELD:
+  case INSN_EXTEND:
+  case INSN_LOAD_IMM:
+  case INSN_LOAD_REG:
+  case INSN_LOAD_LITERAL:
+  case INSN_STORE_IMM:
+  case INSN_STORE_REG:
+  case INSN_LOAD_MULTIPLE:
+  case INSN_STORE_MULTIPLE:
+  case INSN_LOAD_EXCLUSIVE:
+  case INSN_STORE_EXCLUSIVE:
+  case INSN_CLEAR_EXCLUSIVE:
+  case INSN_LOAD_ACQUIRE:
+  case INSN_STORE_RELEASE:
+  case INSN_MRS:
+  case INSN_MSR:
+  case INSN_CPS:
+  case INSN_BARRIER:
+  case INSN_HINT:
+  case INSN_TT:
+  case INSN_MCR:
+  case INSN_MRC:
+  case INSN_FPU_LOAD:
+  case INSN_FPU_STORE:
+  case INSN_FPU_MOVE:
+  case INSN_FPU_ARITH:
+  case INSN_FPU_CMP:
+  case INSN_FPU_CVT:
+  case INSN_FPU_MULTI:
+  case INSN_TYPE_COUNT:
   default:
     return false;
   }
@@ -78,6 +120,46 @@ static BlockEndType get_end_type(const DecodedInsn *insn) {
   case INSN_SG:
     return BLOCK_END_SYSTEM;
 
+  case INSN_UNDEFINED:
+  case INSN_DATA_PROC_IMM:
+  case INSN_DATA_PROC_REG:
+  case INSN_DATA_PROC_SHIFTED:
+  case INSN_MULTIPLY:
+  case INSN_DIVIDE:
+  case INSN_SATURATE:
+  case INSN_SAT_ARITH:
+  case INSN_PARALLEL:
+  case INSN_PACK:
+  case INSN_BITFIELD:
+  case INSN_EXTEND:
+  case INSN_LOAD_IMM:
+  case INSN_LOAD_REG:
+  case INSN_LOAD_LITERAL:
+  case INSN_STORE_IMM:
+  case INSN_STORE_REG:
+  case INSN_LOAD_MULTIPLE:
+  case INSN_STORE_MULTIPLE:
+  case INSN_LOAD_EXCLUSIVE:
+  case INSN_STORE_EXCLUSIVE:
+  case INSN_CLEAR_EXCLUSIVE:
+  case INSN_LOAD_ACQUIRE:
+  case INSN_STORE_RELEASE:
+  case INSN_MRS:
+  case INSN_MSR:
+  case INSN_CPS:
+  case INSN_BARRIER:
+  case INSN_HINT:
+  case INSN_TT:
+  case INSN_MCR:
+  case INSN_MRC:
+  case INSN_FPU_LOAD:
+  case INSN_FPU_STORE:
+  case INSN_FPU_MOVE:
+  case INSN_FPU_ARITH:
+  case INSN_FPU_CMP:
+  case INSN_FPU_CVT:
+  case INSN_FPU_MULTI:
+  case INSN_TYPE_COUNT:
   default:
     return BLOCK_END_MAX_SIZE;
   }
@@ -146,6 +228,54 @@ static bool build_block(BasicBlock *block, uint32_t pc,
         block->target_not_taken = current_pc;
         break;
 
+      case INSN_UNDEFINED:
+      case INSN_DATA_PROC_IMM:
+      case INSN_DATA_PROC_REG:
+      case INSN_DATA_PROC_SHIFTED:
+      case INSN_MULTIPLY:
+      case INSN_DIVIDE:
+      case INSN_SATURATE:
+      case INSN_SAT_ARITH:
+      case INSN_PARALLEL:
+      case INSN_PACK:
+      case INSN_BITFIELD:
+      case INSN_EXTEND:
+      case INSN_LOAD_IMM:
+      case INSN_LOAD_REG:
+      case INSN_LOAD_LITERAL:
+      case INSN_STORE_IMM:
+      case INSN_STORE_REG:
+      case INSN_LOAD_MULTIPLE:
+      case INSN_STORE_MULTIPLE:
+      case INSN_LOAD_EXCLUSIVE:
+      case INSN_STORE_EXCLUSIVE:
+      case INSN_CLEAR_EXCLUSIVE:
+      case INSN_LOAD_ACQUIRE:
+      case INSN_STORE_RELEASE:
+      case INSN_BRANCH_EXCHANGE:
+      case INSN_BRANCH_LINK_EXCHANGE:
+      case INSN_TABLE_BRANCH:
+      case INSN_SVC:
+      case INSN_MRS:
+      case INSN_MSR:
+      case INSN_CPS:
+      case INSN_BARRIER:
+      case INSN_HINT:
+      case INSN_IT:
+      case INSN_SG:
+      case INSN_BXNS:
+      case INSN_BLXNS:
+      case INSN_TT:
+      case INSN_MCR:
+      case INSN_MRC:
+      case INSN_FPU_LOAD:
+      case INSN_FPU_STORE:
+      case INSN_FPU_MOVE:
+      case INSN_FPU_ARITH:
+      case INSN_FPU_CMP:
+      case INSN_FPU_CVT:
+      case INSN_FPU_MULTI:
+      case INSN_TYPE_COUNT:
       default:
         block->target_taken = 0;
         block->target_not_taken = current_pc;

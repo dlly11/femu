@@ -1,5 +1,4 @@
-"""
-Unified logging system for FEMU.
+"""Unified logging system for FEMU.
 
 This module provides a logging bridge between C code and Python's logging module,
 enabling unified output with configurable verbosity.
@@ -31,15 +30,16 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import IntEnum
-from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from . import _emulator_cffi as cffi
 
 if TYPE_CHECKING:
-    pass
+    from pathlib import Path
+
+    from ._cffi_types import EmulatorLib
 
 # =============================================================================
 # Custom TRACE log level
@@ -127,7 +127,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON."""
         log_dict = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
             "level": record.levelname,
             "logger": record.name,
             "file": record.filename,
@@ -157,8 +157,8 @@ _log_file_handle: TextIO | None = None
 
 
 @_ffi.callback("void(void*, int, int, const char*, int, const char*, const char*)")
-def _c_log_callback(
-    ctx: object,
+def _c_log_callback(  # noqa: PLR0913 - signature fixed by the C EmuLogCallback ABI
+    _ctx: object,
     level: int,
     category: int,
     file_ptr: object,
@@ -166,8 +166,7 @@ def _c_log_callback(
     func_ptr: object,
     msg_ptr: object,
 ) -> None:
-    """
-    C log callback that routes messages to Python logging.
+    """C log callback that routes messages to Python logging.
 
     This function is called from C code through the EmuLogCallback mechanism.
     """
@@ -203,8 +202,7 @@ def _c_log_callback(
 
 
 def get_logger(category: LogCategory) -> logging.Logger:
-    """
-    Get a logger for a specific category.
+    """Get a logger for a specific category.
 
     Args:
         category: The log category
@@ -216,6 +214,77 @@ def get_logger(category: LogCategory) -> logging.Logger:
     return logging.getLogger(f"femu.{cat_name}")
 
 
+def _try_get_lib() -> EmulatorLib | None:
+    """Return the emulator library, or None if it isn't available."""
+    try:
+        return cffi.get_lib()
+    except OSError:
+        return None
+
+
+def _configure_c_logging(
+    lib: EmulatorLib | None,
+    level: LogLevel,
+    category_levels: dict[LogCategory, LogLevel] | None,
+) -> None:
+    """Install the C->Python log callback and push level settings into C."""
+    global _callback_handle  # noqa: PLW0603 - module-level handle kept alive for C
+    if lib is None:
+        return
+    _callback_handle = _c_log_callback  # Keep a reference so it isn't GC'd.
+    lib.emu_log_set_callback(_c_log_callback, _ffi.NULL)
+    lib.emu_log_set_level(int(level))
+    lib.emu_log_set_enabled(True)
+    if category_levels:
+        for cat, cat_level in category_levels.items():
+            lib.emu_log_set_category_level(int(cat), int(cat_level))
+
+
+def _make_formatter(*, json_format: bool) -> logging.Formatter:
+    """Build the log formatter (JSON or human-readable)."""
+    if json_format:
+        return JSONFormatter()
+    fmt = "%(asctime)s.%(msecs)03d [%(name)s] %(levelname)-5s %(filename)s:%(lineno)d: %(message)s"
+    return logging.Formatter(fmt, datefmt="%H:%M:%S")
+
+
+def _make_handlers(
+    log_file: str | Path | None,
+    stream: TextIO | None,
+    formatter: logging.Formatter,
+) -> list[logging.Handler]:
+    """Build the stream and/or file handlers for the root logger."""
+    global _log_file_handle  # noqa: PLW0603 - module-level handle kept alive for reuse
+    handlers: list[logging.Handler] = []
+
+    if log_file is None or stream is not None:
+        stream_handler = logging.StreamHandler(stream or sys.stderr)
+        stream_handler.setFormatter(formatter)
+        handlers.append(stream_handler)
+
+    if log_file is not None:
+        if _log_file_handle is not None:
+            _log_file_handle.close()
+            _log_file_handle = None
+        file_handler = logging.FileHandler(str(log_file), mode="w")
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
+
+    return handlers
+
+
+def _configure_python_category_levels(
+    category_levels: dict[LogCategory, LogLevel] | None,
+) -> None:
+    """Apply per-category level overrides to the Python loggers."""
+    if not category_levels:
+        return
+    for cat, cat_level in category_levels.items():
+        cat_name = _CATEGORY_NAMES.get(cat, "unknown")
+        cat_logger = logging.getLogger(f"femu.{cat_name}")
+        cat_logger.setLevel(_LEVEL_MAP.get(cat_level, logging.INFO))
+
+
 def configure_logging(
     level: LogLevel = LogLevel.INFO,
     category_levels: dict[LogCategory, LogLevel] | None = None,
@@ -223,8 +292,7 @@ def configure_logging(
     json_format: bool = False,
     stream: TextIO | None = None,
 ) -> None:
-    """
-    Configure unified logging for C and Python code.
+    """Configure unified logging for C and Python code.
 
     This sets up the logging callback from C to Python and configures
     Python's logging module for unified output.
@@ -249,85 +317,24 @@ def configure_logging(
             log_file="trace.log"
         )
     """
-    global _callback_handle, _log_file_handle
+    lib = _try_get_lib()
+    _configure_c_logging(lib, level, category_levels)
 
-    # Get the library
-    try:
-        lib = cffi.get_lib()
-    except OSError:
-        # Library not available - configure Python logging only
-        lib = None
-
-    # Set up the C callback
-    if lib is not None:
-        _callback_handle = _c_log_callback  # Keep reference
-        lib.emu_log_set_callback(_c_log_callback, _ffi.NULL)
-        lib.emu_log_set_level(int(level))
-        lib.emu_log_set_enabled(True)
-
-        # Set per-category levels
-        if category_levels:
-            for cat, cat_level in category_levels.items():
-                lib.emu_log_set_category_level(int(cat), int(cat_level))
-
-    # Configure Python logging
-    # Get the root femu logger
     root_logger = logging.getLogger("femu")
-
-    # Map LogLevel to Python level
     py_level = _LEVEL_MAP.get(level, logging.INFO)
     root_logger.setLevel(py_level)
-
-    # Clear existing handlers
     root_logger.handlers.clear()
 
-    # Create formatter
-    formatter: logging.Formatter
-    if json_format:
-        formatter = JSONFormatter()
-    else:
-        # Default format with timestamp, logger name, level, file, line, and message
-        fmt = "%(asctime)s.%(msecs)03d [%(name)s] %(levelname)-5s "
-        fmt += "%(filename)s:%(lineno)d: %(message)s"
-        formatter = logging.Formatter(fmt, datefmt="%H:%M:%S")
-
-    # Add handlers
-    handlers: list[logging.Handler] = []
-
-    # Stream handler (stderr or custom stream)
-    if log_file is None or stream is not None:
-        stream_handler = logging.StreamHandler(stream or sys.stderr)
-        stream_handler.setFormatter(formatter)
-        handlers.append(stream_handler)
-
-    # File handler
-    if log_file is not None:
-        # Close previous file handle if any
-        if _log_file_handle is not None:
-            _log_file_handle.close()
-            _log_file_handle = None
-
-        file_handler = logging.FileHandler(str(log_file), mode="w")
-        file_handler.setFormatter(formatter)
-        handlers.append(file_handler)
-
-    # Add handlers to root logger
-    for handler in handlers:
+    formatter = _make_formatter(json_format=json_format)
+    for handler in _make_handlers(log_file, stream, formatter):
         handler.setLevel(py_level)
         root_logger.addHandler(handler)
 
-    # Configure per-category loggers
-    if category_levels:
-        for cat, cat_level in category_levels.items():
-            cat_name = _CATEGORY_NAMES.get(cat, "unknown")
-            cat_logger = logging.getLogger(f"femu.{cat_name}")
-            cat_py_level = _LEVEL_MAP.get(cat_level, logging.INFO)
-            cat_logger.setLevel(cat_py_level)
+    _configure_python_category_levels(category_levels)
 
 
 def disable_logging() -> None:
-    """
-    Disable all logging from C code.
+    """Disable all logging from C code.
 
     This is a fast way to disable logging without removing the callback.
     """
@@ -339,9 +346,7 @@ def disable_logging() -> None:
 
 
 def enable_logging() -> None:
-    """
-    Re-enable logging from C code after disable_logging().
-    """
+    """Re-enable logging from C code after disable_logging()."""
     try:
         lib = cffi.get_lib()
         lib.emu_log_set_enabled(True)
@@ -355,10 +360,10 @@ def enable_logging() -> None:
 
 __all__ = [
     "TRACE",
-    "LogLevel",
     "LogCategory",
-    "get_logger",
+    "LogLevel",
     "configure_logging",
     "disable_logging",
     "enable_logging",
+    "get_logger",
 ]

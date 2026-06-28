@@ -9,6 +9,7 @@
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
+#include "exec_handlers.h"
 
 /*============================================================================
  * Internal Helpers
@@ -220,9 +221,6 @@ int exec_table_branch(Executor *exec, const DecodedInsn *insn) {
 /*============================================================================
  * TrustZone Branch Instructions
  *============================================================================*/
-
-/* Forward declaration for security check */
-extern SecurityAttr armv8m_check_security(const Executor *exec, uint32_t addr);
 
 /**
  * Clear caller-saved registers for security when transitioning S->NS.

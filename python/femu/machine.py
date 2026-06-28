@@ -1,5 +1,4 @@
-"""
-Machine definition and YAML loader.
+"""Machine definition and YAML loader.
 
 The Machine class provides a high-level way to define complete emulated systems
 including CPU configuration, memory regions, and peripherals.
@@ -50,14 +49,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .arch.armv8m import ARMv8MConfig
-from .arch.base import BaseEmulator, EmulatorState
-from .elf_loader import ElfInfo
 from .emulator import ArchType, create_emulator
 from .peripheral import PeripheralBase, PluginPeripheral
 from .peripheral_registry import PeripheralRegistry
+
+if TYPE_CHECKING:
+    from .arch.base import BaseEmulator, EmulatorState
+    from .elf_loader import ElfInfo
 
 # =============================================================================
 # Helper Functions
@@ -65,8 +66,7 @@ from .peripheral_registry import PeripheralRegistry
 
 
 def _parse_size(value: str | int) -> int:
-    """
-    Parse size value with optional K/M/G suffix.
+    """Parse size value with optional K/M/G suffix.
 
     Args:
         value: Integer or string like "512K", "1M", "0x10000"
@@ -102,8 +102,7 @@ def _parse_size(value: str | int) -> int:
 
 
 def _parse_address(value: str | int) -> int:
-    """
-    Parse address value (supports hex strings).
+    """Parse address value (supports hex strings).
 
     Args:
         value: Integer or string like "0x08000000"
@@ -201,8 +200,7 @@ class MachineDef:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], base_path: Path | None = None) -> MachineDef:
-        """
-        Create from dictionary.
+        """Create from dictionary.
 
         Args:
             data: Configuration dictionary
@@ -250,8 +248,7 @@ class MachineDef:
 
 
 class Machine:
-    """
-    Machine instance with emulator and peripherals.
+    """Machine instance with emulator and peripherals.
 
     A Machine combines:
     - CPU emulator with configuration
@@ -261,9 +258,8 @@ class Machine:
     Machines can be defined programmatically or loaded from YAML files.
     """
 
-    def __init__(self, definition: MachineDef):
-        """
-        Initialize machine from definition.
+    def __init__(self, definition: MachineDef) -> None:
+        """Initialize machine from definition.
 
         Args:
             definition: MachineDef with complete configuration
@@ -320,7 +316,7 @@ class Machine:
             )
             return create_emulator(ArchType.ARMV8M, config)
 
-        elif arch_lower in ("armv7m", "cortexm4", "cortexm3"):
+        if arch_lower in ("armv7m", "cortexm4", "cortexm3"):
             config = ARMv8MConfig(
                 has_fpu=cpu.has_fpu,
                 has_dsp=cpu.has_dsp,
@@ -329,10 +325,7 @@ class Machine:
             )
             return create_emulator(ArchType.ARMV7M, config)
 
-        else:
-            raise ValueError(
-                f"Unsupported architecture: {self._def.arch}. " f"Supported: armv8m, armv7m"
-            )
+        raise ValueError(f"Unsupported architecture: {self._def.arch}. Supported: armv8m, armv7m")
 
     def _add_memory_region(self, mem: MemoryRegion) -> None:
         """Add a memory region to the emulator."""
@@ -341,7 +334,7 @@ class Machine:
         elif mem.type == "ram":
             self._emu.add_ram(mem.base, mem.size)
         else:
-            raise ValueError(f"Unknown memory type: {mem.type}. " f"Supported: flash, ram")
+            raise ValueError(f"Unknown memory type: {mem.type}. Supported: flash, ram")
 
     def _create_peripheral(self, pdef: PeripheralDef) -> PeripheralBase:
         """Create a peripheral from its definition."""
@@ -358,8 +351,7 @@ class Machine:
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> Machine:
-        """
-        Load machine from YAML file.
+        """Load machine from YAML file.
 
         Args:
             path: Path to YAML configuration file
@@ -372,10 +364,10 @@ class Machine:
         """
         # Import yaml here to make it optional
         try:
-            import yaml  # type: ignore[import-untyped]
+            import yaml
         except ImportError as e:
             raise ImportError(
-                "PyYAML is required to load YAML files. Install it with: pip install pyyaml"
+                "PyYAML is required to load YAML files. Install it with: uv pip install pyyaml"
             ) from e
 
         path = Path(path)
@@ -383,19 +375,19 @@ class Machine:
         if not path.exists():
             raise FileNotFoundError(f"Machine definition not found: {path}")
 
-        with open(path) as f:
+        with path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if not isinstance(data, dict):
-            raise ValueError(f"Invalid YAML format in {path}: expected a mapping")
+            msg = f"Invalid YAML format in {path}: expected a mapping"
+            raise TypeError(msg)
 
         definition = MachineDef.from_dict(data, base_path=path.parent)
         return cls(definition)
 
     @classmethod
     def from_dict(cls, config: dict[str, Any], base_path: Path | None = None) -> Machine:
-        """
-        Create machine from dictionary.
+        """Create machine from dictionary.
 
         Args:
             config: Configuration dictionary
@@ -449,8 +441,7 @@ class Machine:
         return list(self._peripheral_map.keys())
 
     def get_peripheral(self, name: str) -> PeripheralBase | None:
-        """
-        Get peripheral by instance name.
+        """Get peripheral by instance name.
 
         Args:
             name: Peripheral instance name (e.g., "USART1")
@@ -461,8 +452,7 @@ class Machine:
         return self._peripheral_map.get(name)
 
     def __getitem__(self, name: str) -> PeripheralBase:
-        """
-        Get peripheral by name (dict-style access).
+        """Get peripheral by name (dict-style access).
 
         Args:
             name: Peripheral instance name
@@ -483,8 +473,7 @@ class Machine:
     # =========================================================================
 
     def load_elf(self, path: str | Path) -> ElfInfo:
-        """
-        Load ELF firmware file.
+        """Load ELF firmware file.
 
         Args:
             path: Path to ELF file
@@ -495,8 +484,7 @@ class Machine:
         return self._emu.load_elf(path)
 
     def run(self, max_cycles: int = 0) -> int:
-        """
-        Run emulation.
+        """Run emulation.
 
         Args:
             max_cycles: Maximum cycles to execute (0 = unlimited)
@@ -507,8 +495,7 @@ class Machine:
         return self._emu.run(max_cycles)
 
     def step(self) -> int:
-        """
-        Execute single instruction.
+        """Execute single instruction.
 
         Returns:
             Result code
@@ -580,6 +567,7 @@ class Machine:
         return self._emu.dump_regs()
 
     def __repr__(self) -> str:
+        """Return a concise machine summary for debugging."""
         return (
             f"Machine(name={self._def.name!r}, arch={self._def.arch!r}, "
             f"peripherals={len(self._peripherals)})"
@@ -591,9 +579,9 @@ class Machine:
 # =============================================================================
 
 __all__ = [
+    "CPUConfig",
     "Machine",
     "MachineDef",
     "MemoryRegion",
     "PeripheralDef",
-    "CPUConfig",
 ]

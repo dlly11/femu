@@ -7,11 +7,14 @@ they assert that the right cmake invocations are constructed.
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 from femu import build
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
@@ -60,7 +63,8 @@ class TestCompile:
         build.compile_project(jobs=4)
         cmd = mock_run.call_args.args[0]
         assert cmd[:3] == ["cmake", "--build", str(fake_build_dir)]
-        assert "-j" in cmd and "4" in cmd
+        assert "-j" in cmd
+        assert "4" in cmd
 
     def test_compile_with_target(self, fake_build_dir: Path, mock_run: MagicMock) -> None:
         build.compile_project(jobs=1, target="armv8m_emulator")

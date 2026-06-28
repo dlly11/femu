@@ -10,6 +10,7 @@
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
+#include "exec_handlers.h"
 
 /*============================================================================
  * Special Register Numbers (for MRS/MSR)
@@ -154,7 +155,7 @@ static inline void set_reg(Executor *exec, uint8_t reg, uint32_t value) {
  * high cognitive-complexity score is a false positive, so it is suppressed. */
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 int exec_mrs(Executor *exec, const DecodedInsn *insn) {
-  CPUState *cpu = &exec->cpu;
+  const CPUState *cpu = &exec->cpu;
   uint8_t sysreg = insn->sysreg;
   uint32_t value = 0;
   bool privileged = is_privileged(exec);
@@ -724,9 +725,6 @@ int exec_mrc(Executor *exec, const DecodedInsn *insn) {
  * TrustZone Test Target Instructions
  *============================================================================*/
 
-/* Forward declaration for security check */
-extern SecurityAttr armv8m_check_security(const Executor *exec, uint32_t addr);
-
 /**
  * TT - Test Target (TrustZone)
  *
@@ -830,34 +828,36 @@ int exec_tt(Executor *exec, const DecodedInsn *insn) {
                        !(exec->cpu.control & ARMV8M_CONTROL_NPRIV);
   }
 
-  /* MPU region lookup for IREGION field.
-   *
-   * TODO: For full TT instruction support, the executor would need:
-   * 1. A pointer to the MPU state, OR
-   * 2. A callback to query MPU regions
-   *
-   * Currently, the executor doesn't have direct MPU access (MPU is managed
-   * by the memory subsystem). For now, IREGION is always 0 and IRVALID is 0.
-   *
-   * When MPU integration is added, this should:
-   * 1. Find the matching MPU region (if MPU is enabled)
-   * 2. Set IREGION to the region number
-   * 3. Set IRVALID if a region matches
-   * 4. Check MPU permissions for R/RW bits
-   */
-  if (exec->num_mpu_regions > 0) {
-    /* MPU is present but we can't query it directly.
-     * Leave IREGION=0, IRVALID=0 for now. */
+  /* MPU lookup for IREGION/IRVALID and the R/RW permission bits. */
+  bool can_read = false;
+  bool can_write = false;
+  if (exec->mpu != NULL && exec->mpu->enabled) {
+    int region = armv8m_mpu_region_for_addr(exec->mpu, addr);
+    if (region >= 0) {
+      result |= ((uint32_t)region & 0xFFU) << 24; /* IREGION */
+      result |= (1U << 23);                       /* IRVALID */
+    }
+    armv8m_mpu_access_bits(exec->mpu, region, check_privileged, &can_read,
+                           &can_write);
+  } else {
+    /* No MPU (or disabled): privileged access gets R+RW, unprivileged R only. */
+    can_read = true;
+    can_write = check_privileged;
   }
 
-  /* For R/RW bits, without MPU access we use a simplified model:
-   * - Privileged access gets R+RW
-   * - Unprivileged access gets R only
-   * With MPU integration, this should check actual MPU permissions. */
-  if (check_privileged) {
-    result |= 0x3; /* R and RW bits */
-  } else {
-    result |= 0x1; /* R bit only */
+  /* Domain restriction: a query of the Non-secure domain cannot access a
+   * Secure address, so it reports no permission. This is where query_state
+   * has an observable effect on the TT result. */
+  if (query_state == SECURITY_NONSECURE && attr == SEC_SECURE) {
+    can_read = false;
+    can_write = false;
+  }
+
+  if (can_read) {
+    result |= 0x1; /* R bit */
+  }
+  if (can_write) {
+    result |= 0x2; /* RW bit */
   }
 
   static const char *tt_names[] = {"TT", "TTT", "TTA", "TTAT"};

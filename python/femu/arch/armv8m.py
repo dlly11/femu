@@ -1,5 +1,4 @@
-"""
-ARMv8-M emulator implementation.
+"""ARMv8-M emulator implementation.
 
 This module provides the ARMv8-M (Cortex-M33) specific emulator that
 implements the BaseEmulator interface.
@@ -8,8 +7,7 @@ implements the BaseEmulator interface.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from .. import _emulator_cffi as cffi
 from .base import (
@@ -23,6 +21,8 @@ from .base import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from ..elf_loader import ElfInfo
     from ..peripheral import PeripheralBase
 
@@ -44,8 +44,7 @@ class ARMv8MConfig(BaseEmulatorConfig):
 
 
 class ARMv8MEmulator(BaseEmulator):
-    """
-    ARMv8-M (Cortex-M33) emulator.
+    """ARMv8-M (Cortex-M33) emulator.
 
     Example usage:
         emu = ARMv8MEmulator()
@@ -55,7 +54,7 @@ class ARMv8MEmulator(BaseEmulator):
     """
 
     # Register names for dump_regs()
-    _REG_NAMES = [
+    _REG_NAMES: ClassVar[list[str]] = [
         "r0",
         "r1",
         "r2",
@@ -74,9 +73,8 @@ class ARMv8MEmulator(BaseEmulator):
         "pc",
     ]
 
-    def __init__(self, config: ARMv8MConfig | None = None):
-        """
-        Initialize ARMv8-M emulator.
+    def __init__(self, config: ARMv8MConfig | None = None) -> None:
+        """Initialize ARMv8-M emulator.
 
         Args:
             config: Optional configuration. If None, uses defaults.
@@ -316,8 +314,7 @@ class ARMv8MEmulator(BaseEmulator):
     def add_watchpoint(
         self, addr: int, size: int = 4, wp_type: int = cffi.WATCHPOINT_WRITE
     ) -> None:
-        """
-        Add a watchpoint.
+        """Add a watchpoint.
 
         Args:
             addr: Address to watch
@@ -332,8 +329,7 @@ class ARMv8MEmulator(BaseEmulator):
     def remove_watchpoint(
         self, addr: int, size: int = 4, wp_type: int = cffi.WATCHPOINT_WRITE
     ) -> None:
-        """
-        Remove a watchpoint.
+        """Remove a watchpoint.
 
         Args:
             addr: Address of watchpoint
@@ -392,8 +388,7 @@ class ARMv8MEmulator(BaseEmulator):
     # =========================================================================
 
     def add_peripheral(self, peripheral: PeripheralBase, base: int, size: int) -> None:
-        """
-        Add a peripheral to the emulator.
+        """Add a peripheral to the emulator.
 
         Args:
             peripheral: Peripheral instance (Python, C, or plugin)

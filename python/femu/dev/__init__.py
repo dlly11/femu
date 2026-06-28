@@ -1,5 +1,4 @@
-"""
-Development tools for FEMU.
+"""Development tools for FEMU.
 
 This module provides:
 - Module validation

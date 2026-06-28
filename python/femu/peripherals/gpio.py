@@ -1,5 +1,4 @@
-"""
-Simple GPIO peripheral implementation.
+"""Simple GPIO peripheral implementation.
 
 This provides a basic GPIO port with configurable pins.
 
@@ -21,16 +20,18 @@ Mode bits (per pin):
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from ..peripheral import Peripheral
 from ..peripheral_registry import PeripheralRegistry
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 @PeripheralRegistry.register("simple_gpio", "Simple 16-pin GPIO port")
 class SimpleGPIO(Peripheral):
-    """
-    Simple GPIO port peripheral.
+    """Simple GPIO port peripheral.
 
     Example:
         gpio = SimpleGPIO(name="GPIOA")
@@ -61,9 +62,8 @@ class SimpleGPIO(Peripheral):
     MODE_ALTFUNC = 2
     MODE_ANALOG = 3
 
-    def __init__(self, name: str = "gpio", num_pins: int = 16, irq: int = -1):
-        """
-        Initialize GPIO peripheral.
+    def __init__(self, name: str = "gpio", num_pins: int = 16, irq: int = -1) -> None:
+        """Initialize GPIO peripheral.
 
         Args:
             name: Instance name (e.g., "GPIOA")
@@ -89,21 +89,16 @@ class SimpleGPIO(Peripheral):
 
     def read(self, offset: int, size: int) -> int:
         """Handle register reads."""
-        if offset == self.REG_MODER:
-            return self._moder
-        elif offset == self.REG_OTYPER:
-            return self._otyper
-        elif offset == self.REG_OSPEED:
-            return self._ospeed
-        elif offset == self.REG_PUPDR:
-            return self._pupdr
-        elif offset == self.REG_IDR:
-            return self._get_idr()
-        elif offset == self.REG_ODR:
-            return self._odr
-        elif offset == self.REG_BSRR:
-            return 0  # Write-only
-        return 0
+        register_values = {
+            self.REG_MODER: self._moder,
+            self.REG_OTYPER: self._otyper,
+            self.REG_OSPEED: self._ospeed,
+            self.REG_PUPDR: self._pupdr,
+            self.REG_IDR: self._get_idr(),
+            self.REG_ODR: self._odr,
+            self.REG_BSRR: 0,  # Write-only register reads as zero
+        }
+        return register_values.get(offset, 0)
 
     def write(self, offset: int, value: int, size: int) -> None:
         """Handle register writes."""
@@ -136,8 +131,7 @@ class SimpleGPIO(Peripheral):
         self._external_input = 0
 
     def _get_idr(self) -> int:
-        """
-        Get input data register value.
+        """Get input data register value.
 
         For input pins, returns external input state.
         For output pins, returns ODR value.
@@ -149,10 +143,9 @@ class SimpleGPIO(Peripheral):
                 # Input mode: use external input
                 if self._external_input & (1 << pin):
                     result |= 1 << pin
-            else:
-                # Output/alternate/analog: return ODR
-                if self._odr & (1 << pin):
-                    result |= 1 << pin
+            # Output/alternate/analog: return ODR
+            elif self._odr & (1 << pin):
+                result |= 1 << pin
         return result
 
     def _notify_changes(self, old_val: int, new_val: int) -> None:
@@ -170,8 +163,7 @@ class SimpleGPIO(Peripheral):
     # =========================================================================
 
     def set_input_pin(self, pin: int, state: bool) -> None:
-        """
-        Set external input state for a pin.
+        """Set external input state for a pin.
 
         This simulates external signals (button presses, sensor inputs, etc.).
 
@@ -194,8 +186,7 @@ class SimpleGPIO(Peripheral):
         return bool(self._external_input & (1 << pin))
 
     def get_output_pin(self, pin: int) -> bool:
-        """
-        Get output state for a pin.
+        """Get output state for a pin.
 
         Args:
             pin: Pin number (0-15)
@@ -208,8 +199,7 @@ class SimpleGPIO(Peripheral):
         return bool(self._odr & (1 << pin))
 
     def get_pin_mode(self, pin: int) -> int:
-        """
-        Get mode for a pin.
+        """Get mode for a pin.
 
         Args:
             pin: Pin number (0-15)
@@ -222,8 +212,7 @@ class SimpleGPIO(Peripheral):
         return (self._moder >> (pin * 2)) & 0x3
 
     def on_output_change(self, callback: Callable[[int, bool], None]) -> None:
-        """
-        Register callback for output changes.
+        """Register callback for output changes.
 
         Args:
             callback: Function(pin, state) called when output changes

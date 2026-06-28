@@ -34,13 +34,6 @@
             pytest
             pytest-cov
 
-            # Development tools
-            black
-            mypy
-            ruff
-            pip
-            build # For building wheels
-
             # Documentation
             sphinx
             sphinx-autodoc-typehints
@@ -70,6 +63,11 @@
 
             # Python environment
             pythonEnv
+
+            # Python tooling (Astral): package manager, linter/formatter, type checker
+            uv
+            ruff
+            ty
 
             # Debugging and analysis
             gdb
@@ -107,6 +105,10 @@
             echo "  clang-tidy        - $(clang-tidy --version | head -1)"
             echo ""
             echo "Python: $(python3 --version)"
+            echo "Python tooling (Astral):"
+            echo "  uv                - $(uv --version)"
+            echo "  ruff              - $(ruff --version)"
+            echo "  ty                - $(ty --version)"
             echo ""
 
             # Set up environment for ARM cross-compilation

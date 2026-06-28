@@ -12,16 +12,18 @@ if(BUILD_DECODER AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/decoder/decoder.c)
     add_subdirectory(decoder)
 endif()
 
+# MPU is configured before the executor so the executor can link it (the TT
+# instruction handler uses the MPU region/permission helpers).
+if(BUILD_MPU AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/mpu/mpu.c)
+    add_subdirectory(mpu)
+endif()
+
 if(BUILD_EXECUTOR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/executor/executor.c)
     add_subdirectory(executor)
 endif()
 
 if(BUILD_NVIC AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/nvic/nvic.c)
     add_subdirectory(nvic)
-endif()
-
-if(BUILD_MPU AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/mpu/mpu.c)
-    add_subdirectory(mpu)
 endif()
 
 # Build the emulator glue layer as a static library

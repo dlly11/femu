@@ -1,13 +1,21 @@
-"""
-FEMU CLI.
+"""FEMU CLI.
 
 Main entry point for the emulator and development tools.
 """
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import click
 from rich.console import Console
 
 from . import __version__
+
+if TYPE_CHECKING:
+    from .arch.base import BaseEmulator
+    from .elf_loader import ElfInfo
+    from .logging import LogCategory, LogLevel
 
 console = Console()
 
@@ -33,7 +41,6 @@ def main(ctx: click.Context, version: bool) -> None:
 @main.group()
 def build() -> None:
     """Build commands for the emulator."""
-    pass
 
 
 @build.command("configure")
@@ -52,7 +59,7 @@ def build_configure(
     from .build import Compiler, configure
 
     # Cast compiler to Literal type (click.Choice validates the value)
-    typed_compiler = cast(Compiler | None, compiler)
+    typed_compiler = cast("Compiler | None", compiler)
     configure(
         build_type=build_type,
         clean=clean,
@@ -85,7 +92,7 @@ def build_all(build_type: str, jobs: int | None, compiler: str | None, no_saniti
     from .build import Compiler, compile_project, configure
 
     # Cast compiler to Literal type (click.Choice validates the value)
-    typed_compiler = cast(Compiler | None, compiler)
+    typed_compiler = cast("Compiler | None", compiler)
     configure(build_type=build_type, compiler=typed_compiler, sanitizers=not no_sanitizers)
     compile_project(jobs=jobs)
 
@@ -122,7 +129,6 @@ def build_analyze(tool: str | None) -> None:
 @main.group()
 def test() -> None:
     """Test commands."""
-    pass
 
 
 @test.command("c")
@@ -162,7 +168,6 @@ def test_all(verbose: bool) -> None:
 @main.group()
 def dev() -> None:
     """Development tools."""
-    pass
 
 
 @dev.command("validate")
@@ -215,7 +220,6 @@ def dev_list() -> None:
 @main.group()
 def docs() -> None:
     """Documentation commands."""
-    pass
 
 
 @docs.command("build")
@@ -263,7 +267,7 @@ def docs_build(clean: bool) -> None:
         console.print(f"[green]Documentation built at:[/green] {build_dir / 'html'}")
     except FileNotFoundError:
         console.print("[red]sphinx-build not found[/red]")
-        console.print("Install with: pip install sphinx")
+        console.print("Install with: uv pip install sphinx")
         raise SystemExit(1) from None
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Sphinx failed:[/red] {e}")
@@ -304,6 +308,82 @@ def docs_serve(port: int) -> None:
 # =============================================================================
 
 
+def _resolve_trace_levels(trace: tuple[str, ...]) -> dict[LogCategory, LogLevel] | None:
+    """Map --trace category names to per-category TRACE level overrides."""
+    from .logging import LogCategory, LogLevel
+
+    category_map = {
+        "decoder": LogCategory.DECODER,
+        "executor": LogCategory.EXECUTOR,
+        "memory": LogCategory.MEMORY,
+        "nvic": LogCategory.NVIC,
+        "mpu": LogCategory.MPU,
+        "peripheral": LogCategory.PERIPHERAL,
+        "gdb": LogCategory.GDB,
+        "emulator": LogCategory.EMULATOR,
+    }
+    category_levels: dict[LogCategory, LogLevel] = {}
+    for cat_name in trace:
+        category = category_map.get(cat_name.lower())
+        if category is None:
+            console.print(f"[yellow]Unknown trace category: {cat_name}[/yellow]")
+        else:
+            category_levels[category] = LogLevel.TRACE
+    return category_levels or None
+
+
+def _print_loaded_elf(elf: ElfInfo) -> None:
+    """Print entry point, vectors, and segment map for a loaded ELF."""
+    console.print(f"  Entry point: {elf.entry_point:#010x}")
+    if elf.initial_sp:
+        console.print(f"  Initial SP:  {elf.initial_sp:#010x}")
+    if elf.reset_vector:
+        console.print(f"  Reset vector: {elf.reset_vector:#010x}")
+    console.print(f"  Segments: {len(elf.segments)}")
+    for seg in elf.segments:
+        flags = ("X" if seg.is_executable else "") + ("W" if seg.is_writable else "")
+        console.print(f"    {seg.vaddr:#010x} - {seg.vaddr + seg.memsz:#010x} [{flags}]")
+
+
+def _print_registers(emu: BaseEmulator) -> None:
+    """Print the final register file in rows of four."""
+    console.print("\n[bold]Final registers:[/bold]")
+    regs = emu.dump_regs()
+    reg_names = list(regs.keys())
+    for i in range(0, len(reg_names), 4):
+        row = "  " + "".join(f"{name:4s}={regs[name]:#010x}  " for name in reg_names[i : i + 4])
+        console.print(row)
+
+
+def _serve_gdb(emu: BaseEmulator, gdb_port: int) -> None:
+    """Start the GDB server, blocking until the client disconnects."""
+    from .gdb_server import GDBServer
+
+    console.print(f"\n[bold green]Starting GDB server on port {gdb_port}[/bold green]")
+    server = GDBServer(emu, port=gdb_port)
+    try:
+        server.start()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted[/yellow]")
+
+
+def _run_until_stop(emu: BaseEmulator, max_cycles: int, *, verbose: bool) -> None:
+    """Run the emulator directly and report the final state."""
+    console.print("[bold green]Running...[/bold green]")
+    try:
+        cycles = emu.run(max_cycles)
+        console.print("\n[bold]Execution stopped[/bold]")
+        console.print(f"  State:  {emu.state.name}")
+        console.print(f"  Cycles: {cycles:,}")
+        console.print(f"  PC:     {emu.pc:#010x}")
+        if verbose:
+            _print_registers(emu)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted[/yellow]")
+        console.print(f"  Cycles: {emu.cycles:,}")
+        console.print(f"  PC:     {emu.pc:#010x}")
+
+
 @main.command("run")
 @click.argument("firmware", type=click.Path(exists=True))
 @click.option("--gdb-port", type=int, default=None, help="Start GDB server on port.")
@@ -319,7 +399,7 @@ def docs_serve(port: int) -> None:
 )
 @click.option("--log-file", type=click.Path(), default=None, help="Log to file.")
 @click.option("--json-log", is_flag=True, help="Use JSON log format.")
-def run_emulator(
+def run_emulator(  # noqa: PLR0913 - each parameter maps one-to-one to a click option
     firmware: str,
     gdb_port: int | None,
     max_cycles: int,
@@ -329,40 +409,21 @@ def run_emulator(
     json_log: bool,
 ) -> None:
     """Run the emulator with a firmware file."""
-    from .logging import LogCategory, LogLevel, configure_logging
+    from .logging import LogLevel, configure_logging
 
     # Configure logging based on verbosity
     level_map = {0: LogLevel.WARNING, 1: LogLevel.INFO, 2: LogLevel.DEBUG, 3: LogLevel.TRACE}
     log_level = level_map.get(min(verbose, 3), LogLevel.TRACE)
 
-    # Build category overrides for --trace
-    category_map = {
-        "decoder": LogCategory.DECODER,
-        "executor": LogCategory.EXECUTOR,
-        "memory": LogCategory.MEMORY,
-        "nvic": LogCategory.NVIC,
-        "mpu": LogCategory.MPU,
-        "peripheral": LogCategory.PERIPHERAL,
-        "gdb": LogCategory.GDB,
-        "emulator": LogCategory.EMULATOR,
-    }
-    category_levels = {}
-    for cat_name in trace:
-        if cat_name.lower() in category_map:
-            category_levels[category_map[cat_name.lower()]] = LogLevel.TRACE
-        else:
-            console.print(f"[yellow]Unknown trace category: {cat_name}[/yellow]")
-
     configure_logging(
         level=log_level,
-        category_levels=category_levels if category_levels else None,
+        category_levels=_resolve_trace_levels(trace),
         log_file=log_file,
         json_format=json_log,
     )
 
     try:
         from .emulator import create_emulator
-        from .gdb_server import GDBServer
     except OSError as e:
         console.print(f"[red]Error loading emulator library:[/red] {e}")
         console.print("[yellow]Build the project first with:[/yellow] femu build all")
@@ -374,55 +435,12 @@ def run_emulator(
 
         if verbose:
             console.print(f"[bold]Loaded:[/bold] {firmware}")
-            console.print(f"  Entry point: {elf.entry_point:#010x}")
-            if elf.initial_sp:
-                console.print(f"  Initial SP:  {elf.initial_sp:#010x}")
-            if elf.reset_vector:
-                console.print(f"  Reset vector: {elf.reset_vector:#010x}")
-            console.print(f"  Segments: {len(elf.segments)}")
-            for seg in elf.segments:
-                flags = ""
-                if seg.is_executable:
-                    flags += "X"
-                if seg.is_writable:
-                    flags += "W"
-                console.print(f"    {seg.vaddr:#010x} - {seg.vaddr + seg.memsz:#010x} [{flags}]")
+            _print_loaded_elf(elf)
 
         if gdb_port:
-            # Start GDB server (blocks until disconnect)
-            console.print(f"\n[bold green]Starting GDB server on port {gdb_port}[/bold green]")
-            server = GDBServer(emu, port=gdb_port)
-            try:
-                server.start()
-            except KeyboardInterrupt:
-                console.print("\n[yellow]Interrupted[/yellow]")
+            _serve_gdb(emu, gdb_port)
         else:
-            # Run directly
-            console.print("[bold green]Running...[/bold green]")
-            try:
-                cycles = emu.run(max_cycles)
-                state = emu.state
-
-                console.print("\n[bold]Execution stopped[/bold]")
-                console.print(f"  State:  {state.name}")
-                console.print(f"  Cycles: {cycles:,}")
-                console.print(f"  PC:     {emu.pc:#010x}")
-
-                if verbose:
-                    console.print("\n[bold]Final registers:[/bold]")
-                    regs = emu.dump_regs()
-                    # Print in rows of 4
-                    reg_names = list(regs.keys())
-                    for i in range(0, len(reg_names), 4):
-                        row = "  "
-                        for name in reg_names[i : i + 4]:
-                            row += f"{name:4s}={regs[name]:#010x}  "
-                        console.print(row)
-
-            except KeyboardInterrupt:
-                console.print("\n[yellow]Interrupted[/yellow]")
-                console.print(f"  Cycles: {emu.cycles:,}")
-                console.print(f"  PC:     {emu.pc:#010x}")
+            _run_until_stop(emu, max_cycles, verbose=bool(verbose))
 
     except FileNotFoundError as e:
         console.print(f"[red]File not found:[/red] {e}")
@@ -444,7 +462,6 @@ def run_emulator(
 @main.group()
 def ci() -> None:
     """Run CI workflows locally."""
-    pass
 
 
 @ci.command("build")
@@ -452,7 +469,7 @@ def ci_build() -> None:
     """Run build workflow locally."""
     import subprocess
 
-    subprocess.run(["act", "-j", "build", "-W", ".github/workflows/build.yml"])
+    subprocess.run(["act", "-j", "build", "-W", ".github/workflows/build.yml"], check=False)
 
 
 @ci.command("test")
@@ -460,7 +477,7 @@ def ci_test() -> None:
     """Run test workflow locally."""
     import subprocess
 
-    subprocess.run(["act", "-j", "test", "-W", ".github/workflows/test.yml"])
+    subprocess.run(["act", "-j", "test", "-W", ".github/workflows/test.yml"], check=False)
 
 
 @ci.command("lint")
@@ -468,7 +485,7 @@ def ci_lint() -> None:
     """Run lint workflow locally."""
     import subprocess
 
-    subprocess.run(["act", "-j", "lint", "-W", ".github/workflows/lint.yml"])
+    subprocess.run(["act", "-j", "lint", "-W", ".github/workflows/lint.yml"], check=False)
 
 
 @ci.command("format")
@@ -476,7 +493,7 @@ def ci_format() -> None:
     """Run format workflow locally."""
     import subprocess
 
-    subprocess.run(["act", "-j", "format", "-W", ".github/workflows/format.yml"])
+    subprocess.run(["act", "-j", "format", "-W", ".github/workflows/format.yml"], check=False)
 
 
 @ci.command("all")
@@ -485,7 +502,9 @@ def ci_all() -> None:
     import subprocess
 
     for workflow in ["build", "test", "lint", "format"]:
-        subprocess.run(["act", "-j", workflow, "-W", f".github/workflows/{workflow}.yml"])
+        subprocess.run(
+            ["act", "-j", workflow, "-W", f".github/workflows/{workflow}.yml"], check=False
+        )
 
 
 if __name__ == "__main__":

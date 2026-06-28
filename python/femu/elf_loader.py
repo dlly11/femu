@@ -1,5 +1,4 @@
-"""
-Simple ELF32 loader for ARM firmware.
+"""Simple ELF32 loader for ARM firmware.
 
 This module parses ELF32 files and extracts information needed
 to load firmware into the emulator. No external dependencies required.
@@ -90,8 +89,7 @@ class ElfInfo:
 
     @property
     def initial_sp(self) -> int | None:
-        """
-        Get initial stack pointer from vector table.
+        """Get initial stack pointer from vector table.
 
         For Cortex-M, the first word at the load address is the initial SP.
         """
@@ -106,8 +104,7 @@ class ElfInfo:
 
     @property
     def reset_vector(self) -> int | None:
-        """
-        Get reset vector from vector table.
+        """Get reset vector from vector table.
 
         For Cortex-M, the second word at the load address is the reset vector.
         """
@@ -121,37 +118,29 @@ class ElfInfo:
 
     @property
     def flash_regions(self) -> list[tuple[int, int]]:
-        """
-        Get memory regions that should be mapped as flash (read-only executable).
+        """Get memory regions that should be mapped as flash (read-only executable).
 
         Returns:
             List of (base_addr, size) tuples
         """
-        regions = []
-        for seg in self.segments:
-            if seg.is_executable and not seg.is_writable:
-                regions.append((seg.vaddr, seg.memsz))
-        return regions
+        return [
+            (seg.vaddr, seg.memsz)
+            for seg in self.segments
+            if seg.is_executable and not seg.is_writable
+        ]
 
     @property
     def ram_regions(self) -> list[tuple[int, int]]:
-        """
-        Get memory regions that should be mapped as RAM (writable).
+        """Get memory regions that should be mapped as RAM (writable).
 
         Returns:
             List of (base_addr, size) tuples
         """
-        regions = []
-        for seg in self.segments:
-            if seg.is_writable:
-                regions.append((seg.vaddr, seg.memsz))
-        return regions
+        return [(seg.vaddr, seg.memsz) for seg in self.segments if seg.is_writable]
 
 
 class ElfError(Exception):
     """Error parsing ELF file."""
-
-    pass
 
 
 def _read_elf_header(f: BinaryIO) -> ElfHeader:
@@ -285,8 +274,7 @@ def _load_segments(f: BinaryIO, phdrs: list[ProgramHeader]) -> list[LoadSegment]
 
 
 def load_elf(path: str | Path) -> ElfInfo:
-    """
-    Load and parse an ELF file.
+    """Load and parse an ELF file.
 
     Args:
         path: Path to the ELF file
@@ -300,7 +288,7 @@ def load_elf(path: str | Path) -> ElfInfo:
     """
     path = Path(path)
 
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         header = _read_elf_header(f)
 
         # Verify ARM machine type
@@ -320,9 +308,46 @@ def load_elf(path: str | Path) -> ElfInfo:
     )
 
 
+def _scan_memory_bounds(elf: ElfInfo) -> tuple[int | None, int, int | None, int]:
+    """Scan segments for the lowest base and highest end of flash and RAM."""
+    flash_base: int | None = None
+    flash_end = 0
+    ram_base: int | None = None
+    ram_end = 0
+    for seg in elf.segments:
+        if seg.is_executable and not seg.is_writable:  # Flash/ROM segment
+            if flash_base is None or seg.vaddr < flash_base:
+                flash_base = seg.vaddr
+            flash_end = max(flash_end, seg.vaddr + seg.memsz)
+        elif seg.is_writable:  # RAM segment
+            if ram_base is None or seg.vaddr < ram_base:
+                ram_base = seg.vaddr
+            ram_end = max(ram_end, seg.vaddr + seg.memsz)
+    return flash_base, flash_end, ram_base, ram_end
+
+
+def _extend_ram_for_initial_sp(elf: ElfInfo, ram_base: int, ram_end: int) -> int:
+    """Extend RAM to cover the initial SP from the vector table, if needed."""
+    for seg in elf.segments:
+        if seg.is_executable and len(seg.data) >= 4:
+            initial_sp = int.from_bytes(seg.data[:4], "little")
+            if initial_sp > ram_base and initial_sp > ram_end:
+                return initial_sp
+            break
+    return ram_end
+
+
+def _round_up_power2(size: int, min_size: int = 0x1000) -> int:
+    """Round a size up to the next power of two (at least ``min_size``)."""
+    size = max(size, min_size)
+    power = 1
+    while power < size:
+        power *= 2
+    return power
+
+
 def suggest_memory_config(elf: ElfInfo) -> dict[str, int]:
-    """
-    Suggest memory configuration based on ELF segments.
+    """Suggest memory configuration based on ELF segments.
 
     Args:
         elf: Parsed ELF information
@@ -330,60 +355,21 @@ def suggest_memory_config(elf: ElfInfo) -> dict[str, int]:
     Returns:
         Dictionary with suggested flash_base, flash_size, ram_base, ram_size
     """
-    flash_base = None
-    flash_end = 0
-    ram_base = None
-    ram_end = 0
+    flash_base, flash_end, ram_base, ram_end = _scan_memory_bounds(elf)
 
-    for seg in elf.segments:
-        if seg.is_executable and not seg.is_writable:
-            # Flash/ROM segment
-            if flash_base is None or seg.vaddr < flash_base:
-                flash_base = seg.vaddr
-            seg_end = seg.vaddr + seg.memsz
-            if seg_end > flash_end:
-                flash_end = seg_end
-        elif seg.is_writable:
-            # RAM segment
-            if ram_base is None or seg.vaddr < ram_base:
-                ram_base = seg.vaddr
-            seg_end = seg.vaddr + seg.memsz
-            if seg_end > ram_end:
-                ram_end = seg_end
-
-    # Default values if not found in ELF
+    # Default values if the ELF did not provide a flash/RAM segment.
     if flash_base is None:
         flash_base = 0x08000000
         flash_end = flash_base + 0x80000  # 512KB
-
     if ram_base is None:
         ram_base = 0x20000000
         ram_end = ram_base + 0x20000  # 128KB
 
-    # Check initial SP from vector table (first word in flash segment)
-    # This ensures the stack area is covered by RAM
-    for seg in elf.segments:
-        if seg.is_executable and len(seg.data) >= 4:
-            initial_sp = int.from_bytes(seg.data[:4], "little")
-            # If initial SP is in RAM region, extend RAM to cover it
-            if ram_base is not None and initial_sp > ram_base and initial_sp > ram_end:
-                ram_end = initial_sp
-            break
-
-    # Round up sizes to power of 2 for convenience
-    def round_up_power2(size: int, min_size: int = 0x1000) -> int:
-        size = max(size, min_size)
-        power = 1
-        while power < size:
-            power *= 2
-        return power
-
-    flash_size = round_up_power2(flash_end - flash_base)
-    ram_size = round_up_power2(ram_end - ram_base)
+    ram_end = _extend_ram_for_initial_sp(elf, ram_base, ram_end)
 
     return {
         "flash_base": flash_base,
-        "flash_size": flash_size,
+        "flash_size": _round_up_power2(flash_end - flash_base),
         "ram_base": ram_base,
-        "ram_size": ram_size,
+        "ram_size": _round_up_power2(ram_end - ram_base),
     }

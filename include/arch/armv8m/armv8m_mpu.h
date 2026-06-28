@@ -226,6 +226,29 @@ void armv8m_mpu_write(MPU *mpu, uint32_t offset, uint32_t value, uint8_t size);
 uint8_t armv8m_mpu_get_attributes(const MPU *mpu, uint32_t addr,
                                   bool privileged);
 
+/**
+ * Find the enabled MPU region containing an address.
+ *
+ * @param mpu   MPU
+ * @param addr  Address to look up
+ * @return      Region index (0..num_regions-1), or -1 if no region matches.
+ */
+int armv8m_mpu_region_for_addr(const MPU *mpu, uint32_t addr);
+
+/**
+ * Decode a region's access permissions into read/write booleans for the
+ * TT instruction result, given the access privilege level.
+ *
+ * @param mpu        MPU
+ * @param region     Region index (from armv8m_mpu_region_for_addr); -1 yields
+ *                   no access.
+ * @param privileged Whether the query is for privileged access.
+ * @param r          Output: read permitted.
+ * @param rw         Output: read-write permitted.
+ */
+void armv8m_mpu_access_bits(const MPU *mpu, int region, bool privileged,
+                            bool *r, bool *rw);
+
 #ifdef __cplusplus
 }
 #endif

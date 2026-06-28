@@ -89,8 +89,8 @@ struct EmuDecoderVTable {
    * @param size      Buffer size
    * @return          Characters written, or negative on error
    */
-  int (*disassemble)(EmuDecoder *dec, const EmuDecodedInsn *insn, char *buf,
-                     size_t size);
+  int (*disassemble)(const EmuDecoder *dec, const EmuDecodedInsn *insn,
+                     char *buf, size_t size);
 
   /**
    * Get maximum instruction size for this architecture.

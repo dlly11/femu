@@ -32,7 +32,7 @@ def main() -> None:
     results.append(subprocess.call(["ruff", "check", "python/"]))
 
     # Python type checking
-    results.append(subprocess.call(["mypy", "python/femu/"]))
+    results.append(subprocess.call(["ty", "check", "python/femu/"]))
 
     sys.exit(1 if any(results) else 0)
 

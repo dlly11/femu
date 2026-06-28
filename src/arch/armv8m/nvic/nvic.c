@@ -478,7 +478,7 @@ void armv8m_nvic_set_exception_priority(NVIC *nvic, int exc, uint8_t priority) {
 }
 
 /* Scan pending system exceptions (2-15), updating the best (exc, pri). */
-static void nvic_scan_system_exceptions(NVIC *nvic, uint8_t basepri,
+static void nvic_scan_system_exceptions(const NVIC *nvic, uint8_t basepri,
                                         int current_pri, int *best_exc,
                                         int *best_pri) {
   for (int exc = 2; exc <= 15; exc++) {
@@ -666,7 +666,7 @@ static uint32_t nvic_read_ipr(const NVIC *nvic, uint32_t offset, uint8_t size) {
   return value;
 }
 
-uint32_t armv8m_nvic_read(NVIC *nvic, uint32_t offset, uint8_t size) {
+uint32_t armv8m_nvic_read(const NVIC *nvic, uint32_t offset, uint8_t size) {
   if (offset < NVIC_ISER_BASE + 0x20) {
     /* ISER0-7: Interrupt Set Enable */
     return nvic_read_bank(nvic->enabled, offset);

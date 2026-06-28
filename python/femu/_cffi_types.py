@@ -1,5 +1,4 @@
-"""
-Type definitions for CFFI bindings.
+"""Type definitions for CFFI bindings.
 
 This module provides Protocol classes that describe CFFI interfaces
 without using `Any`. These types enable proper type checking across

@@ -7,7 +7,15 @@
 # switches* (e.g. exec_mrs/exec_msr/exec_hint, decode_multiply) carry a
 # localized NOLINTNEXTLINE because their score is a false positive. Functions
 # that are flagged for genuine nested complexity are intentionally left
-# reported (the checks are report-only; WarningsAsErrors is empty).
+# reported.
+#
+# Enforcement: the bug-finding and quality families (bugprone-*, cert-*,
+# modernize-*, performance-*, portability-*) are promoted to errors via
+# WarningsAsErrors so they gate CI. clang-analyzer-* is deliberately left
+# advisory: clang-analyzer-security.ArrayBound fires false positives on the
+# bounded computed-goto interpreter, and clang-analyzer-deadcode.DeadStores
+# covers the threaded-interpreter dispatch. The readability-* complexity checks
+# are also advisory (intentional flat opcode dispatch).
 
 Checks: >
   -*,
@@ -35,7 +43,7 @@ Checks: >
   -clang-diagnostic-error,
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
 
-WarningsAsErrors: ''
+WarningsAsErrors: 'bugprone-*,cert-*,modernize-*,performance-*,portability-*'
 
 HeaderFilterRegex: 'include/.*\.h$'
 

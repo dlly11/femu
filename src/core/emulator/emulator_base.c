@@ -15,11 +15,6 @@
  *============================================================================*/
 
 /**
- * Architecture-specific emulator creation function type.
- */
-typedef EmuEmulator *(*ArchEmulatorCreateFn)(const EmuEmulatorConfig *config);
-
-/**
  * Registered architecture entry.
  */
 typedef struct {
@@ -124,6 +119,7 @@ void emu_emulator_default_config(EmuEmulatorConfig *config, EmuArchType arch) {
     config->num_irqs = 32;
     break;
 
+  case EMU_ARCH_UNKNOWN:
   default:
     /* Generic defaults */
     config->flash_base = 0x00000000;
@@ -155,6 +151,7 @@ const char *emu_arch_name(EmuArchType arch) {
     return "RISC-V 32";
   case EMU_ARCH_RISCV64:
     return "RISC-V 64";
+  case EMU_ARCH_UNKNOWN:
   default:
     return "Unknown";
   }

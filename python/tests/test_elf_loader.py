@@ -5,10 +5,13 @@ Uses the prebuilt firmware ELFs under tests/firmware. No C library required.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from femu.elf_loader import ElfError, load_elf, suggest_memory_config
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 EM_ARM = 40
 

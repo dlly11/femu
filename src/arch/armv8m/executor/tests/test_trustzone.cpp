@@ -434,6 +434,92 @@ TEST(TZ_TT, TT_ReturnsSREGION) {
   CHECK_EQUAL(2u, (exec.cpu.r[1] >> 8) & 0xFF); /* SREGION = 2 */
 }
 
+TEST(TZ_TT, TT_MPU_IREGION) {
+  /* TT reports the matching MPU region number in IREGION/IRVALID. */
+  MPU mpu;
+  armv8m_mpu_init(&mpu, 8);
+  armv8m_mpu_configure_region(&mpu, 3, 0x20000000, 0x2000FFFF, MPU_AP_RW_ALL,
+                              false, MPU_SH_NONE, 0, true);
+  armv8m_mpu_enable(&mpu, true, false, false);
+  exec.mpu = &mpu;
+
+  exec.cpu.r[0] = 0x20001000; /* inside region 3 */
+  insn.type = INSN_TT;
+  insn.rd = 1;
+  insn.rn = 0;
+  insn.op = 0;
+
+  CHECK_EQUAL(ARMV8M_OK, armv8m_exec_insn(&exec, &insn));
+  CHECK_TRUE(exec.cpu.r[1] & (1U << 23));        /* IRVALID */
+  CHECK_EQUAL(3u, (exec.cpu.r[1] >> 24) & 0xFF); /* IREGION = 3 */
+  CHECK_EQUAL(0x3u, exec.cpu.r[1] & 0x3);        /* RW region -> R and RW */
+}
+
+TEST(TZ_TT, TT_MPU_ReadOnlyPermissions) {
+  /* A read-only MPU region yields R set but RW clear in the TT result. */
+  MPU mpu;
+  armv8m_mpu_init(&mpu, 8);
+  armv8m_mpu_configure_region(&mpu, 0, 0x20000000, 0x2000FFFF, MPU_AP_RO_ALL,
+                              false, MPU_SH_NONE, 0, true);
+  armv8m_mpu_enable(&mpu, true, false, false);
+  exec.mpu = &mpu;
+
+  exec.cpu.r[0] = 0x20001000;
+  insn.type = INSN_TT;
+  insn.rd = 1;
+  insn.rn = 0;
+  insn.op = 0;
+
+  CHECK_EQUAL(ARMV8M_OK, armv8m_exec_insn(&exec, &insn));
+  CHECK_TRUE(exec.cpu.r[1] & 0x1);  /* R */
+  CHECK_FALSE(exec.cpu.r[1] & 0x2); /* RW clear (read-only) */
+}
+
+TEST(TZ_TT, TTA_NonSecureViewClearsSecureAccess) {
+  /* Secure code uses TTA to query the Non-secure view of a Secure address.
+   * The Non-secure domain cannot access Secure memory, so R/RW must be clear
+   * even though the address is Secure. This exercises the query-domain logic;
+   * without it the result would report privileged R+RW. */
+  exec.cpu.security = SECURITY_SECURE;
+  exec.sau.ctrl = ARMV8M_SAU_CTRL_ENABLE; /* enabled, but addr in no NS region */
+  exec.cpu.r[0] = 0x10000000;             /* not in any SAU region -> Secure */
+
+  insn.type = INSN_TT;
+  insn.rd = 1;
+  insn.rn = 0;
+  insn.op = 2; /* TTA - query alternate (Non-secure) domain */
+
+  CHECK_EQUAL(ARMV8M_OK, armv8m_exec_insn(&exec, &insn));
+  CHECK_TRUE(exec.cpu.r[1] & (1U << 16)); /* S bit (address is Secure) */
+  CHECK_EQUAL(0u, exec.cpu.r[1] & 0x3);   /* R/RW clear: NS cannot access Secure */
+}
+
+TEST(TZ_TT, TT_IDAU_PinsSecure) {
+  /* SAU marks the address Non-secure, but an IDAU region pins it Secure.
+   * The combined attribution must be Secure. */
+  exec.cpu.security = SECURITY_SECURE;
+  exec.sau.ctrl = ARMV8M_SAU_CTRL_ENABLE;
+  exec.sau.regions[0].rbar = 0x20000000 & 0xFFFFFFE0;
+  exec.sau.regions[0].rlar = 0x2000FFFF | ARMV8M_SAU_RLAR_ENABLE; /* NS region */
+
+  exec.idau.enabled = true;
+  exec.idau.num_regions = 1;
+  exec.idau.regions[0].rbar = 0x20000000 & 0xFFFFFFE0;
+  /* Limit masked to bits[31:5] with EN set but NOT NSC (bit 1) -> the IDAU
+   * region pins the area Secure. */
+  exec.idau.regions[0].rlar = (0x2000FFFF & 0xFFFFFFE0) | ARMV8M_SAU_RLAR_ENABLE;
+
+  exec.cpu.r[0] = 0x20001000;
+  insn.type = INSN_TT;
+  insn.rd = 1;
+  insn.rn = 0;
+  insn.op = 0;
+
+  CHECK_EQUAL(ARMV8M_OK, armv8m_exec_insn(&exec, &insn));
+  CHECK_TRUE(exec.cpu.r[1] & (1U << 16)); /* S bit set (IDAU pinned Secure) */
+  CHECK_FALSE(exec.cpu.r[1] & (1U << 5)); /* NS bit clear */
+}
+
 /*============================================================================
  * Test Group: TrustZone Security Checks
  *============================================================================*/

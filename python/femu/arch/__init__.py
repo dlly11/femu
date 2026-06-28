@@ -1,5 +1,4 @@
-"""
-Architecture-specific emulator implementations.
+"""Architecture-specific emulator implementations.
 
 This package provides architecture-specific emulator classes that implement
 the common BaseEmulator interface.
@@ -16,9 +15,9 @@ from .armv8m import ARMv8MEmulator
 from .base import ArchType, BaseEmulator, EmulatorError, EmulatorState
 
 __all__ = [
-    "BaseEmulator",
-    "EmulatorState",
-    "EmulatorError",
-    "ArchType",
     "ARMv8MEmulator",
+    "ArchType",
+    "BaseEmulator",
+    "EmulatorError",
+    "EmulatorState",
 ]

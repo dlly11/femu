@@ -75,7 +75,7 @@ static int armv8m_decoder_decode(EmuDecoder *dec, const uint8_t *mem,
   return result;
 }
 
-static int armv8m_decoder_disassemble(EmuDecoder *dec,
+static int armv8m_decoder_disassemble(const EmuDecoder *dec,
                                       const EmuDecodedInsn *insn, char *buf,
                                       size_t size) {
   if (!dec || !insn || !buf || size == 0) {

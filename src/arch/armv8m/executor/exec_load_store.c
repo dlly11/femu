@@ -9,6 +9,7 @@
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
+#include "exec_handlers.h"
 
 /*============================================================================
  * Internal Helpers
@@ -89,6 +90,7 @@ static uint32_t sign_extend(uint32_t value, AccessSize size) {
     return (uint32_t)(int32_t)(int8_t)(value & 0xFF);
   case ACCESS_HALF:
     return (uint32_t)(int32_t)(int16_t)(value & 0xFFFF);
+  case ACCESS_WORD:
   default:
     return value;
   }

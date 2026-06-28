@@ -41,8 +41,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Base warning flags for both compilers
 set(COMMON_WARNING_FLAGS "-Wall -Wextra -Werror -pedantic")
 
-# Additional warnings
-set(EXTRA_C_WARNINGS "-Wconversion -Wshadow -Wundef -Wcast-align -Wwrite-strings")
+# Additional warnings. The C set is deliberately aggressive: prototype and
+# declaration hygiene, pointer-arithmetic and VLA bans, and float-promotion
+# checks on top of the conversion/shadow/alignment checks.
+set(EXTRA_C_WARNINGS
+    "-Wconversion -Wshadow -Wundef -Wcast-align -Wwrite-strings \
+-Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations \
+-Wold-style-definition -Wredundant-decls -Wnested-externs \
+-Wpointer-arith -Wvla -Wdouble-promotion -Wformat=2 \
+-Wswitch-default -Wswitch-enum")
 set(EXTRA_CXX_WARNINGS "-Wconversion -Wshadow -Wundef -Wcast-align")
 
 # Compiler-specific flags
@@ -104,17 +111,16 @@ if(CPPCHECK)
             --std=c11
             --suppress=missingIncludeSystem
             --suppress=missingInclude  # External test framework headers
-            --suppress=unusedFunction
-            --suppress=constVariablePointer  # Style only
-            --suppress=constVariable  # Style only
-            --suppress=constParameterPointer  # Style only
-            --suppress=constParameterCallback  # Style only
-            --suppress=staticFunction  # Style only - internal linkage choice
-            --suppress=unusedVariable  # Test code often has unused vars
-            --suppress=unreadVariable  # May be used for debugging
+            --suppress=unusedFunction  # Library entry points exported for callers
+            # const-correctness IS enforced: constVariable/constVariablePointer/
+            # constParameter* are no longer suppressed. The one computed-goto
+            # false positive carries an inline cppcheck-suppress in executor.c.
+            --suppress=staticFunction  # Block-exec entry points are public API (declared in headers) though currently self-contained
+            --suppress=unusedVariable  # CppUTest TEST_GROUP fixtures are legitimately unused per-group
+            --suppress=unreadVariable  # Computed-goto interpreter / run-loop false positives (real dead stores still flagged by clang-tidy deadcode)
             --suppress=unusedLabelConfiguration  # Labels for computed goto
             --suppress=variableScope  # Style only
-            --suppress=knownConditionTrueFalse  # Defensive coding
+            --suppress=knownConditionTrueFalse  # Defensive bounds guards + PC mutation the analyzer cannot track
             --suppress=shiftTooManyBitsSigned  # False positive for ASR instructions
             --suppress=assignBoolToPointer  # False positive for GCC computed goto
             --suppress=normalCheckLevelMaxBranches  # Just an info message

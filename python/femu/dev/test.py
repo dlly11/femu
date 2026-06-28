@@ -1,5 +1,4 @@
-"""
-Test runner for FEMU.
+"""Test runner for FEMU.
 
 Runs C tests (CppUTest) and Python tests (pytest).
 """
@@ -17,8 +16,7 @@ console = Console()
 
 
 def run_c_tests(verbose: bool = False, test_filter: str | None = None) -> bool:
-    """
-    Run C tests using CTest.
+    """Run C tests using CTest.
 
     Returns True if all tests passed.
     """
@@ -43,8 +41,7 @@ def run_c_tests(verbose: bool = False, test_filter: str | None = None) -> bool:
 
 
 def run_python_tests(verbose: bool = False, expression: str | None = None) -> bool:
-    """
-    Run Python tests using pytest.
+    """Run Python tests using pytest.
 
     Returns True if all tests passed.
     """
@@ -71,6 +68,7 @@ def run_python_tests(verbose: bool = False, expression: str | None = None) -> bo
             cmd,
             cwd=PROJECT_ROOT,
             env={**os.environ, **env},
+            check=False,
         )
         success = result.returncode == 0
     except (OSError, subprocess.SubprocessError) as e:
@@ -86,8 +84,7 @@ def run_python_tests(verbose: bool = False, expression: str | None = None) -> bo
 
 
 def run_all_tests(verbose: bool = False) -> bool:
-    """
-    Run all tests (C and Python).
+    """Run all tests (C and Python).
 
     Returns True if all tests passed.
     """

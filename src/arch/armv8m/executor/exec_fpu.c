@@ -9,6 +9,7 @@
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
+#include "exec_handlers.h"
 #include <math.h>
 #include <string.h>
 
@@ -480,7 +481,7 @@ static void fpu_vmov_imm(CPUState *cpu, const DecodedInsn *insn) {
     /* F32: aBbbbbbc defgh000 00000000 00000000 */
     uint32_t exp = b ? 0x7C : 0x80;
     uint32_t imm32 =
-        ((uint32_t)a << 31) | ((uint32_t)exp << 23) | ((uint32_t)bcdefgh << 19);
+        ((uint32_t)a << 31) | (exp << 23) | ((uint32_t)bcdefgh << 19);
     union {
       uint32_t i;
       float f;

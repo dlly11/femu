@@ -7,19 +7,10 @@
  */
 
 #include "arch/armv8m/armv8m_decoder.h"
+#include "decoder_internal.h"
 #include "emu/emu_log.h"
 #include <stdio.h>
 #include <string.h>
-
-/*============================================================================
- * Internal Function Declarations
- *============================================================================*/
-
-/* Defined in decode_thumb16.c */
-int decode_thumb16(uint16_t insn, uint32_t pc, DecodedInsn *out);
-
-/* Defined in decode_thumb32.c */
-int decode_thumb32(uint16_t hw1, uint16_t hw2, uint32_t pc, DecodedInsn *out);
 
 /*============================================================================
  * Helper Functions
@@ -158,6 +149,33 @@ const char *armv8m_insn_mnemonic(InstructionType type, uint8_t op) {
     return "SDIV/UDIV";
   case INSN_EXTEND:
     return "SXTH/UXTH";
+  case INSN_UNDEFINED:
+  case INSN_SATURATE:
+  case INSN_SAT_ARITH:
+  case INSN_PARALLEL:
+  case INSN_PACK:
+  case INSN_BITFIELD:
+  case INSN_LOAD_EXCLUSIVE:
+  case INSN_STORE_EXCLUSIVE:
+  case INSN_CLEAR_EXCLUSIVE:
+  case INSN_LOAD_ACQUIRE:
+  case INSN_STORE_RELEASE:
+  case INSN_TABLE_BRANCH:
+  case INSN_CPS:
+  case INSN_SG:
+  case INSN_BXNS:
+  case INSN_BLXNS:
+  case INSN_TT:
+  case INSN_MCR:
+  case INSN_MRC:
+  case INSN_FPU_LOAD:
+  case INSN_FPU_STORE:
+  case INSN_FPU_MOVE:
+  case INSN_FPU_ARITH:
+  case INSN_FPU_CMP:
+  case INSN_FPU_CVT:
+  case INSN_FPU_MULTI:
+  case INSN_TYPE_COUNT:
   default:
     break;
   }
@@ -196,6 +214,50 @@ int armv8m_disasm(const DecodedInsn *insn, char *buf, size_t buf_size) {
   case INSN_BRANCH_EXCHANGE:
     written = snprintf(buf, buf_size, "%s R%d", mnemonic, insn->rm);
     break;
+  case INSN_UNDEFINED:
+  case INSN_DATA_PROC_SHIFTED:
+  case INSN_MULTIPLY:
+  case INSN_DIVIDE:
+  case INSN_SATURATE:
+  case INSN_SAT_ARITH:
+  case INSN_PARALLEL:
+  case INSN_PACK:
+  case INSN_BITFIELD:
+  case INSN_EXTEND:
+  case INSN_LOAD_REG:
+  case INSN_LOAD_LITERAL:
+  case INSN_STORE_REG:
+  case INSN_LOAD_MULTIPLE:
+  case INSN_STORE_MULTIPLE:
+  case INSN_LOAD_EXCLUSIVE:
+  case INSN_STORE_EXCLUSIVE:
+  case INSN_CLEAR_EXCLUSIVE:
+  case INSN_LOAD_ACQUIRE:
+  case INSN_STORE_RELEASE:
+  case INSN_BRANCH_LINK_EXCHANGE:
+  case INSN_COMPARE_BRANCH:
+  case INSN_TABLE_BRANCH:
+  case INSN_SVC:
+  case INSN_MRS:
+  case INSN_MSR:
+  case INSN_CPS:
+  case INSN_BARRIER:
+  case INSN_HINT:
+  case INSN_IT:
+  case INSN_SG:
+  case INSN_BXNS:
+  case INSN_BLXNS:
+  case INSN_TT:
+  case INSN_MCR:
+  case INSN_MRC:
+  case INSN_FPU_LOAD:
+  case INSN_FPU_STORE:
+  case INSN_FPU_MOVE:
+  case INSN_FPU_ARITH:
+  case INSN_FPU_CMP:
+  case INSN_FPU_CVT:
+  case INSN_FPU_MULTI:
+  case INSN_TYPE_COUNT:
   default:
     written = snprintf(buf, buf_size, "%s", mnemonic);
     break;

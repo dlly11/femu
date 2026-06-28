@@ -1,5 +1,4 @@
-"""
-AI Session Helper.
+"""AI Session Helper.
 
 Helps AI assistants understand which files to read for each module
 and provides context for development sessions.

@@ -11,77 +11,80 @@
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_icache.h"
 #include "emu/emu_log.h"
+#include "exec_handlers.h"
 #include <string.h>
-
-/*============================================================================
- * Forward Declarations for Instruction Handlers
- *============================================================================*/
-
-/* Data processing (exec_data_proc.c) */
-int exec_data_proc_imm(Executor *exec, const DecodedInsn *insn);
-int exec_data_proc_reg(Executor *exec, const DecodedInsn *insn);
-int exec_data_proc_shifted(Executor *exec, const DecodedInsn *insn);
-int exec_multiply(Executor *exec, const DecodedInsn *insn);
-int exec_divide(Executor *exec, const DecodedInsn *insn);
-int exec_extend(Executor *exec, const DecodedInsn *insn);
-int exec_bitfield(Executor *exec, const DecodedInsn *insn);
-int exec_saturate(Executor *exec, const DecodedInsn *insn);
-int exec_sat_arith(Executor *exec, const DecodedInsn *insn);
-int exec_parallel(Executor *exec, const DecodedInsn *insn);
-int exec_pack(Executor *exec, const DecodedInsn *insn);
-
-/* Load/store (exec_load_store.c) */
-int exec_load_imm(Executor *exec, const DecodedInsn *insn);
-int exec_load_reg(Executor *exec, const DecodedInsn *insn);
-int exec_load_literal(Executor *exec, const DecodedInsn *insn);
-int exec_store_imm(Executor *exec, const DecodedInsn *insn);
-int exec_store_reg(Executor *exec, const DecodedInsn *insn);
-int exec_load_multiple(Executor *exec, const DecodedInsn *insn);
-int exec_store_multiple(Executor *exec, const DecodedInsn *insn);
-int exec_load_exclusive(Executor *exec, const DecodedInsn *insn);
-int exec_store_exclusive(Executor *exec, const DecodedInsn *insn);
-int exec_clear_exclusive(Executor *exec, const DecodedInsn *insn);
-int exec_load_acquire(Executor *exec, const DecodedInsn *insn);
-int exec_store_release(Executor *exec, const DecodedInsn *insn);
-
-/* Branch (exec_branch.c) */
-int exec_branch(Executor *exec, const DecodedInsn *insn);
-int exec_branch_link(Executor *exec, const DecodedInsn *insn);
-int exec_branch_exchange(Executor *exec, const DecodedInsn *insn);
-int exec_branch_link_exchange(Executor *exec, const DecodedInsn *insn);
-int exec_compare_branch(Executor *exec, const DecodedInsn *insn);
-int exec_table_branch(Executor *exec, const DecodedInsn *insn);
-int exec_sg(Executor *exec, const DecodedInsn *insn);
-int exec_bxns(Executor *exec, const DecodedInsn *insn);
-int exec_blxns(Executor *exec, const DecodedInsn *insn);
-
-/* System (exec_system.c) */
-int exec_svc(Executor *exec, const DecodedInsn *insn);
-int exec_mrs(Executor *exec, const DecodedInsn *insn);
-int exec_msr(Executor *exec, const DecodedInsn *insn);
-int exec_cps(Executor *exec, const DecodedInsn *insn);
-int exec_barrier(Executor *exec, const DecodedInsn *insn);
-int exec_hint(Executor *exec, const DecodedInsn *insn);
-int exec_it(Executor *exec, const DecodedInsn *insn);
-int exec_mcr(Executor *exec, const DecodedInsn *insn);
-int exec_mrc(Executor *exec, const DecodedInsn *insn);
-int exec_tt(Executor *exec, const DecodedInsn *insn);
-
-/* FPU (exec_fpu.c) */
-int exec_fpu_load(Executor *exec, const DecodedInsn *insn);
-int exec_fpu_store(Executor *exec, const DecodedInsn *insn);
-int exec_fpu_move(Executor *exec, const DecodedInsn *insn);
-int exec_fpu_arith(Executor *exec, const DecodedInsn *insn);
-int exec_fpu_cmp(Executor *exec, const DecodedInsn *insn);
-int exec_fpu_cvt(Executor *exec, const DecodedInsn *insn);
-int exec_fpu_multi(Executor *exec, const DecodedInsn *insn);
 
 /*============================================================================
  * TrustZone Security Check
  *============================================================================*/
 
 /**
- * Check security attributes of an address using SAU.
+ * Look up an address in a SAU/IDAU-style region table.
+ *
+ * @param regions     Region array (SAU layout: rbar/rlar).
+ * @param count       Number of regions to scan.
+ * @param addr        Address to look up.
+ * @param plain_match Attribute for a matching region without the NSC bit.
+ * @param unmatched   Attribute when no enabled region contains the address.
+ * @return SEC_NSC for an NSC region, otherwise @p plain_match / @p unmatched.
+ */
+static SecurityAttr region_table_attr(const SAURegion *regions, uint32_t count,
+                                      uint32_t addr, SecurityAttr plain_match,
+                                      SecurityAttr unmatched) {
+  for (uint32_t i = 0; i < count; i++) {
+    const SAURegion *region = &regions[i];
+    if (!(region->rlar & ARMV8M_SAU_RLAR_ENABLE)) {
+      continue;
+    }
+    /* Base is bits [31:5] of RBAR; limit is bits [31:5] of RLAR with the low
+     * 5 bits set (regions are 32-byte aligned and the limit is inclusive). */
+    uint32_t base = region->rbar & 0xFFFFFFE0U;
+    uint32_t limit = (region->rlar & 0xFFFFFFE0U) | 0x1FU;
+    if (addr >= base && addr <= limit) {
+      return (region->rlar & ARMV8M_SAU_RLAR_NSC) ? SEC_NSC : plain_match;
+    }
+  }
+  return unmatched;
+}
+
+/** SAU attribution: regions mark Non-Secure(/NSC) areas; default Secure. */
+static SecurityAttr sau_attr(const Executor *exec, uint32_t addr) {
+  const SAUState *sau = &exec->sau;
+  if (!(sau->ctrl & ARMV8M_SAU_CTRL_ENABLE)) {
+    return (sau->ctrl & ARMV8M_SAU_CTRL_ALLNS) ? SEC_NONSECURE : SEC_SECURE;
+  }
+  return region_table_attr(sau->regions, ARMV8M_SAU_REGIONS_MAX, addr,
+                           SEC_NONSECURE, SEC_SECURE);
+}
+
+/** IDAU attribution: regions pin Secure(/NSC) areas; otherwise no opinion
+ * (Non-secure) so the SAU result governs via more_secure(). */
+static SecurityAttr idau_attr(const Executor *exec, uint32_t addr) {
+  const IDAUState *idau = &exec->idau;
+  if (!idau->enabled) {
+    return SEC_NONSECURE;
+  }
+  return region_table_attr(idau->regions, idau->num_regions, addr, SEC_SECURE,
+                           SEC_NONSECURE);
+}
+
+/** Combine two attributions, keeping the more secure (Secure > NSC > NS). */
+static SecurityAttr more_secure(SecurityAttr a, SecurityAttr b) {
+  if (a == SEC_SECURE || b == SEC_SECURE) {
+    return SEC_SECURE;
+  }
+  if (a == SEC_NSC || b == SEC_NSC) {
+    return SEC_NSC;
+  }
+  return SEC_NONSECURE;
+}
+
+/**
+ * Check security attributes of an address by combining SAU and IDAU.
+ *
+ * The attribution is domain-independent (the same from Secure or Non-secure
+ * state); callers that need a domain-relative view (e.g. TT permission bits)
+ * apply that separately.
  *
  * @param exec  Executor context
  * @param addr  Address to check
@@ -92,42 +95,7 @@ SecurityAttr armv8m_check_security(const Executor *exec, uint32_t addr) {
     /* No TrustZone - treat all memory as secure */
     return SEC_SECURE;
   }
-
-  const SAUState *sau = &exec->sau;
-
-  /* If SAU is disabled, check ALLNS bit */
-  if (!(sau->ctrl & ARMV8M_SAU_CTRL_ENABLE)) {
-    if (sau->ctrl & ARMV8M_SAU_CTRL_ALLNS) {
-      return SEC_NONSECURE;
-    }
-    return SEC_SECURE;
-  }
-
-  /* Check each SAU region */
-  for (uint32_t i = 0; i < ARMV8M_SAU_REGIONS_MAX; i++) {
-    const SAURegion *region = &sau->regions[i];
-
-    /* Check if region is enabled */
-    if (!(region->rlar & ARMV8M_SAU_RLAR_ENABLE)) {
-      continue;
-    }
-
-    /* Region base is bits [31:5] of RBAR */
-    uint32_t base = region->rbar & 0xFFFFFFE0U;
-    /* Region limit is bits [31:5] of RLAR, with bits [4:0] set to 1 */
-    uint32_t limit = (region->rlar & 0xFFFFFFE0U) | 0x1FU;
-
-    if (addr >= base && addr <= limit) {
-      /* Address is in this region */
-      if (region->rlar & ARMV8M_SAU_RLAR_NSC) {
-        return SEC_NSC;
-      }
-      return SEC_NONSECURE;
-    }
-  }
-
-  /* Address not in any NS region - secure by default */
-  return SEC_SECURE;
+  return more_secure(sau_attr(exec, addr), idau_attr(exec, addr));
 }
 
 /*============================================================================
@@ -586,6 +554,7 @@ int armv8m_exec_insn(Executor *exec, const DecodedInsn *insn) {
     return exec_fpu_multi(exec, insn);
 
   case INSN_UNDEFINED:
+  case INSN_TYPE_COUNT:
   default:
     return ARMV8M_ERR_UNDEFINED_INSN;
   }
@@ -1105,6 +1074,8 @@ static BasicBlock *exec_next_linked_block(Executor *exec, BasicBlock *block) {
  * would defeat the threaded-dispatch performance design). */
 // NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
 int armv8m_exec_block_threaded(Executor *exec, BasicBlock *block) {
+  /* cppcheck-suppress constVariablePointer  # cpu is mutated inside the
+   * computed-goto dispatch blocks below, which cppcheck cannot follow. */
   CPUState *cpu = &exec->cpu;
   int result = ARMV8M_OK;
 

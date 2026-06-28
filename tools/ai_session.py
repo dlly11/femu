@@ -41,7 +41,7 @@ def main() -> int:
 
     except ImportError:
         print("Error: femu package not installed.")
-        print("Run 'pip install -e .' or enter the nix shell with 'nix develop'")
+        print("Run 'uv pip install -e .' or enter the nix shell with 'nix develop'")
         return 1
 
 

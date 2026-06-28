@@ -1,5 +1,4 @@
-"""
-Module validation tools.
+"""Module validation tools.
 
 Validates that module implementations:
 - Exist and have required files
@@ -19,8 +18,7 @@ console = Console()
 
 
 def validate_module(module: str) -> bool:
-    """
-    Validate a single module implementation.
+    """Validate a single module implementation.
 
     Returns True if validation passed, False otherwise.
     """
@@ -42,8 +40,7 @@ def validate_module(module: str) -> bool:
     # Check if module is implemented
     if not main_file.exists():
         console.print(
-            f"[yellow]Module '{module}' not implemented yet "
-            f"(missing {m['impl_files'][0]})[/yellow]"
+            f"[yellow]Module '{module}' not implemented yet (missing {m['impl_files'][0]})[/yellow]"
         )
         return True  # Not an error, just not implemented
 
@@ -90,14 +87,12 @@ def validate_module(module: str) -> bool:
     if errors == 0:
         console.print(f"[green]✓ Module '{module}' validated successfully![/green]")
         return True
-    else:
-        console.print(f"[red]✗ Module '{module}' has {errors} error(s)[/red]")
-        return False
+    console.print(f"[red]✗ Module '{module}' has {errors} error(s)[/red]")
+    return False
 
 
 def validate_all_modules() -> bool:
-    """
-    Validate all implemented modules.
+    """Validate all implemented modules.
 
     Returns True if all validations passed.
     """

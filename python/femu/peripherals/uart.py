@@ -1,5 +1,4 @@
-"""
-Simple UART peripheral implementation.
+"""Simple UART peripheral implementation.
 
 This provides a basic UART that can capture output from firmware
 and optionally inject input.
@@ -30,8 +29,7 @@ from ..peripheral_registry import PeripheralRegistry
 
 @PeripheralRegistry.register("simple_uart", "Simple UART with TX/RX buffering")
 class SimpleUART(Peripheral):
-    """
-    Simple UART peripheral for capturing firmware output.
+    """Simple UART peripheral for capturing firmware output.
 
     Example:
         uart = SimpleUART(name="USART1")
@@ -60,9 +58,8 @@ class SimpleUART(Peripheral):
 
     def __init__(
         self, name: str = "uart", irq: int = -1, echo: bool = False, max_buffer: int = 4096
-    ):
-        """
-        Initialize UART peripheral.
+    ) -> None:
+        """Initialize UART peripheral.
 
         Args:
             name: Instance name (e.g., "USART1")
@@ -88,13 +85,13 @@ class SimpleUART(Peripheral):
                 return self._rx_buffer.popleft()
             return 0
 
-        elif offset == self.REG_STATUS:
+        if offset == self.REG_STATUS:
             status = self.STATUS_TXE  # TX always ready
             if self._rx_buffer:
                 status |= self.STATUS_RXNE
             return status
 
-        elif offset == self.REG_CTRL:
+        if offset == self.REG_CTRL:
             return self._ctrl
 
         return 0
@@ -124,8 +121,7 @@ class SimpleUART(Peripheral):
     # =========================================================================
 
     def get_output(self) -> str:
-        """
-        Get all transmitted data as a string.
+        """Get all transmitted data as a string.
 
         Returns:
             String of all characters transmitted by firmware
@@ -133,8 +129,7 @@ class SimpleUART(Peripheral):
         return "".join(chr(c) for c in self._tx_buffer)
 
     def get_output_bytes(self) -> bytes:
-        """
-        Get all transmitted data as bytes.
+        """Get all transmitted data as bytes.
 
         Returns:
             Bytes of all data transmitted by firmware
@@ -146,8 +141,7 @@ class SimpleUART(Peripheral):
         self._tx_buffer.clear()
 
     def inject_input(self, data: str | bytes) -> None:
-        """
-        Inject data into the receive buffer.
+        """Inject data into the receive buffer.
 
         This simulates data being received by the UART.
 

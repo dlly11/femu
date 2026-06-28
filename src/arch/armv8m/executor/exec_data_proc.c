@@ -9,6 +9,7 @@
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
+#include "exec_handlers.h"
 
 /*============================================================================
  * Internal Helpers
@@ -936,6 +937,7 @@ int exec_extend(Executor *exec, const DecodedInsn *insn) {
     }
     break;
 
+  case ACCESS_WORD:
   default:
     result = rm_val;
     break;
@@ -979,6 +981,24 @@ int exec_bitfield(Executor *exec, const DecodedInsn *insn) {
     break;
 
   case DP_MOV:
+  case DP_AND:
+  case DP_EOR:
+  case DP_LSL:
+  case DP_LSR:
+  case DP_ASR:
+  case DP_ADC:
+  case DP_SBC:
+  case DP_ROR:
+  case DP_TST:
+  case DP_TEQ:
+  case DP_RSB:
+  case DP_CMP:
+  case DP_CMN:
+  case DP_MUL:
+  case DP_MVN:
+  case DP_ADD:
+  case DP_SUB:
+  case DP_ORN:
   default:
     /* SBFX/UBFX: Bitfield extract */
     if (insn->is_signed) {

@@ -1,5 +1,4 @@
-"""
-Built-in example peripherals.
+"""Built-in example peripherals.
 
 This module provides example peripheral implementations that demonstrate
 how to create peripherals using the femu peripheral system.
@@ -31,6 +30,6 @@ from .gpio import SimpleGPIO
 from .uart import SimpleUART
 
 __all__ = [
-    "SimpleUART",
     "SimpleGPIO",
+    "SimpleUART",
 ]

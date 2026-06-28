@@ -358,7 +358,7 @@ int decode_vfp(uint16_t hw1, uint16_t hw2, DecodedInsn *out) {
     /* Not a VFP instruction - generic coprocessor */
     out->type = (BIT(hw1, 4)) ? INSN_MRC : INSN_MCR;
     out->rd = (uint8_t)EXTRACT(hw2, 12, 4);
-    out->imm = ((uint32_t)opc1 << 4) | opc2;
+    out->imm = (opc1 << 4) | opc2;
     return 0;
   }
 

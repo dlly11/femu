@@ -1,9 +1,9 @@
 repos:
   - repo: local
     hooks:
-      - id: black
-        name: black (Python formatter)
-        entry: black
+      - id: ruff-format
+        name: ruff format (Python formatter)
+        entry: ruff format
         language: system
         types: [python]
 
@@ -19,9 +19,9 @@ repos:
         language: system
         files: \.(c|h|cpp|hpp)$
 
-      - id: mypy
-        name: mypy (Python type checker)
-        entry: mypy python/femu/
+      - id: ty
+        name: ty (Python type checker)
+        entry: ty check python/femu/
         language: system
         types: [python]
         pass_filenames: false

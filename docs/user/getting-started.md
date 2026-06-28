@@ -46,10 +46,10 @@ If you prefer not to use Nix, install these dependencies manually:
 - Python 3.10+
 - ARM cross-compiler (`arm-none-eabi-gcc`)
 
-**Python packages:**
+**Python packages** (using [uv](https://docs.astral.sh/uv/)):
 
 ```bash
-pip install cffi click rich pytest
+uv pip install cffi click rich pytest
 ```
 
 **Optional (for static analysis):**
@@ -60,7 +60,7 @@ pip install cffi click rich pytest
 **Install FEMU:**
 
 ```bash
-pip install -e .
+uv pip install -e .
 ```
 
 ## Building FEMU

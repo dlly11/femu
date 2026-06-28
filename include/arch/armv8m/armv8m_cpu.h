@@ -110,16 +110,16 @@ typedef enum {
  * ARMv8-M special register IDs for get_special_reg/set_special_reg.
  */
 typedef enum {
-  ARMV8M_CPU_SREG_MSP = 0, /* Main Stack Pointer */
-  ARMV8M_CPU_SREG_PSP,     /* Process Stack Pointer */
-  ARMV8M_CPU_SREG_PRIMASK,
-  ARMV8M_CPU_SREG_BASEPRI,
-  ARMV8M_CPU_SREG_FAULTMASK,
-  ARMV8M_CPU_SREG_CONTROL,
-  ARMV8M_CPU_SREG_MSPLIM,
-  ARMV8M_CPU_SREG_PSPLIM,
-  ARMV8M_CPU_SREG_FPSCR, /* FPU status */
-  ARMV8M_CPU_SREG_S0,    /* FPU S0-S31 start at this ID */
+  ARMV8M_CPU_SREG_MSP = 0,       /* Main Stack Pointer */
+  ARMV8M_CPU_SREG_PSP = 1,       /* Process Stack Pointer */
+  ARMV8M_CPU_SREG_PRIMASK = 2,
+  ARMV8M_CPU_SREG_BASEPRI = 3,
+  ARMV8M_CPU_SREG_FAULTMASK = 4,
+  ARMV8M_CPU_SREG_CONTROL = 5,
+  ARMV8M_CPU_SREG_MSPLIM = 6,
+  ARMV8M_CPU_SREG_PSPLIM = 7,
+  ARMV8M_CPU_SREG_FPSCR = 8, /* FPU status */
+  ARMV8M_CPU_SREG_S0 = 9,    /* FPU S0-S31 start at this ID */
   /* S1-S31 follow sequentially */
   ARMV8M_CPU_SREG_COUNT = ARMV8M_CPU_SREG_S0 + 32
 } ARMv8MCPUSpecialReg;

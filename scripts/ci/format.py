@@ -14,11 +14,11 @@ def main() -> None:
     results = []
 
     # Python formatting
-    black_args = ["black"]
+    ruff_args = ["ruff", "format"]
     if args.check:
-        black_args.append("--check")
-    black_args.append("python/")
-    results.append(subprocess.call(black_args))
+        ruff_args.append("--check")
+    ruff_args.append("python/")
+    results.append(subprocess.call(ruff_args))
 
     # C/C++ formatting
     c_files = list(Path("src").rglob("*.[ch]")) + list(Path("src").rglob("*.cpp"))

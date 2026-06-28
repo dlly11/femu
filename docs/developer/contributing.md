@@ -12,8 +12,8 @@ Thank you for your interest in contributing to FEMU. This guide covers code styl
 # Using Nix (recommended)
 nix develop
 
-# Or install dependencies manually (see docs/user/getting-started.md)
-pip install -e .
+# Or install dependencies manually with uv (see docs/user/getting-started.md)
+uv pip install -e .
 ```
 
 4. Build and verify:

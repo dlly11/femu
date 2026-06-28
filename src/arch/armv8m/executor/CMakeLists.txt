@@ -42,6 +42,10 @@ endif()
 if(TARGET emu_log)
     target_link_libraries(armv8m_executor emu_log)
 endif()
+# MPU region/permission helpers are used by the TT instruction handler.
+if(TARGET armv8m_mpu)
+    target_link_libraries(armv8m_executor armv8m_mpu)
+endif()
 
 # Unit tests (with mocked decoder)
 set(TEST_SOURCES

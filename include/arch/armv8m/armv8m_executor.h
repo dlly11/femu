@@ -15,6 +15,7 @@
 #include "arch/armv8m/armv8m_blocks.h"
 #include "arch/armv8m/armv8m_decoder.h"
 #include "arch/armv8m/armv8m_icache.h"
+#include "arch/armv8m/armv8m_mpu.h"
 #include "arch/armv8m/armv8m_types.h"
 
 #ifdef __cplusplus
@@ -149,6 +150,23 @@ typedef struct {
 } SAUState;
 
 /**
+ * IDAU (Implementation Defined Attribution Unit) state.
+ *
+ * Minimal fixed-attribution model: a region table that pins addresses to a
+ * security attribute regardless of SAU programming. Each region reuses the SAU
+ * region layout; a region with the NSC bit set marks Non-Secure-Callable,
+ * otherwise it marks Secure. Addresses outside every enabled IDAU region (and
+ * the whole unit when @ref enabled is false) contribute no opinion, so the SAU
+ * result governs. The final attribution is the more-secure of SAU and IDAU.
+ * Defaults to disabled/empty, preserving SAU-only behaviour.
+ */
+typedef struct {
+  bool enabled;
+  uint32_t num_regions;
+  SAURegion regions[ARMV8M_SAU_REGIONS_MAX];
+} IDAUState;
+
+/**
  * TrustZone banked registers.
  */
 typedef struct {
@@ -217,6 +235,7 @@ typedef struct {
 
   /* TrustZone state (if has_trustzone) */
   SAUState sau;                /**< Security Attribution Unit */
+  IDAUState idau;              /**< Implementation Defined Attribution Unit */
   TrustZoneBankedRegs tz_regs; /**< Banked registers */
 
   /* Configuration */
@@ -224,6 +243,7 @@ typedef struct {
   bool has_dsp;             /**< DSP extension present? */
   bool has_trustzone;       /**< TrustZone present? */
   uint32_t num_mpu_regions; /**< Number of MPU regions (0 if no MPU) */
+  MPU *mpu;                 /**< MPU state for TT queries (NULL if no MPU) */
 
   /* Vector Table Offset Registers */
   uint32_t vtor;    /**< VTOR - Vector Table Offset Register */

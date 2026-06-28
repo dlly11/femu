@@ -36,10 +36,10 @@ You'll need:
 - Python 3.10+ with click, rich, pytest
 - cppcheck (optional, for static analysis)
 
-Then install the package:
+Then install the package (uv is the project's package manager):
 
 ```bash
-pip install -e .
+uv pip install -e .
 ```
 
 ## Quick Start

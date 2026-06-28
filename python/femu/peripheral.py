@@ -1,5 +1,4 @@
-"""
-Peripheral base classes for Python, C, and plugin peripherals.
+"""Peripheral base classes for Python, C, and plugin peripherals.
 
 This module provides the foundation for implementing peripherals in the emulator:
 
@@ -32,18 +31,23 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from . import _emulator_cffi as cffi
 from ._cffi_types import CData, PeripheralStruct
 from .logging import LogCategory, get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .arch.armv8m import ARMv8MEmulator
 
 logger = get_logger(LogCategory.PERIPHERAL)
+
+# Upper bound on entries scanned from a plugin's NULL-terminated peripheral-type
+# array, so a malformed (non-terminated) array can't drive an unbounded read.
+_MAX_PLUGIN_TYPES = 1024
 
 
 # =============================================================================
@@ -79,8 +83,7 @@ class PeripheralBase(ABC):
 
 
 class Peripheral(PeripheralBase):
-    """
-    Base class for Python-implemented peripherals.
+    """Base class for Python-implemented peripherals.
 
     Subclass this to create peripherals in pure Python. Override the
     read() and write() methods at minimum.
@@ -125,12 +128,11 @@ class Peripheral(PeripheralBase):
     # of the process and are not reclaimed by GC (so __del__ below does not run
     # while an entry exists). This is deliberate for C-handle safety; there is
     # currently no per-instance release path.
-    _instances: dict[int, Peripheral] = {}
-    _handles: dict[int, CData] = {}
+    _instances: ClassVar[dict[int, Peripheral]] = {}
+    _handles: ClassVar[dict[int, CData]] = {}
 
-    def __init__(self, name: str, peripheral_type: str):
-        """
-        Initialize peripheral.
+    def __init__(self, name: str, peripheral_type: str) -> None:
+        """Initialize peripheral.
 
         Args:
             name: Instance name (e.g., "USART1")
@@ -178,7 +180,7 @@ class Peripheral(PeripheralBase):
     @property
     def c_struct(self) -> PeripheralStruct:
         """Return the underlying EmuPeripheral C struct pointer."""
-        return cast(PeripheralStruct, self._c_periph)
+        return cast("PeripheralStruct", self._c_periph)
 
     @property
     def name(self) -> str:
@@ -196,8 +198,7 @@ class Peripheral(PeripheralBase):
 
     @abstractmethod
     def read(self, offset: int, size: int) -> int:
-        """
-        Read from peripheral register.
+        """Read from peripheral register.
 
         Args:
             offset: Byte offset from peripheral base address
@@ -210,8 +211,7 @@ class Peripheral(PeripheralBase):
 
     @abstractmethod
     def write(self, offset: int, value: int, size: int) -> None:
-        """
-        Write to peripheral register.
+        """Write to peripheral register.
 
         Args:
             offset: Byte offset from peripheral base address
@@ -221,16 +221,13 @@ class Peripheral(PeripheralBase):
         ...
 
     def reset(self) -> None:
-        """
-        Reset peripheral to initial state.
+        """Reset peripheral to initial state.
 
         Called on emulator reset. Override to clear registers and state.
         """
-        pass
 
     def tick(self, cycles: int) -> None:
-        """
-        Advance peripheral time.
+        """Advance peripheral time.
 
         Called after each instruction with the number of cycles elapsed.
         Override for cycle-accurate peripherals like timers.
@@ -238,15 +235,13 @@ class Peripheral(PeripheralBase):
         Args:
             cycles: Number of CPU cycles since last tick
         """
-        pass
 
     # =========================================================================
     # IRQ Support
     # =========================================================================
 
     def assert_irq(self, irq: int) -> None:
-        """
-        Assert an interrupt line (set level to 1).
+        """Assert an interrupt line (set level to 1).
 
         Args:
             irq: IRQ number (external interrupt number, not exception number)
@@ -254,13 +249,12 @@ class Peripheral(PeripheralBase):
         # Use C callback if available (set by emulator when peripheral is added)
         if self._c_irq_callback is not None and self._c_emu_ctx is not None:
             # CFFI function pointer is callable at runtime
-            self._c_irq_callback(self._c_emu_ctx, irq, 1)  # type: ignore[operator]
+            self._c_irq_callback(self._c_emu_ctx, irq, 1)
         elif self._irq_callback:
             self._irq_callback(irq, 1)
 
     def deassert_irq(self, irq: int) -> None:
-        """
-        Deassert an interrupt line (set level to 0).
+        """Deassert an interrupt line (set level to 0).
 
         Args:
             irq: IRQ number
@@ -268,13 +262,12 @@ class Peripheral(PeripheralBase):
         # Use C callback if available
         if self._c_irq_callback is not None and self._c_emu_ctx is not None:
             # CFFI function pointer is callable at runtime
-            self._c_irq_callback(self._c_emu_ctx, irq, 0)  # type: ignore[operator]
+            self._c_irq_callback(self._c_emu_ctx, irq, 0)
         elif self._irq_callback:
             self._irq_callback(irq, 0)
 
     def pulse_irq(self, irq: int) -> None:
-        """
-        Pulse an interrupt (assert then immediately deassert).
+        """Pulse an interrupt (assert then immediately deassert).
 
         Useful for edge-triggered interrupts.
 
@@ -285,8 +278,7 @@ class Peripheral(PeripheralBase):
         self.deassert_irq(irq)
 
     def _set_irq_callback(self, callback: Callable[[int, int], None]) -> None:
-        """
-        Set the IRQ callback (called by emulator during registration).
+        """Set the IRQ callback (called by emulator during registration).
 
         Args:
             callback: Function taking (irq_num, level)
@@ -308,8 +300,8 @@ def _py_periph_read(ctx: CData, offset: int, size: int) -> int:
         periph: Peripheral = _ffi.from_handle(ctx)
         result = periph.read(offset, size)
         return result & 0xFFFFFFFF
-    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
-        logger.error("Peripheral read error at offset 0x%x: %s", offset, e)
+    except Exception:  # CFFI callback must not raise into C
+        logger.exception("Peripheral read error at offset 0x%x", offset)
         return 0
 
 
@@ -319,8 +311,8 @@ def _py_periph_write(ctx: CData, offset: int, value: int, size: int) -> None:
     try:
         periph: Peripheral = _ffi.from_handle(ctx)
         periph.write(offset, value, size)
-    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
-        logger.error("Peripheral write error at offset 0x%x: %s", offset, e)
+    except Exception:  # CFFI callback must not raise into C
+        logger.exception("Peripheral write error at offset 0x%x", offset)
 
 
 @_ffi.callback("void(void*)")
@@ -329,8 +321,8 @@ def _py_periph_reset(ctx: CData) -> None:
     try:
         periph: Peripheral = _ffi.from_handle(ctx)
         periph.reset()
-    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
-        logger.error("Peripheral reset error: %s", e)
+    except Exception:  # CFFI callback must not raise into C
+        logger.exception("Peripheral reset error")
 
 
 @_ffi.callback("void(void*, uint64_t)")
@@ -339,8 +331,8 @@ def _py_periph_tick(ctx: CData, cycles: int) -> None:
     try:
         periph: Peripheral = _ffi.from_handle(ctx)
         periph.tick(cycles)
-    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
-        logger.error("Peripheral tick error: %s", e)
+    except Exception:  # CFFI callback must not raise into C
+        logger.exception("Peripheral tick error")
 
 
 @_ffi.callback("void(void*, EmuPeriphIRQCallback, void*)")
@@ -348,11 +340,12 @@ def _py_periph_set_irq_callback(ctx: CData, callback: CData, emu_ctx: CData) -> 
     """CFFI callback that receives the IRQ callback from the emulator."""
     try:
         periph: Peripheral = _ffi.from_handle(ctx)
-        # Store the callback and context for later use
-        periph._c_irq_callback = callback
-        periph._c_emu_ctx = emu_ctx
-    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
-        logger.error("Peripheral set_irq_callback error: %s", e)
+        # Store the callback and context for later use. These are private members
+        # of the peripheral the C side owns, so the access is deliberate.
+        periph._c_irq_callback = callback  # noqa: SLF001
+        periph._c_emu_ctx = emu_ctx  # noqa: SLF001
+    except Exception:  # CFFI callback must not raise into C
+        logger.exception("Peripheral set_irq_callback error")
 
 
 # =============================================================================
@@ -361,8 +354,7 @@ def _py_periph_set_irq_callback(ctx: CData, callback: CData, emu_ctx: CData) -> 
 
 
 class CPeripheral(PeripheralBase):
-    """
-    Wrapper for C-implemented peripherals compiled into the library.
+    """Wrapper for C-implemented peripherals compiled into the library.
 
     Use this to access peripherals implemented in C that are part of the
     emulator library (not loaded from plugins).
@@ -380,8 +372,7 @@ class CPeripheral(PeripheralBase):
         peripheral_type: str,
         keep_alive: list[CData] | None = None,
     ) -> None:
-        """
-        Initialize C peripheral wrapper.
+        """Initialize C peripheral wrapper.
 
         Args:
             c_periph_ptr: Pointer to EmuPeripheral struct
@@ -398,8 +389,7 @@ class CPeripheral(PeripheralBase):
     def from_factory(
         cls, factory_name: str, name: str, config: dict[str, str | int | bool] | None = None
     ) -> CPeripheral:
-        """
-        Create peripheral by calling a C factory function.
+        """Create peripheral by calling a C factory function.
 
         The factory function should have the signature::
 
@@ -441,7 +431,7 @@ class CPeripheral(PeripheralBase):
     @property
     def c_struct(self) -> PeripheralStruct:
         """Return the underlying EmuPeripheral C struct pointer."""
-        return cast(PeripheralStruct, self._c_periph)
+        return cast("PeripheralStruct", self._c_periph)
 
     @property
     def name(self) -> str:
@@ -460,8 +450,7 @@ class CPeripheral(PeripheralBase):
 
 
 class PluginPeripheral(PeripheralBase):
-    """
-    Peripheral loaded from a plugin shared library.
+    """Peripheral loaded from a plugin shared library.
 
     Plugins are .so/.dll/.dylib files that export peripheral factories
     via the emu_plugin_init() entry point.
@@ -483,11 +472,11 @@ class PluginPeripheral(PeripheralBase):
     """
 
     # Cache of loaded plugins: path -> (lib, types_dict, info)
-    _loaded_plugins: dict[
-        str, tuple[CData, dict[str, dict[str, CData | str | None]], dict[str, str | int]]
+    _loaded_plugins: ClassVar[
+        dict[str, tuple[CData, dict[str, dict[str, CData | str | None]], dict[str, str | int]]]
     ] = {}
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - assembles a peripheral from its C handle + metadata
         self,
         c_periph_ptr: CData,
         destroy_fn: CData | None,
@@ -496,8 +485,7 @@ class PluginPeripheral(PeripheralBase):
         plugin_path: str,
         keep_alive: list[CData] | None = None,
     ) -> None:
-        """
-        Initialize plugin peripheral.
+        """Initialize plugin peripheral.
 
         Args:
             c_periph_ptr: Pointer to EmuPeripheral struct
@@ -529,15 +517,14 @@ class PluginPeripheral(PeripheralBase):
         ):
             try:
                 # CFFI function pointer is callable at runtime
-                self._destroy_fn(self._c_periph)  # type: ignore[operator]
+                self._destroy_fn(self._c_periph)
             except Exception as e:  # noqa: BLE001 - cleanup must not raise during GC/shutdown
                 logger.warning("Plugin destroy callback failed: %s", e)
             self._destroyed = True
 
     @classmethod
     def load_plugin(cls, plugin_path: str | Path) -> dict[str, dict[str, CData | str | None]]:
-        """
-        Load a plugin and return its peripheral types.
+        """Load a plugin and return its peripheral types.
 
         Args:
             plugin_path: Path to .so/.dll/.dylib file
@@ -596,13 +583,11 @@ class PluginPeripheral(PeripheralBase):
                 ),
             }
 
-        # Extract peripheral types (NULL-terminated array). Bound the scan so a
-        # plugin with a malformed (non-terminated) array can't drive an
-        # unbounded read past the end of the array into a segfault.
-        MAX_PLUGIN_TYPES = 1024
+        # Extract peripheral types from the NULL-terminated array, bounded by
+        # _MAX_PLUGIN_TYPES (see the constant's definition for why).
         types_dict = {}
         i = 0
-        while i < MAX_PLUGIN_TYPES and types_ptr[i].type_name != ffi.NULL:
+        while i < _MAX_PLUGIN_TYPES and types_ptr[i].type_name != ffi.NULL:
             type_def = types_ptr[i]
             type_name = ffi.string(type_def.type_name).decode("utf-8")
             types_dict[type_name] = {
@@ -627,8 +612,7 @@ class PluginPeripheral(PeripheralBase):
         name: str,
         config: dict[str, str | int | bool] | None = None,
     ) -> PluginPeripheral:
-        """
-        Create a peripheral from a plugin.
+        """Create a peripheral from a plugin.
 
         Args:
             plugin_path: Path to plugin .so/.dll/.dylib
@@ -663,7 +647,7 @@ class PluginPeripheral(PeripheralBase):
         if c_periph == ffi.NULL:
             raise RuntimeError(f"Plugin factory for '{type_name}' returned NULL")
 
-        # destroy is CData | None (not str)
+        # The destroy slot holds a C function pointer or None, never a string.
         destroy_fn = cast("CData | None", type_def["destroy"])
         return cls(
             c_periph,
@@ -676,8 +660,7 @@ class PluginPeripheral(PeripheralBase):
 
     @classmethod
     def get_plugin_info(cls, plugin_path: str | Path) -> dict[str, str | int | list[str]]:
-        """
-        Get metadata about a loaded plugin.
+        """Get metadata about a loaded plugin.
 
         Args:
             plugin_path: Path to plugin file
@@ -699,8 +682,7 @@ class PluginPeripheral(PeripheralBase):
 
     @classmethod
     def unload_plugin(cls, plugin_path: str | Path) -> None:
-        """
-        Remove a plugin from the cache.
+        """Remove a plugin from the cache.
 
         Note: This doesn't truly unload the library (dlclose), but removes
         it from our tracking. Any existing PluginPeripheral instances from
@@ -715,7 +697,7 @@ class PluginPeripheral(PeripheralBase):
     @property
     def c_struct(self) -> PeripheralStruct:
         """Return the underlying EmuPeripheral C struct pointer."""
-        return cast(PeripheralStruct, self._c_periph)
+        return cast("PeripheralStruct", self._c_periph)
 
     @property
     def name(self) -> str:

@@ -18,6 +18,7 @@
  */
 
 #include "decode_thumb32_internal.h"
+#include "decoder_internal.h"
 
 /*============================================================================
  * Main Entry Point

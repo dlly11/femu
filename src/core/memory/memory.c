@@ -350,10 +350,10 @@ uint64_t emu_mem_read(EmuMemorySystem *mem, uint64_t addr, uint8_t size,
   if (mem->page_table && mem->page_table_valid) {
     uint64_t page = addr >> EMU_PAGE_SHIFT;
     if (page < mem->page_table_size) {
-      EmuPageEntry *entry = &mem->page_table[page];
+      const EmuPageEntry *entry = &mem->page_table[page];
       if (entry->data_base) {
         /* Verify address is in region and access fits */
-        EmuMemRegion *r = entry->region;
+        const EmuMemRegion *r = entry->region;
         uint64_t offset = addr - r->base;
         if (addr >= r->base && r->size - offset >= size) {
           return fast_read_ram(entry, addr, size);
@@ -431,10 +431,10 @@ void emu_mem_write(EmuMemorySystem *mem, uint64_t addr, uint64_t value,
   if (mem->page_table && mem->page_table_valid) {
     uint64_t page = addr >> EMU_PAGE_SHIFT;
     if (page < mem->page_table_size) {
-      EmuPageEntry *entry = &mem->page_table[page];
+      const EmuPageEntry *entry = &mem->page_table[page];
       if (entry->data_base && entry->region->type == EMU_MEM_REGION_RAM) {
         /* Verify address is in region and access fits */
-        EmuMemRegion *r = entry->region;
+        const EmuMemRegion *r = entry->region;
         uint64_t offset = addr - r->base;
         if (addr >= r->base && r->size - offset >= size) {
           fast_write_ram(entry, addr, value, size);
@@ -502,9 +502,9 @@ const uint8_t *emu_mem_get_ptr(EmuMemorySystem *mem, uint64_t addr,
   if (mem->page_table && mem->page_table_valid) {
     uint64_t page = addr >> EMU_PAGE_SHIFT;
     if (page < mem->page_table_size) {
-      EmuPageEntry *entry = &mem->page_table[page];
+      const EmuPageEntry *entry = &mem->page_table[page];
       if (entry->data_base && entry->region) {
-        EmuMemRegion *r = entry->region;
+        const EmuMemRegion *r = entry->region;
         if (addr >= r->base && r->size - (addr - r->base) >= size) {
           return entry->data_base + addr;
         }

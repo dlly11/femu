@@ -1,5 +1,4 @@
-"""
-FEMU - Fast EMUlator.
+"""FEMU - Fast EMUlator.
 
 A lightweight, extensible CPU emulator designed for AI-assisted development.
 Currently supports ARMv8-M (Cortex-M33 class).
@@ -89,50 +88,50 @@ def get_project_root() -> Path:
 
 
 __all__ = [
-    # Version info
-    "__version__",
-    "get_version",
-    "get_project_root",
+    "BUILD_DIR",
+    "CPPUTEST_DIR",
+    "INCLUDE_DIR",
+    "LIB_DIR",
     # Paths
     "PROJECT_ROOT",
-    "INCLUDE_DIR",
     "SRC_DIR",
-    "BUILD_DIR",
-    "LIB_DIR",
-    "CPPUTEST_DIR",
-    # Factory and types
-    "create_emulator",
-    "get_supported_architectures",
+    "TRACE",
+    # ARMv8-M specific
+    "ARMv8MConfig",
+    "ARMv8MEmulator",
     "ArchType",
     "BaseEmulator",
     "BaseEmulatorConfig",
+    "CPUConfig",
+    "CPeripheral",
     # Errors
     "EmulatorError",
     "EmulatorState",
     "ExecutionError",
-    "MemoryFaultError",
-    # ARMv8-M specific
-    "ARMv8MConfig",
-    "ARMv8MEmulator",
-    # Peripheral system
-    "PeripheralBase",
-    "Peripheral",
-    "CPeripheral",
-    "PluginPeripheral",
-    "PeripheralRegistry",
-    "PeripheralTypeInfo",
+    "LogCategory",
+    "LogLevel",
     # Machine configuration
     "Machine",
     "MachineDef",
+    "MemoryFaultError",
     "MemoryRegion",
+    "Peripheral",
+    # Peripheral system
+    "PeripheralBase",
     "PeripheralDef",
-    "CPUConfig",
+    "PeripheralRegistry",
+    "PeripheralTypeInfo",
+    "PluginPeripheral",
+    # Version info
+    "__version__",
     # Logging system
     "configure_logging",
-    "get_logger",
+    # Factory and types
+    "create_emulator",
     "disable_logging",
     "enable_logging",
-    "LogLevel",
-    "LogCategory",
-    "TRACE",
+    "get_logger",
+    "get_project_root",
+    "get_supported_architectures",
+    "get_version",
 ]

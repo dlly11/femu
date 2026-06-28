@@ -19,8 +19,8 @@ def main() -> None:
     configure(build_type="Release", sanitizers=False)
     compile_project()
 
-    # Build wheel
-    sys.exit(subprocess.call(["python", "-m", "build", "--wheel", "--outdir", "dist/"]))
+    # Build wheel (uv drives the setuptools build backend declared in pyproject.toml)
+    sys.exit(subprocess.call(["uv", "build", "--wheel", "--out-dir", "dist/"]))
 
 
 if __name__ == "__main__":

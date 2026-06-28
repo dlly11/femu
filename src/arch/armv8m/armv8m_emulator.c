@@ -341,8 +341,9 @@ int armv8m_emu_init(Emulator *emu, const EmulatorConfig *config) {
   /* Initialize NVIC */
   armv8m_nvic_init(&emu->nvic, cfg.num_irqs);
 
-  /* Initialize MPU */
+  /* Initialize MPU and give the executor a handle for TT region queries. */
   armv8m_mpu_init(&emu->mpu, cfg.num_mpu_regions);
+  emu->exec.mpu = &emu->mpu;
 
   /* Wire memory callbacks */
   emu->exec.mem.ctx = emu;

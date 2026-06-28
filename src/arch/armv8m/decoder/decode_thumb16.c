@@ -20,6 +20,7 @@
  */
 
 #include "arch/armv8m/armv8m_decoder.h"
+#include "decoder_internal.h"
 
 /*============================================================================
  * Helper Macros

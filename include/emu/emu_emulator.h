@@ -294,6 +294,47 @@ EmuEmulator *emu_emulator_create(EmuArchType arch,
 void emu_emulator_destroy(EmuEmulator *emu);
 
 /*============================================================================
+ * Architecture Registry
+ *============================================================================*/
+
+/**
+ * Architecture-specific emulator creation function type.
+ */
+typedef EmuEmulator *(*ArchEmulatorCreateFn)(const EmuEmulatorConfig *config);
+
+/**
+ * Register an architecture emulator creator.
+ *
+ * @param arch          Architecture type
+ * @param create_fn     Creation function
+ * @return              EMU_OK or an error code
+ */
+int emu_register_arch(EmuArchType arch, ArchEmulatorCreateFn create_fn);
+
+/**
+ * Fill @p config with the default configuration for @p arch.
+ */
+void emu_emulator_default_config(EmuEmulatorConfig *config, EmuArchType arch);
+
+/**
+ * Return a human-readable name for @p arch.
+ */
+const char *emu_arch_name(EmuArchType arch);
+
+/**
+ * Report whether an emulator for @p arch has been registered.
+ */
+bool emu_arch_is_available(EmuArchType arch);
+
+/**
+ * Write the list of registered architectures into @p archs.
+ *
+ * @param archs  Output buffer; must hold at least EMU_ARCH_COUNT entries.
+ * @return       Number of architectures written.
+ */
+int emu_get_available_archs(EmuArchType *archs);
+
+/*============================================================================
  * Convenience Macros
  *============================================================================*/
 

@@ -9,10 +9,13 @@ only allocates CFFI buffers, it does not dlopen the emulator.
 from __future__ import annotations
 
 import gc
-from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import pytest
 from femu.peripheral import Peripheral
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 class DummyPeripheral(Peripheral):

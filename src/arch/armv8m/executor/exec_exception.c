@@ -99,7 +99,7 @@ static bool is_lazy_stacking_enabled(const Executor *exec) {
  * Save FPU context to stack (non-lazy).
  */
 static int save_fpu_context(Executor *exec, uint32_t frameptr, bool *fault) {
-  CPUState *cpu = &exec->cpu;
+  const CPUState *cpu = &exec->cpu;
 
   /* Save S0-S15 (16 registers * 4 bytes = 64 bytes) */
   for (int i = 0; i < 16; i++) {

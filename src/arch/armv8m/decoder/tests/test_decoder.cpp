@@ -97,7 +97,7 @@ TEST(Thumb16DataProc, MovImmediate) {
   // MOVS R0, #42 - Move immediate to register with flags update
   // Encoding: 0x202A = 001|00|000|00101010
   //   [15:13]=001 (format), [12:11]=00 (MOVS), [10:8]=Rd, [7:0]=imm8
-  uint8_t code[] = THUMB16_BYTES(0x202A);
+  const uint8_t code[] = THUMB16_BYTES(0x202A);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -113,7 +113,7 @@ TEST(Thumb16DataProc, MovImmediate) {
 TEST(Thumb16DataProc, MovImmediateMaxValue) {
   // MOVS R7, #255 - Move max 8-bit immediate
   // Encoding: 0x27FF = 001|00|111|11111111
-  uint8_t code[] = THUMB16_BYTES(0x27FF);
+  const uint8_t code[] = THUMB16_BYTES(0x27FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -128,7 +128,7 @@ TEST(Thumb16DataProc, AddRegisters) {
   // ADDS R0, R1, R2 - Three-register add with flags
   // Encoding: 0x1888 = 000110|00|010|001|000
   //   [15:9]=0001100 (ADD reg), [8:6]=Rm, [5:3]=Rn, [2:0]=Rd
-  uint8_t code[] = THUMB16_BYTES(0x1888);
+  const uint8_t code[] = THUMB16_BYTES(0x1888);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -144,7 +144,7 @@ TEST(Thumb16DataProc, AddRegisters) {
 TEST(Thumb16DataProc, SubRegisters) {
   // SUBS R3, R4, R5 - Three-register subtract with flags
   // Encoding: 0x1B63 = 000110|11|101|100|011
-  uint8_t code[] = THUMB16_BYTES(0x1B63);
+  const uint8_t code[] = THUMB16_BYTES(0x1B63);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -161,7 +161,7 @@ TEST(Thumb16DataProc, CmpImmediate) {
   // CMP R3, #100 - Compare register with immediate
   // Encoding: 0x2B64 = 001|01|011|01100100
   //   [15:11]=00101 (CMP imm), [10:8]=Rn, [7:0]=imm8
-  uint8_t code[] = THUMB16_BYTES(0x2B64);
+  const uint8_t code[] = THUMB16_BYTES(0x2B64);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -176,7 +176,7 @@ TEST(Thumb16DataProc, CmpImmediate) {
 TEST(Thumb16DataProc, AddImmediate8) {
   // ADDS R2, #50 - Add 8-bit immediate to register
   // Encoding: 0x3232 = 001|10|010|00110010
-  uint8_t code[] = THUMB16_BYTES(0x3232);
+  const uint8_t code[] = THUMB16_BYTES(0x3232);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -192,7 +192,7 @@ TEST(Thumb16DataProc, LslImmediate) {
   // LSLS R1, R2, #3 - Logical shift left by immediate
   // Encoding: 0x00D1 = 000|00|00011|010|001
   //   [15:11]=00000 (LSL imm), [10:6]=imm5, [5:3]=Rm, [2:0]=Rd
-  uint8_t code[] = THUMB16_BYTES(0x00D1);
+  const uint8_t code[] = THUMB16_BYTES(0x00D1);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -208,7 +208,7 @@ TEST(Thumb16DataProc, AndRegister) {
   // ANDS R0, R1 - Bitwise AND with flags
   // Encoding: 0x4008 = 010000|0000|001|000
   //   [15:10]=010000 (data proc), [9:6]=op, [5:3]=Rm, [2:0]=Rd
-  uint8_t code[] = THUMB16_BYTES(0x4008);
+  const uint8_t code[] = THUMB16_BYTES(0x4008);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -223,7 +223,7 @@ TEST(Thumb16DataProc, AndRegister) {
 TEST(Thumb16DataProc, EorRegister) {
   // EORS R2, R3 - Bitwise XOR with flags
   // Encoding: 0x405A = 010000|0001|011|010
-  uint8_t code[] = THUMB16_BYTES(0x405A);
+  const uint8_t code[] = THUMB16_BYTES(0x405A);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -237,7 +237,7 @@ TEST(Thumb16DataProc, EorRegister) {
 TEST(Thumb16DataProc, MvnRegister) {
   // MVNS R4, R5 - Bitwise NOT with flags
   // Encoding: 0x43EC = 010000|1111|101|100
-  uint8_t code[] = THUMB16_BYTES(0x43EC);
+  const uint8_t code[] = THUMB16_BYTES(0x43EC);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -265,7 +265,7 @@ TEST(Thumb16LoadStore, LdrImmediate) {
   // Encoding: 0x6848 = 01101|00001|001|000
   //   [15:11]=01101 (LDR imm), [10:6]=imm5, [5:3]=Rn, [2:0]=Rt
   //   imm = imm5 << 2 = 1 << 2 = 4
-  uint8_t code[] = THUMB16_BYTES(0x6848);
+  const uint8_t code[] = THUMB16_BYTES(0x6848);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -281,7 +281,7 @@ TEST(Thumb16LoadStore, StrImmediate) {
   // STR R2, [R3, #8] - Store word with immediate offset
   // Encoding: 0x609A = 01100|00010|011|010
   //   imm = 2 << 2 = 8
-  uint8_t code[] = THUMB16_BYTES(0x609A);
+  const uint8_t code[] = THUMB16_BYTES(0x609A);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -296,7 +296,7 @@ TEST(Thumb16LoadStore, StrImmediate) {
 TEST(Thumb16LoadStore, LdrbImmediate) {
   // LDRB R0, [R1, #2] - Load byte with immediate offset
   // Encoding: 0x7888 = 01111|00010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x7888);
+  const uint8_t code[] = THUMB16_BYTES(0x7888);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -312,7 +312,7 @@ TEST(Thumb16LoadStore, LdrhImmediate) {
   // LDRH R4, [R5, #6] - Load halfword with immediate offset
   // Encoding: 0x88EC = 10001|00011|101|100
   //   imm = 3 << 1 = 6
-  uint8_t code[] = THUMB16_BYTES(0x88EC);
+  const uint8_t code[] = THUMB16_BYTES(0x88EC);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -328,7 +328,7 @@ TEST(Thumb16LoadStore, LdrRegister) {
   // LDR R0, [R1, R2] - Load word with register offset
   // Encoding: 0x5888 = 0101100|010|001|000
   //   [15:9]=0101100 (LDR reg), [8:6]=Rm, [5:3]=Rn, [2:0]=Rt
-  uint8_t code[] = THUMB16_BYTES(0x5888);
+  const uint8_t code[] = THUMB16_BYTES(0x5888);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -345,7 +345,7 @@ TEST(Thumb16LoadStore, LdrLiteral) {
   // Encoding: 0x4804 = 01001|000|00000100
   //   [15:11]=01001 (LDR lit), [10:8]=Rt, [7:0]=imm8
   //   imm = imm8 << 2 = 4 << 2 = 16
-  uint8_t code[] = THUMB16_BYTES(0x4804);
+  const uint8_t code[] = THUMB16_BYTES(0x4804);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -359,7 +359,7 @@ TEST(Thumb16LoadStore, LdrSpRelative) {
   // LDR R3, [SP, #20] - SP-relative load
   // Encoding: 0x9B05 = 10011|011|00000101
   //   imm = 5 << 2 = 20
-  uint8_t code[] = THUMB16_BYTES(0x9B05);
+  const uint8_t code[] = THUMB16_BYTES(0x9B05);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -375,7 +375,7 @@ TEST(Thumb16LoadStore, Push) {
   // Encoding: 0xB503 = 1011010|1|00000011
   //   [15:9]=1011010 (PUSH), [8]=M (LR), [7:0]=register_list
   //   register_list = 0x4003 (R0, R1, LR)
-  uint8_t code[] = THUMB16_BYTES(0xB503);
+  const uint8_t code[] = THUMB16_BYTES(0xB503);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -391,7 +391,7 @@ TEST(Thumb16LoadStore, Pop) {
   // Encoding: 0xBD03 = 1011110|1|00000011
   //   [15:9]=1011110 (POP), [8]=P (PC), [7:0]=register_list
   //   register_list = 0x8003 (R0, R1, PC)
-  uint8_t code[] = THUMB16_BYTES(0xBD03);
+  const uint8_t code[] = THUMB16_BYTES(0xBD03);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -406,7 +406,7 @@ TEST(Thumb16LoadStore, Stm) {
   // STM R0!, {R1, R2, R3} - Store multiple with writeback
   // Encoding: 0xC00E = 11000|000|00001110
   //   [15:11]=11000 (STM), [10:8]=Rn, [7:0]=register_list
-  uint8_t code[] = THUMB16_BYTES(0xC00E);
+  const uint8_t code[] = THUMB16_BYTES(0xC00E);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -420,7 +420,7 @@ TEST(Thumb16LoadStore, Stm) {
 TEST(Thumb16LoadStore, Ldm) {
   // LDM R1!, {R2, R3, R4} - Load multiple with writeback
   // Encoding: 0xC91C = 11001|001|00011100
-  uint8_t code[] = THUMB16_BYTES(0xC91C);
+  const uint8_t code[] = THUMB16_BYTES(0xC91C);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -447,7 +447,7 @@ TEST(Thumb16Branch, UnconditionalBranch) {
   // Encoding: 0xE004 = 11100|00000000100
   //   [15:11]=11100 (B), [10:0]=imm11
   //   offset = SignExtend(imm11) << 1 = 4 << 1 = 8
-  uint8_t code[] = THUMB16_BYTES(0xE004);
+  const uint8_t code[] = THUMB16_BYTES(0xE004);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -462,7 +462,7 @@ TEST(Thumb16Branch, ConditionalBranchEQ) {
   // Encoding: 0xD003 = 1101|0000|00000011
   //   [15:12]=1101 (B<cond>), [11:8]=cond, [7:0]=imm8
   //   offset = 3 << 1 = 6
-  uint8_t code[] = THUMB16_BYTES(0xD003);
+  const uint8_t code[] = THUMB16_BYTES(0xD003);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -476,7 +476,7 @@ TEST(Thumb16Branch, ConditionalBranchNE) {
   // BNE -4 - Branch if not equal (backward)
   // Encoding: 0xD1FE = 1101|0001|11111110
   //   offset = SignExtend(0xFE) << 1 = -2 << 1 = -4
-  uint8_t code[] = THUMB16_BYTES(0xD1FE);
+  const uint8_t code[] = THUMB16_BYTES(0xD1FE);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -490,7 +490,7 @@ TEST(Thumb16Branch, BxRegister) {
   // BX R3 - Branch and exchange to address in register
   // Encoding: 0x4718 = 010001|11|0|0011|000
   //   [15:7]=010001110 (BX), [6:3]=Rm
-  uint8_t code[] = THUMB16_BYTES(0x4718);
+  const uint8_t code[] = THUMB16_BYTES(0x4718);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -502,7 +502,7 @@ TEST(Thumb16Branch, BxRegister) {
 TEST(Thumb16Branch, BlxRegister) {
   // BLX R4 - Branch with link and exchange
   // Encoding: 0x47A0 = 010001|11|1|0100|000
-  uint8_t code[] = THUMB16_BYTES(0x47A0);
+  const uint8_t code[] = THUMB16_BYTES(0x47A0);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -516,7 +516,7 @@ TEST(Thumb16Branch, Cbz) {
   // CBZ R0, +8 - Compare and branch if zero
   // Encoding: 0xB100 = 10110|0|0|1|00000|000
   //   [15:12]=1011 (CB*), [11]=op (0=CBZ), [9]=i, [7:3]=imm5, [2:0]=Rn
-  uint8_t code[] = THUMB16_BYTES(0xB100);
+  const uint8_t code[] = THUMB16_BYTES(0xB100);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -529,7 +529,7 @@ TEST(Thumb16Branch, Svc) {
   // SVC #5 - Supervisor call
   // Encoding: 0xDF05 = 11011111|00000101
   //   [15:8]=11011111 (SVC), [7:0]=imm8
-  uint8_t code[] = THUMB16_BYTES(0xDF05);
+  const uint8_t code[] = THUMB16_BYTES(0xDF05);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -553,7 +553,7 @@ TEST_GROUP(Thumb16Misc) {
 TEST(Thumb16Misc, Nop) {
   // NOP - No operation hint
   // Encoding: 0xBF00 = 10111111|00000000
-  uint8_t code[] = THUMB16_BYTES(0xBF00);
+  const uint8_t code[] = THUMB16_BYTES(0xBF00);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -565,7 +565,7 @@ TEST(Thumb16Misc, Sxth) {
   // SXTH R0, R1 - Sign extend halfword
   // Encoding: 0xB208 = 1011001|0|00|001|000
   //   [15:6]=1011001000 (SXTH), [5:3]=Rm, [2:0]=Rd
-  uint8_t code[] = THUMB16_BYTES(0xB208);
+  const uint8_t code[] = THUMB16_BYTES(0xB208);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -580,7 +580,7 @@ TEST(Thumb16Misc, Sxth) {
 TEST(Thumb16Misc, Uxtb) {
   // UXTB R2, R3 - Zero extend byte
   // Encoding: 0xB2DA = 1011001|0|11|011|010
-  uint8_t code[] = THUMB16_BYTES(0xB2DA);
+  const uint8_t code[] = THUMB16_BYTES(0xB2DA);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -597,7 +597,7 @@ TEST(Thumb16Misc, AddSpImmediate) {
   // Encoding: 0xB004 = 10110|0|0000100
   //   [15:8]=10110000 (ADD SP), [6:0]=imm7
   //   imm = imm7 << 2 = 4 << 2 = 16
-  uint8_t code[] = THUMB16_BYTES(0xB004);
+  const uint8_t code[] = THUMB16_BYTES(0xB004);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -613,7 +613,7 @@ TEST(Thumb16Misc, SubSpImmediate) {
   // SUB SP, SP, #32 - Adjust stack pointer down
   // Encoding: 0xB088 = 10110|0|0|0001000
   //   imm = 8 << 2 = 32
-  uint8_t code[] = THUMB16_BYTES(0xB088);
+  const uint8_t code[] = THUMB16_BYTES(0xB088);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -628,7 +628,7 @@ TEST(Thumb16Misc, ItBlock) {
   // IT EQ - If-Then block for conditional execution
   // Encoding: 0xBF08 = 10111111|0000|1000
   //   [15:8]=10111111 (IT), [7:4]=firstcond, [3:0]=mask
-  uint8_t code[] = THUMB16_BYTES(0xBF08);
+  const uint8_t code[] = THUMB16_BYTES(0xBF08);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -654,7 +654,7 @@ TEST(Thumb32, BranchWithLink) {
   // Encoding: 0xF000 0xF801
   //   hw1[15:11]=11110 (32-bit prefix), hw1[10]=S
   //   hw2[15:14]=11, hw2[13]=J1, hw2[12]=J2, hw2[11]=1 (BL)
-  uint8_t code[] = THUMB32_BYTES(0xF000, 0xF801);
+  const uint8_t code[] = THUMB32_BYTES(0xF000, 0xF801);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -668,7 +668,7 @@ TEST(Thumb32, BranchWide) {
   // B.W +4 - Unconditional wide branch
   // Encoding: 0xF000 0xB802
   //   hw2[15:14]=10, hw2[12]=1 (B.W)
-  uint8_t code[] = THUMB32_BYTES(0xF000, 0xB802);
+  const uint8_t code[] = THUMB32_BYTES(0xF000, 0xB802);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -684,7 +684,7 @@ TEST(Thumb32, MovWideImmediate) {
   //   hw1[15:11]=11110, hw1[10]=i, hw1[3:0]=imm4
   //   hw2[14:12]=imm3, hw2[11:8]=Rd, hw2[7:0]=imm8
   //   imm16 = imm4:i:imm3:imm8 = 1:0:010:00110100 = 0x1234
-  uint8_t code[] = THUMB32_BYTES(0xF241, 0x2034);
+  const uint8_t code[] = THUMB32_BYTES(0xF241, 0x2034);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -699,7 +699,7 @@ TEST(Thumb32, AddWideImmediate) {
   // ADDW R0, R1, #0x100 - Add 12-bit immediate
   // Encoding: 0xF201 0x1000
   //   Rn=R1, Rd=R0, imm12=0x100
-  uint8_t code[] = THUMB32_BYTES(0xF201, 0x1000);
+  const uint8_t code[] = THUMB32_BYTES(0xF201, 0x1000);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -713,7 +713,7 @@ TEST(Thumb32, LdrdStrd) {
   // Encoding: 0xE9D2 0x0102
   //   hw1[15:9]=1110100, hw1[8]=P, hw1[7]=U, hw1[5]=W, hw1[4]=L
   //   hw1[3:0]=Rn, hw2[15:12]=Rt, hw2[11:8]=Rt2, hw2[7:0]=imm8
-  uint8_t code[] = THUMB32_BYTES(0xE9D2, 0x0102);
+  const uint8_t code[] = THUMB32_BYTES(0xE9D2, 0x0102);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -729,7 +729,7 @@ TEST(Thumb32, StmWide) {
   // Encoding: 0xE8A0 0x001E
   //   hw1[15:9]=1110100, hw1[8:7]=op, hw1[5]=W, hw1[4]=0 (store)
   //   hw1[3:0]=Rn, hw2[15:0]=register_list
-  uint8_t code[] = THUMB32_BYTES(0xE8A0, 0x001E);
+  const uint8_t code[] = THUMB32_BYTES(0xE8A0, 0x001E);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -744,7 +744,7 @@ TEST(Thumb32, LdmWide) {
   // LDMIA R1!, {R2-R5} - Load multiple increment after
   // Encoding: 0xE8B1 0x003C
   //   register_list = 0x003C (R2, R3, R4, R5)
-  uint8_t code[] = THUMB32_BYTES(0xE8B1, 0x003C);
+  const uint8_t code[] = THUMB32_BYTES(0xE8B1, 0x003C);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -760,7 +760,7 @@ TEST(Thumb32, MrsApsr) {
   // Encoding: 0xF3EF 0x8000
   //   hw1[15:4]=0xF3E (MRS), hw1[3:0]=SYSm[11:8]
   //   hw2[15:12]=1000, hw2[11:8]=Rd
-  uint8_t code[] = THUMB32_BYTES(0xF3EF, 0x8000);
+  const uint8_t code[] = THUMB32_BYTES(0xF3EF, 0x8000);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -774,7 +774,7 @@ TEST(Thumb32, CondBranchWide) {
   // BEQ.W +16 - Conditional wide branch
   // Encoding: 0xF000 0x8008
   //   hw2[15:14]=10, hw2[13:12]=cond[1:0]
-  uint8_t code[] = THUMB32_BYTES(0xF000, 0x8008);
+  const uint8_t code[] = THUMB32_BYTES(0xF000, 0x8008);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -790,7 +790,7 @@ TEST(Thumb32, Sdiv) {
   //   hw1 = 0xFB91: bits[15:4]=0xFB9 (SDIV), bits[3:0]=Rn=1
   //   hw2 = 0xF0F2: bits[15:12]=0xF, bits[11:8]=Rd=0, bits[7:4]=0xF,
   //   bits[3:0]=Rm=2
-  uint8_t code[] = THUMB32_BYTES(0xFB91, 0xF0F2);
+  const uint8_t code[] = THUMB32_BYTES(0xFB91, 0xF0F2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -809,7 +809,7 @@ TEST(Thumb32, Udiv) {
   //   hw1 = 0xFBB1: bits[15:4]=0xFBB (UDIV), bits[3:0]=Rn=1
   //   hw2 = 0xF0F2: bits[15:12]=0xF, bits[11:8]=Rd=0, bits[7:4]=0xF,
   //   bits[3:0]=Rm=2
-  uint8_t code[] = THUMB32_BYTES(0xFBB1, 0xF0F2);
+  const uint8_t code[] = THUMB32_BYTES(0xFBB1, 0xF0F2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -837,7 +837,7 @@ TEST_GROUP(DecoderErrors) {
 TEST(DecoderErrors, UndefinedInstruction) {
   // 0xDExx is permanently undefined (UDF)
   // Encoding: 0xDE00 = 11011110|xxxxxxxx
-  uint8_t code[] = THUMB16_BYTES(0xDE00);
+  const uint8_t code[] = THUMB16_BYTES(0xDE00);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -847,7 +847,7 @@ TEST(DecoderErrors, UndefinedInstruction) {
 TEST(DecoderErrors, EmptyStmRegisterList) {
   // STM R0!, {} - Empty register list is unpredictable
   // Encoding: 0xC000 = 11000|000|00000000
-  uint8_t code[] = THUMB16_BYTES(0xC000);
+  const uint8_t code[] = THUMB16_BYTES(0xC000);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -857,7 +857,7 @@ TEST(DecoderErrors, EmptyStmRegisterList) {
 TEST(DecoderErrors, EmptyLdmRegisterList) {
   // LDM R0!, {} - Empty register list is unpredictable
   // Encoding: 0xC800 = 11001|000|00000000
-  uint8_t code[] = THUMB16_BYTES(0xC800);
+  const uint8_t code[] = THUMB16_BYTES(0xC800);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -872,7 +872,7 @@ TEST(DecoderErrors, NullPointerMem) {
 
 TEST(DecoderErrors, NullPointerInsn) {
   // MOVS R0, #0
-  uint8_t code[] = THUMB16_BYTES(0x2000);
+  const uint8_t code[] = THUMB16_BYTES(0x2000);
 
   int result = armv8m_decode(code, TEST_PC, nullptr);
 
@@ -893,7 +893,7 @@ TEST_GROUP(EncodingVerify) {
 
 TEST(EncodingVerify, Size16Bit) {
   // MOVS R0, #0 - Verify 16-bit instruction size
-  uint8_t code[] = THUMB16_BYTES(0x2000);
+  const uint8_t code[] = THUMB16_BYTES(0x2000);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -904,7 +904,7 @@ TEST(EncodingVerify, Size16Bit) {
 
 TEST(EncodingVerify, Size32Bit) {
   // BL - Verify 32-bit instruction size
-  uint8_t code[] = THUMB32_BYTES(0xF000, 0xF801);
+  const uint8_t code[] = THUMB32_BYTES(0xF000, 0xF801);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -916,7 +916,7 @@ TEST(EncodingVerify, Size32Bit) {
 TEST(EncodingVerify, PcValue) {
   // Verify PC is stored correctly
   const uint32_t test_addr = 0x08001234;
-  uint8_t code[] = THUMB16_BYTES(0x2000);
+  const uint8_t code[] = THUMB16_BYTES(0x2000);
 
   int result = armv8m_decode(code, test_addr, &insn);
 
@@ -926,7 +926,7 @@ TEST(EncodingVerify, PcValue) {
 
 TEST(EncodingVerify, RawEncoding16) {
   // MOVS R0, #42 - Verify raw encoding is stored
-  uint8_t code[] = THUMB16_BYTES(0x202A);
+  const uint8_t code[] = THUMB16_BYTES(0x202A);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -936,7 +936,7 @@ TEST(EncodingVerify, RawEncoding16) {
 
 TEST(EncodingVerify, RawEncoding32) {
   // BL - Verify 32-bit raw encoding (hw1 << 16 | hw2)
-  uint8_t code[] = THUMB32_BYTES(0xF000, 0xF801);
+  const uint8_t code[] = THUMB32_BYTES(0xF000, 0xF801);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -960,7 +960,7 @@ TEST(Thumb16Coverage, Adr) {
   // Encoding: 0xA001 = 10100|000|00000001
   //   [15:11]=10100 (ADR), [10:8]=Rd, [7:0]=imm8
   //   imm = imm8 << 2 = 1 << 2 = 4
-  uint8_t code[] = THUMB16_BYTES(0xA001);
+  const uint8_t code[] = THUMB16_BYTES(0xA001);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -974,7 +974,7 @@ TEST(Thumb16Coverage, AddSpImm) {
   // ADD R0, SP, #8 - Add SP with immediate
   // Encoding: 0xA802 = 10101|000|00000010
   //   imm = 2 << 2 = 8
-  uint8_t code[] = THUMB16_BYTES(0xA802);
+  const uint8_t code[] = THUMB16_BYTES(0xA802);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -989,7 +989,7 @@ TEST(Thumb16Coverage, LsrImmZero) {
   // LSRS R0, R1, #0 - Zero shift encodes as 32
   // Encoding: 0x0808 = 00001|00000|001|000
   //   [15:11]=00001 (LSR imm), [10:6]=imm5=0 means 32
-  uint8_t code[] = THUMB16_BYTES(0x0808);
+  const uint8_t code[] = THUMB16_BYTES(0x0808);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1004,7 +1004,7 @@ TEST(Thumb16Coverage, LsrImmZero) {
 TEST(Thumb16Coverage, AsrImmZero) {
   // ASRS R0, R1, #0 - Zero shift encodes as 32
   // Encoding: 0x1008 = 00010|00000|001|000
-  uint8_t code[] = THUMB16_BYTES(0x1008);
+  const uint8_t code[] = THUMB16_BYTES(0x1008);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1020,7 +1020,7 @@ TEST(Thumb16Coverage, AddImm3) {
   // ADDS R0, R1, #3 - Add small immediate
   // Encoding: 0x1CC8 = 000111|00|011|001|000
   //   [15:9]=0001110 (ADD imm3), [8:6]=imm3, [5:3]=Rn, [2:0]=Rd
-  uint8_t code[] = THUMB16_BYTES(0x1CC8);
+  const uint8_t code[] = THUMB16_BYTES(0x1CC8);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1034,7 +1034,7 @@ TEST(Thumb16Coverage, AddImm3) {
 TEST(Thumb16Coverage, SubImm3) {
   // SUBS R0, R1, #3 - Subtract small immediate
   // Encoding: 0x1EC8 = 000111|10|011|001|000
-  uint8_t code[] = THUMB16_BYTES(0x1EC8);
+  const uint8_t code[] = THUMB16_BYTES(0x1EC8);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1047,7 +1047,7 @@ TEST(Thumb16Coverage, SubImm3) {
 TEST(Thumb16Coverage, SubsRdImm8) {
   // SUBS R1, #100 - Subtract 8-bit immediate
   // Encoding: 0x3964 = 001|11|001|01100100
-  uint8_t code[] = THUMB16_BYTES(0x3964);
+  const uint8_t code[] = THUMB16_BYTES(0x3964);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1061,7 +1061,7 @@ TEST(Thumb16Coverage, SubsRdImm8) {
 TEST(Thumb16Coverage, MovsLowReg) {
   // MOVS R0, R1 - Move register (encoded as LSL #0)
   // Encoding: 0x0008 = 00000|00000|001|000
-  uint8_t code[] = THUMB16_BYTES(0x0008);
+  const uint8_t code[] = THUMB16_BYTES(0x0008);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1075,7 +1075,7 @@ TEST(Thumb16Coverage, MovsLowReg) {
 TEST(Thumb16Coverage, LslsReg) {
   // LSLS R0, R1 - Logical shift left by register
   // Encoding: 0x4088 = 010000|0010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4088);
+  const uint8_t code[] = THUMB16_BYTES(0x4088);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1089,7 +1089,7 @@ TEST(Thumb16Coverage, LslsReg) {
 TEST(Thumb16Coverage, LsrsReg) {
   // LSRS R0, R1 - Logical shift right by register
   // Encoding: 0x40C8 = 010000|0011|001|000
-  uint8_t code[] = THUMB16_BYTES(0x40C8);
+  const uint8_t code[] = THUMB16_BYTES(0x40C8);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1103,7 +1103,7 @@ TEST(Thumb16Coverage, LsrsReg) {
 TEST(Thumb16Coverage, AsrsReg) {
   // ASRS R0, R1 - Arithmetic shift right by register
   // Encoding: 0x4108 = 010000|0100|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4108);
+  const uint8_t code[] = THUMB16_BYTES(0x4108);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1116,7 +1116,7 @@ TEST(Thumb16Coverage, AsrsReg) {
 TEST(Thumb16Coverage, Adcs) {
   // ADCS R0, R1 - Add with carry
   // Encoding: 0x4148 = 010000|0101|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4148);
+  const uint8_t code[] = THUMB16_BYTES(0x4148);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1129,7 +1129,7 @@ TEST(Thumb16Coverage, Adcs) {
 TEST(Thumb16Coverage, Sbcs) {
   // SBCS R0, R1 - Subtract with carry
   // Encoding: 0x4188 = 010000|0110|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4188);
+  const uint8_t code[] = THUMB16_BYTES(0x4188);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1143,7 +1143,7 @@ TEST(Thumb16Coverage, Sbcs) {
 TEST(Thumb16Coverage, Rors) {
   // RORS R0, R1 - Rotate right by register
   // Encoding: 0x41C8 = 010000|0111|001|000
-  uint8_t code[] = THUMB16_BYTES(0x41C8);
+  const uint8_t code[] = THUMB16_BYTES(0x41C8);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1156,7 +1156,7 @@ TEST(Thumb16Coverage, Rors) {
 TEST(Thumb16Coverage, Tst) {
   // TST R0, R1 - Test bits (AND without result)
   // Encoding: 0x4208 = 010000|1000|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4208);
+  const uint8_t code[] = THUMB16_BYTES(0x4208);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1169,7 +1169,7 @@ TEST(Thumb16Coverage, Tst) {
 TEST(Thumb16Coverage, Rsb) {
   // RSBS R0, R1, #0 - Reverse subtract (negate)
   // Encoding: 0x4248 = 010000|1001|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4248);
+  const uint8_t code[] = THUMB16_BYTES(0x4248);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1182,7 +1182,7 @@ TEST(Thumb16Coverage, Rsb) {
 TEST(Thumb16Coverage, CmpReg) {
   // CMP R0, R1 - Compare registers
   // Encoding: 0x4288 = 010000|1010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4288);
+  const uint8_t code[] = THUMB16_BYTES(0x4288);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1195,7 +1195,7 @@ TEST(Thumb16Coverage, CmpReg) {
 TEST(Thumb16Coverage, Cmn) {
   // CMN R0, R1 - Compare negative
   // Encoding: 0x42C8 = 010000|1011|001|000
-  uint8_t code[] = THUMB16_BYTES(0x42C8);
+  const uint8_t code[] = THUMB16_BYTES(0x42C8);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1208,7 +1208,7 @@ TEST(Thumb16Coverage, Cmn) {
 TEST(Thumb16Coverage, Orrs) {
   // ORRS R0, R1 - Bitwise OR
   // Encoding: 0x4308 = 010000|1100|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4308);
+  const uint8_t code[] = THUMB16_BYTES(0x4308);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1221,7 +1221,7 @@ TEST(Thumb16Coverage, Orrs) {
 TEST(Thumb16Coverage, Muls) {
   // MULS R0, R1 - Multiply
   // Encoding: 0x4348 = 010000|1101|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4348);
+  const uint8_t code[] = THUMB16_BYTES(0x4348);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1233,7 +1233,7 @@ TEST(Thumb16Coverage, Muls) {
 TEST(Thumb16Coverage, Bics) {
   // BICS R0, R1 - Bit clear (AND NOT)
   // Encoding: 0x4388 = 010000|1110|001|000
-  uint8_t code[] = THUMB16_BYTES(0x4388);
+  const uint8_t code[] = THUMB16_BYTES(0x4388);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1247,7 +1247,7 @@ TEST(Thumb16Coverage, AddHighReg) {
   // ADD R8, R0 - Add using high registers
   // Encoding: 0x4480 = 01000100|1|0000|000
   //   [15:8]=01000100 (special data), [7]=Dn, [6:3]=Rm, [2:0]=Rdn
-  uint8_t code[] = THUMB16_BYTES(0x4480);
+  const uint8_t code[] = THUMB16_BYTES(0x4480);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1260,7 +1260,7 @@ TEST(Thumb16Coverage, AddHighReg) {
 TEST(Thumb16Coverage, CmpHighReg) {
   // CMP R8, R0 - Compare high register
   // Encoding: 0x4580 = 01000101|1|0000|000
-  uint8_t code[] = THUMB16_BYTES(0x4580);
+  const uint8_t code[] = THUMB16_BYTES(0x4580);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1273,7 +1273,7 @@ TEST(Thumb16Coverage, CmpHighReg) {
 TEST(Thumb16Coverage, MovHighReg) {
   // MOV R8, R0 - Move to high register
   // Encoding: 0x4680 = 01000110|1|0000|000
-  uint8_t code[] = THUMB16_BYTES(0x4680);
+  const uint8_t code[] = THUMB16_BYTES(0x4680);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1286,7 +1286,7 @@ TEST(Thumb16Coverage, MovHighReg) {
 TEST(Thumb16Coverage, Push) {
   // PUSH {R0, R1, LR}
   // Encoding: 0xB503 = 1011010|1|00000011
-  uint8_t code[] = THUMB16_BYTES(0xB503);
+  const uint8_t code[] = THUMB16_BYTES(0xB503);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1298,7 +1298,7 @@ TEST(Thumb16Coverage, Push) {
 TEST(Thumb16Coverage, Pop) {
   // POP {R0, R1, PC}
   // Encoding: 0xBD03 = 1011110|1|00000011
-  uint8_t code[] = THUMB16_BYTES(0xBD03);
+  const uint8_t code[] = THUMB16_BYTES(0xBD03);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1310,7 +1310,7 @@ TEST(Thumb16Coverage, Pop) {
 TEST(Thumb16Coverage, Sxth) {
   // SXTH R0, R1 - Sign extend halfword
   // Encoding: 0xB208 = 1011001|0|00|001|000
-  uint8_t code[] = THUMB16_BYTES(0xB208);
+  const uint8_t code[] = THUMB16_BYTES(0xB208);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1323,7 +1323,7 @@ TEST(Thumb16Coverage, Sxth) {
 TEST(Thumb16Coverage, Sxtb) {
   // SXTB R0, R1 - Sign extend byte
   // Encoding: 0xB248 = 1011001|0|01|001|000
-  uint8_t code[] = THUMB16_BYTES(0xB248);
+  const uint8_t code[] = THUMB16_BYTES(0xB248);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1336,7 +1336,7 @@ TEST(Thumb16Coverage, Sxtb) {
 TEST(Thumb16Coverage, Uxth) {
   // UXTH R0, R1 - Zero extend halfword
   // Encoding: 0xB288 = 1011001|0|10|001|000
-  uint8_t code[] = THUMB16_BYTES(0xB288);
+  const uint8_t code[] = THUMB16_BYTES(0xB288);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1349,7 +1349,7 @@ TEST(Thumb16Coverage, Uxth) {
 TEST(Thumb16Coverage, Uxtb) {
   // UXTB R0, R1 - Zero extend byte
   // Encoding: 0xB2C8 = 1011001|0|11|001|000
-  uint8_t code[] = THUMB16_BYTES(0xB2C8);
+  const uint8_t code[] = THUMB16_BYTES(0xB2C8);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1363,7 +1363,7 @@ TEST(Thumb16Coverage, AddSpSpImm) {
   // ADD SP, SP, #8 - Increment stack pointer
   // Encoding: 0xB002 = 10110|0|0000010
   //   imm = 2 << 2 = 8
-  uint8_t code[] = THUMB16_BYTES(0xB002);
+  const uint8_t code[] = THUMB16_BYTES(0xB002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1376,7 +1376,7 @@ TEST(Thumb16Coverage, AddSpSpImm) {
 TEST(Thumb16Coverage, SubSpSpImm) {
   // SUB SP, SP, #8 - Decrement stack pointer
   // Encoding: 0xB082 = 10110|0|1000010
-  uint8_t code[] = THUMB16_BYTES(0xB082);
+  const uint8_t code[] = THUMB16_BYTES(0xB082);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1389,7 +1389,7 @@ TEST(Thumb16Coverage, SubSpSpImm) {
 TEST(Thumb16Coverage, Cbnz) {
   // CBNZ R0, +4 - Compare and branch if not zero
   // Encoding: 0xB902 = 10111|0|01|00000|010
-  uint8_t code[] = THUMB16_BYTES(0xB902);
+  const uint8_t code[] = THUMB16_BYTES(0xB902);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1401,7 +1401,7 @@ TEST(Thumb16Coverage, Cbnz) {
 TEST(Thumb16Coverage, Rev) {
   // REV R0, R1 - Byte reverse word
   // Encoding: 0xBA08 = 1011101|0|00|001|000
-  uint8_t code[] = THUMB16_BYTES(0xBA08);
+  const uint8_t code[] = THUMB16_BYTES(0xBA08);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1413,7 +1413,7 @@ TEST(Thumb16Coverage, Rev) {
 TEST(Thumb16Coverage, Rev16) {
   // REV16 R0, R1 - Byte reverse packed halfwords
   // Encoding: 0xBA48 = 1011101|0|01|001|000
-  uint8_t code[] = THUMB16_BYTES(0xBA48);
+  const uint8_t code[] = THUMB16_BYTES(0xBA48);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1425,7 +1425,7 @@ TEST(Thumb16Coverage, Rev16) {
 TEST(Thumb16Coverage, Revsh) {
   // REVSH R0, R1 - Byte reverse signed halfword
   // Encoding: 0xBAC8 = 1011101|0|11|001|000
-  uint8_t code[] = THUMB16_BYTES(0xBAC8);
+  const uint8_t code[] = THUMB16_BYTES(0xBAC8);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1437,7 +1437,7 @@ TEST(Thumb16Coverage, Revsh) {
 TEST(Thumb16Coverage, Bkpt) {
   // BKPT #0 - Breakpoint
   // Encoding: 0xBE00 = 10111110|00000000
-  uint8_t code[] = THUMB16_BYTES(0xBE00);
+  const uint8_t code[] = THUMB16_BYTES(0xBE00);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1449,7 +1449,7 @@ TEST(Thumb16Coverage, Bkpt) {
 TEST(Thumb16Coverage, Nop) {
   // NOP - No operation
   // Encoding: 0xBF00 = 10111111|00000000
-  uint8_t code[] = THUMB16_BYTES(0xBF00);
+  const uint8_t code[] = THUMB16_BYTES(0xBF00);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1461,7 +1461,7 @@ TEST(Thumb16Coverage, Nop) {
 TEST(Thumb16Coverage, It) {
   // ITEQ - If-Then EQ
   // Encoding: 0xBF08 = 10111111|00001000
-  uint8_t code[] = THUMB16_BYTES(0xBF08);
+  const uint8_t code[] = THUMB16_BYTES(0xBF08);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1473,7 +1473,7 @@ TEST(Thumb16Coverage, It) {
 TEST(Thumb16Coverage, Svc) {
   // SVC #0 - Supervisor call
   // Encoding: 0xDF00 = 11011111|00000000
-  uint8_t code[] = THUMB16_BYTES(0xDF00);
+  const uint8_t code[] = THUMB16_BYTES(0xDF00);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1485,7 +1485,7 @@ TEST(Thumb16Coverage, Svc) {
 TEST(Thumb16Coverage, StrhReg) {
   // STRH R0, [R1, R2] - Store halfword with register offset
   // Encoding: 0x5288 = 0101001|010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x5288);
+  const uint8_t code[] = THUMB16_BYTES(0x5288);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1498,7 +1498,7 @@ TEST(Thumb16Coverage, StrhReg) {
 TEST(Thumb16Coverage, StrbReg) {
   // STRB R0, [R1, R2] - Store byte with register offset
   // Encoding: 0x5488 = 0101010|010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x5488);
+  const uint8_t code[] = THUMB16_BYTES(0x5488);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1511,7 +1511,7 @@ TEST(Thumb16Coverage, StrbReg) {
 TEST(Thumb16Coverage, LdrsbReg) {
   // LDRSB R0, [R1, R2] - Load signed byte with register offset
   // Encoding: 0x5688 = 0101011|010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x5688);
+  const uint8_t code[] = THUMB16_BYTES(0x5688);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1525,7 +1525,7 @@ TEST(Thumb16Coverage, LdrsbReg) {
 TEST(Thumb16Coverage, LdrReg) {
   // LDR R0, [R1, R2] - Load word with register offset
   // Encoding: 0x5888 = 0101100|010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x5888);
+  const uint8_t code[] = THUMB16_BYTES(0x5888);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1538,7 +1538,7 @@ TEST(Thumb16Coverage, LdrReg) {
 TEST(Thumb16Coverage, LdrhReg) {
   // LDRH R0, [R1, R2] - Load halfword with register offset
   // Encoding: 0x5A88 = 0101101|010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x5A88);
+  const uint8_t code[] = THUMB16_BYTES(0x5A88);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1551,7 +1551,7 @@ TEST(Thumb16Coverage, LdrhReg) {
 TEST(Thumb16Coverage, LdrbReg) {
   // LDRB R0, [R1, R2] - Load byte with register offset
   // Encoding: 0x5C88 = 0101110|010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x5C88);
+  const uint8_t code[] = THUMB16_BYTES(0x5C88);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1564,7 +1564,7 @@ TEST(Thumb16Coverage, LdrbReg) {
 TEST(Thumb16Coverage, LdrshReg) {
   // LDRSH R0, [R1, R2] - Load signed halfword with register offset
   // Encoding: 0x5E88 = 0101111|010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x5E88);
+  const uint8_t code[] = THUMB16_BYTES(0x5E88);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1578,7 +1578,7 @@ TEST(Thumb16Coverage, LdrshReg) {
 TEST(Thumb16Coverage, LdrhSpRel) {
   // LDRH R0, [R0, #2] - Load halfword with immediate offset
   // Encoding: 0x8801 = 10001|00000|000|001
-  uint8_t code[] = THUMB16_BYTES(0x8801);
+  const uint8_t code[] = THUMB16_BYTES(0x8801);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1592,7 +1592,7 @@ TEST(Thumb16Coverage, StrhImm) {
   // STRH R0, [R1, #4] - Store halfword with immediate offset
   // Encoding: 0x8048 = 10000|00010|001|000
   //   imm = 2 << 1 = 4
-  uint8_t code[] = THUMB16_BYTES(0x8048);
+  const uint8_t code[] = THUMB16_BYTES(0x8048);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1606,7 +1606,7 @@ TEST(Thumb16Coverage, LdrSpRelWord) {
   // LDR R0, [SP, #4] - SP-relative load
   // Encoding: 0x9801 = 10011|000|00000001
   //   imm = 1 << 2 = 4
-  uint8_t code[] = THUMB16_BYTES(0x9801);
+  const uint8_t code[] = THUMB16_BYTES(0x9801);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1621,7 +1621,7 @@ TEST(Thumb16Coverage, StrSpRelWord) {
   // STR R0, [SP, #4] - SP-relative store
   // Encoding: 0x9001 = 10010|000|00000001
   //   imm = 1 << 2 = 4
-  uint8_t code[] = THUMB16_BYTES(0x9001);
+  const uint8_t code[] = THUMB16_BYTES(0x9001);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1645,7 +1645,7 @@ TEST_GROUP(Thumb32Coverage) {
 TEST(Thumb32Coverage, AndModImm) {
   // AND R0, R1, #0xFF - Bitwise AND with modified immediate
   // Encoding: 0xF001 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF001, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF001, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1658,7 +1658,7 @@ TEST(Thumb32Coverage, AndModImm) {
 TEST(Thumb32Coverage, OrrModImm) {
   // ORR R0, R1, #0xFF - Bitwise OR with modified immediate
   // Encoding: 0xF041 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF041, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF041, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1671,7 +1671,7 @@ TEST(Thumb32Coverage, OrrModImm) {
 TEST(Thumb32Coverage, MvnModImm) {
   // MVN R0, #0xFF - Bitwise NOT of modified immediate
   // Encoding: 0xF06F 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF06F, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF06F, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1684,7 +1684,7 @@ TEST(Thumb32Coverage, MvnModImm) {
 TEST(Thumb32Coverage, EorModImm) {
   // EOR R0, R1, #0xFF - Bitwise XOR with modified immediate
   // Encoding: 0xF081 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF081, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF081, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1697,7 +1697,7 @@ TEST(Thumb32Coverage, EorModImm) {
 TEST(Thumb32Coverage, AddModImm) {
   // ADD R0, R1, #0xFF - Add with modified immediate
   // Encoding: 0xF101 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF101, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF101, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1710,7 +1710,7 @@ TEST(Thumb32Coverage, AddModImm) {
 TEST(Thumb32Coverage, AdcModImm) {
   // ADC R0, R1, #0xFF - Add with carry and modified immediate
   // Encoding: 0xF141 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF141, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF141, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1723,7 +1723,7 @@ TEST(Thumb32Coverage, AdcModImm) {
 TEST(Thumb32Coverage, SbcModImm) {
   // SBC R0, R1, #0xFF - Subtract with carry and modified immediate
   // Encoding: 0xF161 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF161, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF161, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1736,7 +1736,7 @@ TEST(Thumb32Coverage, SbcModImm) {
 TEST(Thumb32Coverage, SubModImm) {
   // SUB R0, R1, #0xFF - Subtract with modified immediate
   // Encoding: 0xF1A1 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF1A1, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF1A1, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1749,7 +1749,7 @@ TEST(Thumb32Coverage, SubModImm) {
 TEST(Thumb32Coverage, RsbModImm) {
   // RSB R0, R1, #0xFF - Reverse subtract with modified immediate
   // Encoding: 0xF1C1 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF1C1, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF1C1, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1762,7 +1762,7 @@ TEST(Thumb32Coverage, RsbModImm) {
 TEST(Thumb32Coverage, SubW) {
   // SUBW R0, R1, #0x100 - Subtract with 12-bit immediate
   // Encoding: 0xF2A1 0x1000
-  uint8_t code[] = THUMB32_BYTES(0xF2A1, 0x1000);
+  const uint8_t code[] = THUMB32_BYTES(0xF2A1, 0x1000);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1775,7 +1775,7 @@ TEST(Thumb32Coverage, SubW) {
 TEST(Thumb32Coverage, Movt) {
   // MOVT R0, #0x1234 - Move to top halfword
   // Encoding: 0xF2C1 0x2034
-  uint8_t code[] = THUMB32_BYTES(0xF2C1, 0x2034);
+  const uint8_t code[] = THUMB32_BYTES(0xF2C1, 0x2034);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1788,7 +1788,7 @@ TEST(Thumb32Coverage, Movt) {
 TEST(Thumb32Coverage, Stmdb) {
   // STMDB R0!, {R1, R2} - Store multiple decrement before
   // Encoding: 0xE920 0x0006
-  uint8_t code[] = THUMB32_BYTES(0xE920, 0x0006);
+  const uint8_t code[] = THUMB32_BYTES(0xE920, 0x0006);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1800,7 +1800,7 @@ TEST(Thumb32Coverage, Stmdb) {
 TEST(Thumb32Coverage, Ldmdb) {
   // LDMDB R0!, {R1, R2} - Load multiple decrement before
   // Encoding: 0xE930 0x0006
-  uint8_t code[] = THUMB32_BYTES(0xE930, 0x0006);
+  const uint8_t code[] = THUMB32_BYTES(0xE930, 0x0006);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1812,7 +1812,7 @@ TEST(Thumb32Coverage, Ldmdb) {
 TEST(Thumb32Coverage, AndShiftedReg) {
   // AND R0, R1, R2, LSL #4 - Bitwise AND with shifted register
   // Encoding: 0xEA01 0x1002
-  uint8_t code[] = THUMB32_BYTES(0xEA01, 0x1002);
+  const uint8_t code[] = THUMB32_BYTES(0xEA01, 0x1002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1825,7 +1825,7 @@ TEST(Thumb32Coverage, AndShiftedReg) {
 TEST(Thumb32Coverage, BicShiftedReg) {
   // BIC R0, R1, R2 - Bit clear with shifted register
   // Encoding: 0xEA21 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEA21, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEA21, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1838,7 +1838,7 @@ TEST(Thumb32Coverage, BicShiftedReg) {
 TEST(Thumb32Coverage, OrrShiftedReg) {
   // ORR R0, R1, R2 - Bitwise OR with shifted register
   // Encoding: 0xEA41 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEA41, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEA41, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1851,7 +1851,7 @@ TEST(Thumb32Coverage, OrrShiftedReg) {
 TEST(Thumb32Coverage, OrnShiftedReg) {
   // ORN R0, R1, R2 - Bitwise OR NOT with shifted register
   // Encoding: 0xEA61 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEA61, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEA61, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1864,7 +1864,7 @@ TEST(Thumb32Coverage, OrnShiftedReg) {
 TEST(Thumb32Coverage, EorShiftedReg) {
   // EOR R0, R1, R2 - Bitwise XOR with shifted register
   // Encoding: 0xEA81 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEA81, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEA81, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1877,7 +1877,7 @@ TEST(Thumb32Coverage, EorShiftedReg) {
 TEST(Thumb32Coverage, AddShiftedReg) {
   // ADD R0, R1, R2 - Add with shifted register
   // Encoding: 0xEB01 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEB01, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEB01, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1890,7 +1890,7 @@ TEST(Thumb32Coverage, AddShiftedReg) {
 TEST(Thumb32Coverage, AdcShiftedReg) {
   // ADC R0, R1, R2 - Add with carry and shifted register
   // Encoding: 0xEB41 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEB41, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEB41, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1903,7 +1903,7 @@ TEST(Thumb32Coverage, AdcShiftedReg) {
 TEST(Thumb32Coverage, SbcShiftedReg) {
   // SBC R0, R1, R2 - Subtract with carry and shifted register
   // Encoding: 0xEB61 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEB61, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEB61, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1916,7 +1916,7 @@ TEST(Thumb32Coverage, SbcShiftedReg) {
 TEST(Thumb32Coverage, SubShiftedReg) {
   // SUB R0, R1, R2 - Subtract with shifted register
   // Encoding: 0xEBA1 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEBA1, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEBA1, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1929,7 +1929,7 @@ TEST(Thumb32Coverage, SubShiftedReg) {
 TEST(Thumb32Coverage, RsbShiftedReg) {
   // RSB R0, R1, R2 - Reverse subtract with shifted register
   // Encoding: 0xEBC1 0x0002
-  uint8_t code[] = THUMB32_BYTES(0xEBC1, 0x0002);
+  const uint8_t code[] = THUMB32_BYTES(0xEBC1, 0x0002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1942,7 +1942,7 @@ TEST(Thumb32Coverage, RsbShiftedReg) {
 TEST(Thumb32Coverage, Mul32) {
   // MUL R0, R1, R2 - 32-bit multiply
   // Encoding: 0xFB01 0xF002
-  uint8_t code[] = THUMB32_BYTES(0xFB01, 0xF002);
+  const uint8_t code[] = THUMB32_BYTES(0xFB01, 0xF002);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1954,7 +1954,7 @@ TEST(Thumb32Coverage, Mul32) {
 TEST(Thumb32Coverage, Msr) {
   // MSR APSR, R0 - Move to system register
   // Encoding: 0xF380 0x8800
-  uint8_t code[] = THUMB32_BYTES(0xF380, 0x8800);
+  const uint8_t code[] = THUMB32_BYTES(0xF380, 0x8800);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1966,7 +1966,7 @@ TEST(Thumb32Coverage, Msr) {
 TEST(Thumb32Coverage, ExpandImmType1) {
   // AND with imm8 replicated: type 1 = 0x1XX
   // imm12 = 0x1FF means type=1, imm8=0xFF => 0x00FF00FF
-  uint8_t code[] = THUMB32_BYTES(0xF001, 0x01FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF001, 0x01FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1978,7 +1978,7 @@ TEST(Thumb32Coverage, ExpandImmType1) {
 TEST(Thumb32Coverage, ExpandImmType2) {
   // imm12 = 0x2FF means type=2, imm8 replicated to 0xFF00FF00
   // Encoding: 0xF001 0x02FF
-  uint8_t code[] = THUMB32_BYTES(0xF001, 0x02FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF001, 0x02FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -1990,7 +1990,7 @@ TEST(Thumb32Coverage, ExpandImmType2) {
 TEST(Thumb32Coverage, ExpandImmType3) {
   // imm12 = 0x3FF means type=3, imm8 replicated to all bytes
   // Encoding: 0xF001 0x03FF
-  uint8_t code[] = THUMB32_BYTES(0xF001, 0x03FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF001, 0x03FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2002,7 +2002,7 @@ TEST(Thumb32Coverage, ExpandImmType3) {
 TEST(Thumb32Coverage, ExpandImmRotated) {
   // imm12 with type >= 4 uses rotation
   // Encoding: 0xF001 0x0480
-  uint8_t code[] = THUMB32_BYTES(0xF001, 0x0480);
+  const uint8_t code[] = THUMB32_BYTES(0xF001, 0x0480);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2014,7 +2014,7 @@ TEST(Thumb32Coverage, ExpandImmRotated) {
 TEST(Thumb16Coverage, StrWordReg) {
   // STR R0, [R1, R2] - Store word with register offset
   // Encoding: 0x5088 = 0101000|010|001|000
-  uint8_t code[] = THUMB16_BYTES(0x5088);
+  const uint8_t code[] = THUMB16_BYTES(0x5088);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2027,7 +2027,7 @@ TEST(Thumb16Coverage, StrWordReg) {
 TEST(Thumb16Coverage, StrbImm) {
   // STRB R0, [R1, #4] - Store byte with immediate offset
   // Encoding: 0x7148 = 01110|00100|001|000
-  uint8_t code[] = THUMB16_BYTES(0x7148);
+  const uint8_t code[] = THUMB16_BYTES(0x7148);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2040,7 +2040,7 @@ TEST(Thumb16Coverage, StrbImm) {
 TEST(Thumb16Coverage, Cps) {
   // CPSID i - Change processor state, disable interrupts
   // Encoding: 0xB672 = 10110110|01110010
-  uint8_t code[] = THUMB16_BYTES(0xB672);
+  const uint8_t code[] = THUMB16_BYTES(0xB672);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2056,7 +2056,7 @@ TEST(Thumb16Coverage, Cps) {
 TEST(Thumb32Coverage, BlxImm) {
   // BLX label - Branch with link and exchange to ARM
   // Encoding: 0xF000 0xC001
-  uint8_t code[] = THUMB32_BYTES(0xF000, 0xC001);
+  const uint8_t code[] = THUMB32_BYTES(0xF000, 0xC001);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2068,7 +2068,7 @@ TEST(Thumb32Coverage, BlxImm) {
 TEST(Thumb32Coverage, NopW) {
   // NOP.W - Wide no-operation hint
   // Encoding: 0xF3AF 0x8000
-  uint8_t code[] = THUMB32_BYTES(0xF3AF, 0x8000);
+  const uint8_t code[] = THUMB32_BYTES(0xF3AF, 0x8000);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2080,7 +2080,7 @@ TEST(Thumb32Coverage, NopW) {
 TEST(Thumb32Coverage, TstModImm) {
   // TST R0, #0xFF - Test bits (AND with flags, no result)
   // Encoding: 0xF010 0x0FFF (Rd=PC indicates TST)
-  uint8_t code[] = THUMB32_BYTES(0xF010, 0x0FFF);
+  const uint8_t code[] = THUMB32_BYTES(0xF010, 0x0FFF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2093,7 +2093,7 @@ TEST(Thumb32Coverage, TstModImm) {
 TEST(Thumb32Coverage, BicModImm) {
   // BIC R0, R1, #0xFF - Bit clear with modified immediate
   // Encoding: 0xF021 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF021, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF021, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2106,7 +2106,7 @@ TEST(Thumb32Coverage, BicModImm) {
 TEST(Thumb32Coverage, MovModImm) {
   // MOV R0, #0xFF - Move modified immediate
   // Encoding: 0xF04F 0x00FF (Rn=0xF indicates MOV)
-  uint8_t code[] = THUMB32_BYTES(0xF04F, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF04F, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2119,7 +2119,7 @@ TEST(Thumb32Coverage, MovModImm) {
 TEST(Thumb32Coverage, OrnModImm) {
   // ORN R0, R1, #0xFF - OR NOT with modified immediate
   // Encoding: 0xF061 0x00FF
-  uint8_t code[] = THUMB32_BYTES(0xF061, 0x00FF);
+  const uint8_t code[] = THUMB32_BYTES(0xF061, 0x00FF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2132,7 +2132,7 @@ TEST(Thumb32Coverage, OrnModImm) {
 TEST(Thumb32Coverage, TeqModImm) {
   // TEQ R0, #0xFF - Test equivalence (XOR with flags)
   // Encoding: 0xF090 0x0FFF
-  uint8_t code[] = THUMB32_BYTES(0xF090, 0x0FFF);
+  const uint8_t code[] = THUMB32_BYTES(0xF090, 0x0FFF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2144,7 +2144,7 @@ TEST(Thumb32Coverage, TeqModImm) {
 TEST(Thumb32Coverage, CmnModImm) {
   // CMN R0, #0xFF - Compare negative (ADD with flags)
   // Encoding: 0xF110 0x0FFF
-  uint8_t code[] = THUMB32_BYTES(0xF110, 0x0FFF);
+  const uint8_t code[] = THUMB32_BYTES(0xF110, 0x0FFF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2157,7 +2157,7 @@ TEST(Thumb32Coverage, CmnModImm) {
 TEST(Thumb32Coverage, CmpModImm) {
   // CMP R0, #0xFF - Compare with modified immediate
   // Encoding: 0xF1B0 0x0FFF
-  uint8_t code[] = THUMB32_BYTES(0xF1B0, 0x0FFF);
+  const uint8_t code[] = THUMB32_BYTES(0xF1B0, 0x0FFF);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2170,7 +2170,7 @@ TEST(Thumb32Coverage, CmpModImm) {
 TEST(Thumb32Coverage, AdrAdd) {
   // ADR R0, label (add) - PC-relative address calculation
   // Encoding: 0xF20F 0x0100
-  uint8_t code[] = THUMB32_BYTES(0xF20F, 0x0100);
+  const uint8_t code[] = THUMB32_BYTES(0xF20F, 0x0100);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2183,7 +2183,7 @@ TEST(Thumb32Coverage, AdrAdd) {
 TEST(Thumb32Coverage, StrbW) {
   // STRB.W R0, [R1, #0] - Wide store byte
   // Encoding: 0xF801 0x0C00
-  uint8_t code[] = THUMB32_BYTES(0xF801, 0x0C00);
+  const uint8_t code[] = THUMB32_BYTES(0xF801, 0x0C00);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2194,7 +2194,7 @@ TEST(Thumb32Coverage, StrbW) {
 TEST(Thumb32Coverage, LdrbW) {
   // LDRB.W R0, [R1, #0] - Wide load byte
   // Encoding: 0xF811 0x0C00
-  uint8_t code[] = THUMB32_BYTES(0xF811, 0x0C00);
+  const uint8_t code[] = THUMB32_BYTES(0xF811, 0x0C00);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2205,7 +2205,7 @@ TEST(Thumb32Coverage, LdrbW) {
 TEST(Thumb32Coverage, MovShifted) {
   // MOV R0, R1, LSL #4 - Move with shifted register
   // Encoding: 0xEA4F 0x1001
-  uint8_t code[] = THUMB32_BYTES(0xEA4F, 0x1001);
+  const uint8_t code[] = THUMB32_BYTES(0xEA4F, 0x1001);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2218,7 +2218,7 @@ TEST(Thumb32Coverage, MovShifted) {
 TEST(Thumb32Coverage, MvnShifted) {
   // MVN R0, R1, LSL #4 - Bitwise NOT with shifted register
   // Encoding: 0xEA6F 0x1001
-  uint8_t code[] = THUMB32_BYTES(0xEA6F, 0x1001);
+  const uint8_t code[] = THUMB32_BYTES(0xEA6F, 0x1001);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2231,7 +2231,7 @@ TEST(Thumb32Coverage, MvnShifted) {
 TEST(Thumb32Coverage, TstShifted) {
   // TST R0, R1 - Test bits with shifted register
   // Encoding: 0xEA10 0x0F01
-  uint8_t code[] = THUMB32_BYTES(0xEA10, 0x0F01);
+  const uint8_t code[] = THUMB32_BYTES(0xEA10, 0x0F01);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2244,7 +2244,7 @@ TEST(Thumb32Coverage, TstShifted) {
 TEST(Thumb32Coverage, TeqShifted) {
   // TEQ R0, R1 - Test equivalence with shifted register
   // Encoding: 0xEA90 0x0F01
-  uint8_t code[] = THUMB32_BYTES(0xEA90, 0x0F01);
+  const uint8_t code[] = THUMB32_BYTES(0xEA90, 0x0F01);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2256,7 +2256,7 @@ TEST(Thumb32Coverage, TeqShifted) {
 TEST(Thumb32Coverage, CmnShifted) {
   // CMN R0, R1 - Compare negative with shifted register
   // Encoding: 0xEB10 0x0F01
-  uint8_t code[] = THUMB32_BYTES(0xEB10, 0x0F01);
+  const uint8_t code[] = THUMB32_BYTES(0xEB10, 0x0F01);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2269,7 +2269,7 @@ TEST(Thumb32Coverage, CmnShifted) {
 TEST(Thumb32Coverage, CmpShifted) {
   // CMP R0, R1 - Compare with shifted register
   // Encoding: 0xEBB0 0x0F01
-  uint8_t code[] = THUMB32_BYTES(0xEBB0, 0x0F01);
+  const uint8_t code[] = THUMB32_BYTES(0xEBB0, 0x0F01);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2282,7 +2282,7 @@ TEST(Thumb32Coverage, CmpShifted) {
 TEST(Thumb32Coverage, Rrx) {
   // RRX R0, R1 - Rotate right with extend
   // Encoding: 0xEA4F 0x0031
-  uint8_t code[] = THUMB32_BYTES(0xEA4F, 0x0031);
+  const uint8_t code[] = THUMB32_BYTES(0xEA4F, 0x0031);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2295,7 +2295,7 @@ TEST(Thumb32Coverage, Rrx) {
 TEST(Thumb32Coverage, Ssat) {
   // SSAT R0, #16, R1 - Signed saturate
   // Encoding: 0xF321 0x000F
-  uint8_t code[] = THUMB32_BYTES(0xF321, 0x000F);
+  const uint8_t code[] = THUMB32_BYTES(0xF321, 0x000F);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2306,7 +2306,7 @@ TEST(Thumb32Coverage, Ssat) {
 TEST(Thumb32Coverage, PlainBinaryImmUndef) {
   // Encoding that exercises the default case
   // Encoding: 0xF3E1 0x0000
-  uint8_t code[] = THUMB32_BYTES(0xF3E1, 0x0000);
+  const uint8_t code[] = THUMB32_BYTES(0xF3E1, 0x0000);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2318,7 +2318,7 @@ TEST(Thumb32Coverage, PlainBinaryImmUndef) {
 TEST(Thumb32Coverage, Sbfx) {
   // SBFX R0, R1, #0, #8 - Signed bit field extract
   // Encoding: 0xF341 0x0007
-  uint8_t code[] = THUMB32_BYTES(0xF341, 0x0007);
+  const uint8_t code[] = THUMB32_BYTES(0xF341, 0x0007);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2329,7 +2329,7 @@ TEST(Thumb32Coverage, Sbfx) {
 TEST(Thumb32Coverage, Ubfx) {
   // UBFX R0, R1, #0, #8 - Unsigned bit field extract
   // Encoding: 0xF3C1 0x0007
-  uint8_t code[] = THUMB32_BYTES(0xF3C1, 0x0007);
+  const uint8_t code[] = THUMB32_BYTES(0xF3C1, 0x0007);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2340,7 +2340,7 @@ TEST(Thumb32Coverage, Ubfx) {
 TEST(Thumb32Coverage, Bfi) {
   // BFI R0, R1, #0, #8 - Bit field insert
   // Encoding: 0xF361 0x0007
-  uint8_t code[] = THUMB32_BYTES(0xF361, 0x0007);
+  const uint8_t code[] = THUMB32_BYTES(0xF361, 0x0007);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2351,7 +2351,7 @@ TEST(Thumb32Coverage, Bfi) {
 TEST(Thumb32Coverage, Tbb) {
   // TBB [R0, R1] - Table branch byte
   // Encoding: 0xE8D0 0xF001
-  uint8_t code[] = THUMB32_BYTES(0xE8D0, 0xF001);
+  const uint8_t code[] = THUMB32_BYTES(0xE8D0, 0xF001);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2362,7 +2362,7 @@ TEST(Thumb32Coverage, Tbb) {
 TEST(Thumb32Coverage, Tbh) {
   // TBH [R0, R1, LSL #1] - Table branch halfword
   // Encoding: 0xE8D0 0xF011
-  uint8_t code[] = THUMB32_BYTES(0xE8D0, 0xF011);
+  const uint8_t code[] = THUMB32_BYTES(0xE8D0, 0xF011);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2373,7 +2373,7 @@ TEST(Thumb32Coverage, Tbh) {
 TEST(Thumb32Coverage, Ldrex) {
   // LDREX R0, [R1] - Load register exclusive
   // Encoding: 0xE851 0x0F00
-  uint8_t code[] = THUMB32_BYTES(0xE851, 0x0F00);
+  const uint8_t code[] = THUMB32_BYTES(0xE851, 0x0F00);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2384,7 +2384,7 @@ TEST(Thumb32Coverage, Ldrex) {
 TEST(Thumb32Coverage, Strex) {
   // STREX R2, R0, [R1] - Store register exclusive
   // Encoding: 0xE840 0x0200
-  uint8_t code[] = THUMB32_BYTES(0xE840, 0x0200);
+  const uint8_t code[] = THUMB32_BYTES(0xE840, 0x0200);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2395,7 +2395,7 @@ TEST(Thumb32Coverage, Strex) {
 TEST(Thumb32Coverage, LdrdPreIndex) {
   // LDRD R0, R1, [R2, #8]! - Load double with pre-index
   // Encoding: 0xE9F2 0x0102
-  uint8_t code[] = THUMB32_BYTES(0xE9F2, 0x0102);
+  const uint8_t code[] = THUMB32_BYTES(0xE9F2, 0x0102);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2406,7 +2406,7 @@ TEST(Thumb32Coverage, LdrdPreIndex) {
 TEST(Thumb32Coverage, Strd) {
   // STRD R0, R1, [R2, #8] - Store double word
   // Encoding: 0xE9C2 0x0102
-  uint8_t code[] = THUMB32_BYTES(0xE9C2, 0x0102);
+  const uint8_t code[] = THUMB32_BYTES(0xE9C2, 0x0102);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2417,7 +2417,7 @@ TEST(Thumb32Coverage, Strd) {
 TEST(Thumb32Coverage, LongMul) {
   // SDIV R0, R1, R2 - Signed divide (uses long_multiply decoder)
   // Encoding: 0xFB91 0xF0F2
-  uint8_t code[] = THUMB32_BYTES(0xFB91, 0xF0F2);
+  const uint8_t code[] = THUMB32_BYTES(0xFB91, 0xF0F2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2438,7 +2438,7 @@ TEST_GROUP(DisasmCoverage) {
 
 TEST(DisasmCoverage, DisasmDataProcImm) {
   // MOVS R0, #42
-  uint8_t code[] = THUMB16_BYTES(0x202A);
+  const uint8_t code[] = THUMB16_BYTES(0x202A);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, sizeof(buf));
@@ -2448,7 +2448,7 @@ TEST(DisasmCoverage, DisasmDataProcImm) {
 
 TEST(DisasmCoverage, DisasmDataProcReg) {
   // ANDS R0, R1
-  uint8_t code[] = THUMB16_BYTES(0x4008);
+  const uint8_t code[] = THUMB16_BYTES(0x4008);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, sizeof(buf));
@@ -2458,7 +2458,7 @@ TEST(DisasmCoverage, DisasmDataProcReg) {
 
 TEST(DisasmCoverage, DisasmLoadImm) {
   // LDR R0, [R1, #4]
-  uint8_t code[] = THUMB16_BYTES(0x6848);
+  const uint8_t code[] = THUMB16_BYTES(0x6848);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, sizeof(buf));
@@ -2468,7 +2468,7 @@ TEST(DisasmCoverage, DisasmLoadImm) {
 
 TEST(DisasmCoverage, DisasmStoreImm) {
   // STR R0, [R1, #4]
-  uint8_t code[] = THUMB16_BYTES(0x6048);
+  const uint8_t code[] = THUMB16_BYTES(0x6048);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, sizeof(buf));
@@ -2478,7 +2478,7 @@ TEST(DisasmCoverage, DisasmStoreImm) {
 
 TEST(DisasmCoverage, DisasmBranch) {
   // B +10
-  uint8_t code[] = THUMB16_BYTES(0xE004);
+  const uint8_t code[] = THUMB16_BYTES(0xE004);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, sizeof(buf));
@@ -2488,7 +2488,7 @@ TEST(DisasmCoverage, DisasmBranch) {
 
 TEST(DisasmCoverage, DisasmBranchLink) {
   // BL
-  uint8_t code[] = THUMB32_BYTES(0xF000, 0xF801);
+  const uint8_t code[] = THUMB32_BYTES(0xF000, 0xF801);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, sizeof(buf));
@@ -2498,7 +2498,7 @@ TEST(DisasmCoverage, DisasmBranchLink) {
 
 TEST(DisasmCoverage, DisasmBranchExchange) {
   // BX R1
-  uint8_t code[] = THUMB16_BYTES(0x4708);
+  const uint8_t code[] = THUMB16_BYTES(0x4708);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, sizeof(buf));
@@ -2508,7 +2508,7 @@ TEST(DisasmCoverage, DisasmBranchExchange) {
 
 TEST(DisasmCoverage, DisasmOther) {
   // NOP
-  uint8_t code[] = THUMB16_BYTES(0xBF00);
+  const uint8_t code[] = THUMB16_BYTES(0xBF00);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, sizeof(buf));
@@ -2518,7 +2518,7 @@ TEST(DisasmCoverage, DisasmOther) {
 
 TEST(DisasmCoverage, DisasmNullBuf) {
   // MOVS R0, #0
-  uint8_t code[] = THUMB16_BYTES(0x2000);
+  const uint8_t code[] = THUMB16_BYTES(0x2000);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, nullptr, 0);
@@ -2534,7 +2534,7 @@ TEST(DisasmCoverage, DisasmNullInsn) {
 
 TEST(DisasmCoverage, DisasmZeroBufSize) {
   // MOVS R0, #0
-  uint8_t code[] = THUMB16_BYTES(0x2000);
+  const uint8_t code[] = THUMB16_BYTES(0x2000);
   armv8m_decode(code, TEST_PC, &insn);
 
   int len = armv8m_disasm(&insn, buf, 0);
@@ -2675,7 +2675,7 @@ TEST(Thumb32Coverage, ThumbExpandImm_Type1_ReplicateTo0And16) {
   const uint16_t hw1 = AND_IMM_HW1(REG_R1, 0); /* AND, Rn=R1, i=0 */
   const uint16_t hw2 =
       DP_IMM_HW2(REG_R0, 1, 0xFF); /* Rd=R0, imm3=1, imm8=0xFF */
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2698,7 +2698,7 @@ TEST(Thumb32Coverage, ThumbExpandImm_Type2_ReplicateTo8And24) {
    */
   const uint16_t hw1 = AND_IMM_HW1(REG_R1, 0);
   const uint16_t hw2 = DP_IMM_HW2(REG_R0, 2, 0xFF);
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2720,7 +2720,7 @@ TEST(Thumb32Coverage, ThumbExpandImm_Type3_ReplicateToAllBytes) {
    */
   const uint16_t hw1 = AND_IMM_HW1(REG_R1, 0);
   const uint16_t hw2 = DP_IMM_HW2(REG_R0, 3, 0xFF);
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2742,7 +2742,7 @@ TEST(Thumb32Coverage, ThumbExpandImm_Type4Plus_RotatedConstant) {
    */
   const uint16_t hw1 = AND_IMM_HW1(REG_R1, 0);
   const uint16_t hw2 = DP_IMM_HW2(REG_R0, 4, 0x80);
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2775,7 +2775,7 @@ TEST(Thumb32Coverage, Eret_ExceptionReturn) {
    */
   const uint16_t hw1 = 0xF3DE;
   const uint16_t hw2 = 0x8F00;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2807,7 +2807,7 @@ TEST(Thumb32Coverage, AdrSubtract_PcRelativeAddress) {
    */
   const uint16_t hw1 = 0xF2AF; /* SUBW with Rn=PC */
   const uint16_t hw2 = 0x0180; /* Rd=R1, imm=0x080 */
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2830,7 +2830,7 @@ TEST(Thumb32Coverage, Ssat_SignedSaturate) {
    */
   const uint16_t hw1 = 0xF901;
   const uint16_t hw2 = 0x000F;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2852,7 +2852,7 @@ TEST(Thumb32Coverage, Sbfx_SignedBitFieldExtract) {
    */
   const uint16_t hw1 = 0xF941;
   const uint16_t hw2 = 0x0007;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2879,7 +2879,7 @@ TEST(Thumb32Coverage, Pkh_PackHalfword) {
    */
   const uint16_t hw1 = 0xEAC1;
   const uint16_t hw2 = 0x0002;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2902,7 +2902,7 @@ TEST(Thumb32Coverage, DataProcShiftedReg_ViaOp1Equals3) {
    */
   const uint16_t hw1 = 0xFA21;
   const uint16_t hw2 = 0x8002;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2927,7 +2927,7 @@ TEST(Thumb32Coverage, LdrhW_LoadHalfword) {
    */
   const uint16_t hw1 = 0xF8B1;
   const uint16_t hw2 = 0x0080;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2950,7 +2950,7 @@ TEST(Thumb32Coverage, LoadStore_ViaOp1Equals3_Op1Path) {
    */
   const uint16_t hw1 = 0xF801;
   const uint16_t hw2 = 0x8000;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2970,7 +2970,7 @@ TEST(Thumb32Coverage, LoadLiteral_PcRelative) {
    */
   const uint16_t hw1 = 0xF80F;
   const uint16_t hw2 = 0x8100;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -2988,7 +2988,7 @@ TEST(Thumb32Coverage, LoadRegisterOffset) {
    */
   const uint16_t hw1 = 0xF801;
   const uint16_t hw2 = 0x8022;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3006,7 +3006,7 @@ TEST(Thumb32Coverage, Load12BitImmediate) {
    */
   const uint16_t hw1 = 0xF841;
   const uint16_t hw2 = 0x8FFF;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3024,7 +3024,7 @@ TEST(Thumb32Coverage, StrReg_StoreRegisterOffset) {
    */
   const uint16_t hw1 = 0xF841;
   const uint16_t hw2 = 0x0022;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3046,7 +3046,7 @@ TEST(Thumb32Coverage, StrPcRelative_StoreWithPcBase) {
    */
   const uint16_t hw1 = 0xF84F;
   const uint16_t hw2 = 0x0100;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3066,7 +3066,7 @@ TEST(Thumb32Coverage, StrImm12_Store12BitOffset) {
    */
   const uint16_t hw1 = 0xF8C1;
   const uint16_t hw2 = 0x0FFF;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3087,7 +3087,7 @@ TEST(Thumb32Coverage, StrhW_StoreHalfword) {
    */
   const uint16_t hw1 = 0xF8A1;
   const uint16_t hw2 = 0x0080;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3125,7 +3125,7 @@ TEST(Thumb32Coverage, Stmdb_Op0_DecrementBefore) {
    */
   const uint16_t hw1 = 0xE900;
   const uint16_t hw2 = 0x0006; /* bits 1,2 set = R1, R2 */
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3148,7 +3148,7 @@ TEST(Thumb32Coverage, Stmdb_Op0_ViaAltEncoding) {
    */
   const uint16_t hw1 = 0xE800;
   const uint16_t hw2 = 0x0006;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3168,7 +3168,7 @@ TEST(Thumb32Coverage, Stm_Op3_IncrementAfter) {
    */
   const uint16_t hw1 = 0xE980;
   const uint16_t hw2 = 0x0006;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3190,7 +3190,7 @@ TEST(Thumb32Coverage, StmWriteback_RnInList_Unpredictable) {
    */
   const uint16_t hw1 = 0xE8A0;
   const uint16_t hw2 = 0x0007; /* R0, R1, R2 */
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3213,7 +3213,7 @@ TEST(Thumb32Coverage, Mla_MultiplyAccumulate) {
    */
   const uint16_t hw1 = 0xFB01;
   const uint16_t hw2 = 0xB002;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3235,7 +3235,7 @@ TEST(Thumb32Coverage, Smull_SignedLongMultiply) {
    */
   const uint16_t hw1 = 0xFB81;
   const uint16_t hw2 = 0x8003;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3262,7 +3262,7 @@ TEST(Thumb32Coverage, Op1_3_Op0_LoadStoreSingle) {
    */
   const uint16_t hw1 = 0xF800;
   const uint16_t hw2 = 0x0000;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3279,7 +3279,7 @@ TEST(Thumb32Coverage, Op1_3_Op0_PlainBinaryImmediate) {
    */
   const uint16_t hw1 = 0xFB01;
   const uint16_t hw2 = 0x000F;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3296,7 +3296,7 @@ TEST(Thumb32Coverage, Op1_3_Op0_BranchesMisc) {
    */
   const uint16_t hw1 = 0xFC00;
   const uint16_t hw2 = 0x0000;
-  uint8_t code[] = THUMB32_BYTES(hw1, hw2);
+  const uint8_t code[] = THUMB32_BYTES(hw1, hw2);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3314,7 +3314,7 @@ TEST(Thumb32Coverage, Dmb_DataMemoryBarrier) {
    *   hw1 = 0xF3BF: miscellaneous control
    *   hw2[7:4] = 0x5 (DMB), hw2[3:0] = 0xF (SY option)
    */
-  uint8_t code[] = THUMB32_BYTES(0xF3BF, 0x8F5F);
+  const uint8_t code[] = THUMB32_BYTES(0xF3BF, 0x8F5F);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3330,7 +3330,7 @@ TEST(Thumb32Coverage, Dsb_DataSynchronizationBarrier) {
    * Encoding: 0xF3BF 0x8F4F
    *   hw2[7:4] = 0x4 (DSB), hw2[3:0] = 0xF (SY option)
    */
-  uint8_t code[] = THUMB32_BYTES(0xF3BF, 0x8F4F);
+  const uint8_t code[] = THUMB32_BYTES(0xF3BF, 0x8F4F);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3346,7 +3346,7 @@ TEST(Thumb32Coverage, Isb_InstructionSynchronizationBarrier) {
    * Encoding: 0xF3BF 0x8F6F
    *   hw2[7:4] = 0x6 (ISB), hw2[3:0] = 0xF (SY option)
    */
-  uint8_t code[] = THUMB32_BYTES(0xF3BF, 0x8F6F);
+  const uint8_t code[] = THUMB32_BYTES(0xF3BF, 0x8F6F);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 
@@ -3368,7 +3368,7 @@ TEST(Thumb32Coverage, Mls_MultiplySubtract) {
    *   hw2 = 0x8012: Ra=R8 (bit15=1 for routing), Rd=R0, op2=0x1 (MLS), Rm=R2
    *   hw2[15:12]=Ra=8, hw2[11:8]=Rd=0, hw2[7:4]=0x1 (MLS), hw2[3:0]=Rm=2
    */
-  uint8_t code[] = THUMB32_BYTES(0xFB01, 0x8012);
+  const uint8_t code[] = THUMB32_BYTES(0xFB01, 0x8012);
 
   int result = armv8m_decode(code, TEST_PC, &insn);
 

@@ -26,6 +26,7 @@ def emulator_lib_available() -> bool:
         [sys.executable, "-c", "from femu._emulator_cffi import get_lib; get_lib()"],
         env=env,
         capture_output=True,
+        check=False,
     )
     return result.returncode == 0
 

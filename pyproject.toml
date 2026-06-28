@@ -32,9 +32,8 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "black>=23.0",
-    "mypy>=1.0",
-    "ruff>=0.1.0",
+    "ruff>=0.5.0",
+    "ty>=0.0.1",
     "types-PyYAML>=6.0",
 ]
 
@@ -88,26 +87,69 @@ exclude_lines = [
     "raise NotImplementedError",
 ]
 
-[tool.black]
-line-length = 100
-target-version = ["py313"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4", "BLE", "T20", "G", "SIM"]
+# Opt in to every rule, then subtract only what is genuinely inapplicable. Each
+# ignore below carries its rationale; the default is "enabled and fixed".
+select = ["ALL"]
+ignore = [
+    # --- Conflicts with the ruff formatter (must stay off) ---
+    "COM812",   # trailing comma is decided by the formatter
+    "ISC001",   # single-line implicit string concat is decided by the formatter
+
+    # --- pydocstyle: keep one side of each mutually-exclusive pair (google) ---
+    "D203",     # one-blank-line-before-class (conflicts with D211)
+    "D213",     # multi-line-summary-second-line (conflicts with D212)
+
+    # --- Deliberate, pervasive patterns in this codebase ---
+    "PLR2004",  # opcodes/bitmasks are inherently "magic numbers" in an emulator
+    "TID252",   # relative imports inside the femu package are intentional
+    "PLC0415",  # local imports gate optional deps and break import cycles on purpose
+    "FBT001", "FBT002", "FBT003",  # boolean flags are part of the build/config API
+    "S603", "S607",  # subprocess invokes known dev tools (cmake/gcc/clang) by name
+    "UP017",    # datetime.UTC is 3.11+; project supports 3.10 (see requires-python)
+
+    # --- Stylistic rules whose churn outweighs their value here ---
+    "TRY003",   # messages live at the raise site rather than in bespoke exceptions
+    "EM101", "EM102",  # short exception messages stay inline for readability
+    "ANN401",   # Any is unavoidable at the cffi boundary
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/firmware/test_emulator.py" = ["E402"]
+# Tests legitimately use bare asserts, reach into internals, skip docstrings, and
+# compare against literal expected values.
+"python/tests/**" = [
+    "S101",
+    "SLF001",
+    "ANN",
+    "D",
+    "ARG",
+    "INP001",
+    "PLR2004",
+    "T20",
+    "N806",  # tests mirror C-API constant names (e.g. ARMV8M_OK)
+    "RUF059",  # partial tuple unpacking from fixtures is fine in tests
+]
+"tests/**" = ["S101", "SLF001", "ANN", "D", "ARG", "INP001", "PLR2004", "T20", "E402"]
+# Every public method here is a concrete override of a documented BaseEmulator
+# abstract method; duplicating those docstrings would only invite drift.
+"python/femu/arch/armv8m.py" = ["D102"]
+# Peripheral read/write implement a fixed (offset, size) MMIO contract; `size`
+# is legitimately unused for registers that are always word-wide.
+"python/femu/peripherals/**" = ["ARG002"]
 
-[tool.mypy]
-python_version = "3.13"
-warn_return_any = true
-warn_unused_ignores = true
-disallow_untyped_defs = true
+[tool.ruff.format]
+# Black-compatible defaults (line length comes from [tool.ruff] above).
 
-[[tool.mypy.overrides]]
-module = "cffi.*"
-ignore_missing_imports = true
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.rules]
+# cffi's generated bindings have no type stubs; don't fail on the import.
+unresolved-import = "warn"

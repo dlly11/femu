@@ -1,5 +1,4 @@
-"""
-Peripheral type registry supporting Python, C, and plugin peripherals.
+"""Peripheral type registry supporting Python, C, and plugin peripherals.
 
 The PeripheralRegistry provides a unified factory for creating peripherals
 regardless of their implementation (Python, C, or plugin).
@@ -31,12 +30,15 @@ Example::
 from __future__ import annotations
 
 import platform
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar
 
 from .logging import LogCategory, get_logger
 from .peripheral import CPeripheral, Peripheral, PeripheralBase, PluginPeripheral
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger(LogCategory.PERIPHERAL)
 
@@ -52,8 +54,7 @@ class PeripheralTypeInfo:
 
 
 class PeripheralRegistry:
-    """
-    Central registry for peripheral types.
+    """Central registry for peripheral types.
 
     Supports three kinds of peripherals:
     - Python: Registered via @register decorator
@@ -64,16 +65,16 @@ class PeripheralRegistry:
     """
 
     # Python peripheral classes: type_name -> class
-    _python_types: dict[str, type[Peripheral]] = {}
+    _python_types: ClassVar[dict[str, type[Peripheral]]] = {}
 
     # C peripheral factory names: type_name -> factory_name
-    _c_types: dict[str, str] = {}
+    _c_types: ClassVar[dict[str, str]] = {}
 
     # Plugin peripheral types: type_name -> (plugin_path, type_name_in_plugin)
-    _plugin_types: dict[str, tuple[str, str]] = {}
+    _plugin_types: ClassVar[dict[str, tuple[str, str]]] = {}
 
     # Descriptions for all types
-    _descriptions: dict[str, str] = {}
+    _descriptions: ClassVar[dict[str, str]] = {}
 
     # ==========================================================================
     # Python Peripherals
@@ -83,8 +84,7 @@ class PeripheralRegistry:
     def register(
         cls, name: str, description: str = ""
     ) -> Callable[[type[Peripheral]], type[Peripheral]]:
-        """
-        Decorator to register a Python peripheral class.
+        """Decorator to register a Python peripheral class.
 
         Args:
             name: Type name for the registry (used in YAML configs)
@@ -114,8 +114,7 @@ class PeripheralRegistry:
     def register_python(
         cls, name: str, periph_class: type[Peripheral], description: str = ""
     ) -> None:
-        """
-        Register a Python peripheral class (non-decorator version).
+        """Register a Python peripheral class (non-decorator version).
 
         Args:
             name: Type name for the registry
@@ -137,8 +136,7 @@ class PeripheralRegistry:
 
     @classmethod
     def register_c(cls, type_name: str, factory_name: str, description: str = "") -> None:
-        """
-        Register a C peripheral factory function.
+        """Register a C peripheral factory function.
 
         The factory function should be exported from the emulator library
         with the signature::
@@ -162,8 +160,7 @@ class PeripheralRegistry:
 
     @classmethod
     def load_plugin(cls, plugin_path: str | Path, prefix: str = "") -> list[str]:
-        """
-        Load peripheral types from a plugin shared library.
+        """Load peripheral types from a plugin shared library.
 
         Args:
             plugin_path: Path to .so/.dll/.dylib file
@@ -202,8 +199,7 @@ class PeripheralRegistry:
     def load_plugins_from_directory(
         cls, directory: str | Path, pattern: str | None = None
     ) -> dict[str, list[str]]:
-        """
-        Load all plugins from a directory.
+        """Load all plugins from a directory.
 
         Args:
             directory: Directory to scan
@@ -250,8 +246,7 @@ class PeripheralRegistry:
         config: dict[str, str | int | bool] | None = None,
         **kwargs: str | int | bool,
     ) -> PeripheralBase:
-        """
-        Create a peripheral instance by type name.
+        """Create a peripheral instance by type name.
 
         Args:
             type_name: Registered type name
@@ -275,7 +270,7 @@ class PeripheralRegistry:
         if type_name in cls._python_types:
             periph_class = cls._python_types[type_name]
             # Config dict is passed as kwargs to peripheral constructor
-            return periph_class(name=name, **merged_config)  # type: ignore[arg-type]
+            return periph_class(name=name, **merged_config)
 
         # Check C types
         if type_name in cls._c_types:
@@ -299,45 +294,35 @@ class PeripheralRegistry:
 
     @classmethod
     def list_types(cls) -> list[PeripheralTypeInfo]:
-        """
-        List all registered peripheral types.
+        """List all registered peripheral types.
 
         Returns:
             List of PeripheralTypeInfo objects
         """
-        result = []
-
-        for name in sorted(cls._python_types.keys()):
-            result.append(
-                PeripheralTypeInfo(
-                    name=name, source="python", description=cls._descriptions.get(name, "")
-                )
+        result: list[PeripheralTypeInfo] = [
+            PeripheralTypeInfo(
+                name=name, source="python", description=cls._descriptions.get(name, "")
             )
-
-        for name in sorted(cls._c_types.keys()):
-            result.append(
-                PeripheralTypeInfo(
-                    name=name, source="c", description=cls._descriptions.get(name, "")
-                )
+            for name in sorted(cls._python_types)
+        ]
+        result.extend(
+            PeripheralTypeInfo(name=name, source="c", description=cls._descriptions.get(name, ""))
+            for name in sorted(cls._c_types)
+        )
+        result.extend(
+            PeripheralTypeInfo(
+                name=name,
+                source="plugin",
+                description=cls._descriptions.get(name, ""),
+                plugin_path=cls._plugin_types[name][0],
             )
-
-        for name in sorted(cls._plugin_types.keys()):
-            path, _ = cls._plugin_types[name]
-            result.append(
-                PeripheralTypeInfo(
-                    name=name,
-                    source="plugin",
-                    description=cls._descriptions.get(name, ""),
-                    plugin_path=path,
-                )
-            )
-
+            for name in sorted(cls._plugin_types)
+        )
         return result
 
     @classmethod
     def has_type(cls, type_name: str) -> bool:
-        """
-        Check if a type is registered.
+        """Check if a type is registered.
 
         Args:
             type_name: Type name to check
@@ -353,8 +338,7 @@ class PeripheralRegistry:
 
     @classmethod
     def get_type_info(cls, type_name: str) -> PeripheralTypeInfo | None:
-        """
-        Get information about a specific type.
+        """Get information about a specific type.
 
         Args:
             type_name: Type name to look up
@@ -385,8 +369,7 @@ class PeripheralRegistry:
 
     @classmethod
     def get_type_source(cls, type_name: str) -> str | None:
-        """
-        Get the source of a peripheral type.
+        """Get the source of a peripheral type.
 
         Args:
             type_name: Type name to look up
@@ -408,8 +391,7 @@ class PeripheralRegistry:
 
     @classmethod
     def unregister(cls, type_name: str) -> bool:
-        """
-        Unregister a peripheral type.
+        """Unregister a peripheral type.
 
         Args:
             type_name: Type name to unregister
@@ -438,8 +420,7 @@ class PeripheralRegistry:
 
     @classmethod
     def clear(cls) -> None:
-        """
-        Clear all registered types.
+        """Clear all registered types.
 
         Mainly useful for testing.
         """

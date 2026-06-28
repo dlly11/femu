@@ -1,5 +1,4 @@
-"""
-Build system integration for FEMU.
+"""Build system integration for FEMU.
 
 Handles CMake configuration, compilation, and packaging.
 """
@@ -40,7 +39,7 @@ def run_command(
         full_env.update(env)
 
     try:
-        result = subprocess.run(
+        return subprocess.run(
             cmd,
             cwd=cwd,
             check=check,
@@ -48,7 +47,6 @@ def run_command(
             text=True,
             env=full_env,
         )
-        return result
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Command failed with exit code {e.returncode}[/red]")
         if e.stdout:
@@ -64,8 +62,7 @@ def configure(
     compiler: Compiler | None = None,
     sanitizers: bool = True,
 ) -> None:
-    """
-    Configure the CMake build.
+    """Configure the CMake build.
 
     Args:
         build_type: Build type (Debug, Release)
@@ -163,14 +160,14 @@ def run_ctest(verbose: bool = False, test_filter: str | None = None) -> bool:
 
     try:
         run_command(cmd, cwd=BUILD_DIR)
-        return True
     except subprocess.CalledProcessError:
         return False
+    else:
+        return True
 
 
 def run_analysis(tool: str | None = None) -> bool:
-    """
-    Run static analysis tools.
+    """Run static analysis tools.
 
     Args:
         tool: Specific tool to run (cppcheck, clang-tidy, or None for all)
@@ -189,16 +186,16 @@ def run_analysis(tool: str | None = None) -> bool:
 
     try:
         run_command(cmd)
-        console.print("\n[green]Static analysis complete.[/green]")
-        return True
     except subprocess.CalledProcessError:
         console.print("\n[red]Static analysis found issues.[/red]")
         return False
+    else:
+        console.print("\n[green]Static analysis complete.[/green]")
+        return True
 
 
 def package(output_dir: Path | None = None) -> Path | None:
-    """
-    Package the emulator for distribution.
+    """Package the emulator for distribution.
 
     Builds a release version and creates a Python wheel with the
     shared library bundled.

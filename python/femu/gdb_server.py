@@ -1,5 +1,4 @@
-"""
-GDB Remote Serial Protocol (RSP) server for FEMU.
+"""GDB Remote Serial Protocol (RSP) server for FEMU.
 
 This module implements a GDB stub that allows debugging firmware
 running in the emulator using standard GDB tools.
@@ -22,21 +21,22 @@ from __future__ import annotations
 
 import contextlib
 import socket
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from . import _emulator_cffi as cffi
 from .emulator import EmulatorState
 from .logging import LogCategory, get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .arch.base import BaseEmulator
 
 logger = get_logger(LogCategory.GDB)
 
 
 class GDBServer:
-    """
-    GDB Remote Serial Protocol server.
+    """GDB Remote Serial Protocol server.
 
     Implements the subset of RSP commands needed for basic debugging:
     - Reading/writing registers
@@ -50,9 +50,25 @@ class GDBServer:
     # R0-R12, SP, LR, PC, xPSR (17 registers)
     NUM_CORE_REGS = 17
 
-    def __init__(self, emulator: BaseEmulator, port: int = 3333, host: str = "127.0.0.1"):
-        """
-        Initialize GDB server.
+    # qXXX queries that map to a fixed reply.
+    _STATIC_QUERY_REPLIES: ClassVar[dict[str, str]] = {
+        "qAttached": "1",  # Attached to existing process
+        "qC": "QC1",  # Current thread ID
+        "qfThreadInfo": "m1",  # Thread list
+        "qsThreadInfo": "l",  # End of thread list
+        "qOffsets": "Text=0;Data=0;Bss=0",
+        "qSymbol": "OK",
+    }
+
+    # GDB Z/z breakpoint-type number -> watchpoint kind.
+    _WATCHPOINT_TYPES: ClassVar[dict[int, int]] = {
+        2: cffi.WATCHPOINT_WRITE,
+        3: cffi.WATCHPOINT_READ,
+        4: cffi.WATCHPOINT_ACCESS,
+    }
+
+    def __init__(self, emulator: BaseEmulator, port: int = 3333, host: str = "127.0.0.1") -> None:
+        """Initialize GDB server.
 
         Args:
             emulator: Emulator instance to debug
@@ -68,9 +84,31 @@ class GDBServer:
         self._running = False
         self._no_ack_mode = False
 
+        # Dispatch table keyed by the RSP command's leading character. Each
+        # handler receives the full command string. Multi-character command
+        # families (q/Q/v) fan out to their own sub-dispatchers.
+        self._handlers: dict[str, Callable[[str], str | None]] = {
+            "?": lambda _cmd: self._cmd_halt_reason(),
+            "g": lambda _cmd: self._cmd_read_registers(),
+            "G": lambda cmd: self._cmd_write_registers(cmd[1:]),
+            "p": lambda cmd: self._cmd_read_register(cmd[1:]),
+            "P": lambda cmd: self._cmd_write_register(cmd[1:]),
+            "m": lambda cmd: self._cmd_read_memory(cmd[1:]),
+            "M": lambda cmd: self._cmd_write_memory(cmd[1:]),
+            "X": lambda cmd: self._cmd_write_memory_binary(cmd[1:]),
+            "c": self._cmd_continue,
+            "s": self._cmd_step,
+            "Z": lambda cmd: self._cmd_set_breakpoint(cmd[1:]),
+            "z": lambda cmd: self._cmd_clear_breakpoint(cmd[1:]),
+            "D": lambda _cmd: self._cmd_detach(),
+            "k": lambda _cmd: self._cmd_kill(),
+            "v": self._cmd_vcont,
+            "q": self._handle_query,
+            "Q": self._handle_set,
+        }
+
     def start(self) -> None:
-        """
-        Start the GDB server.
+        """Start the GDB server.
 
         This blocks until the client disconnects or the server is stopped.
         """
@@ -135,67 +173,73 @@ class GDBServer:
     # =========================================================================
 
     def _recv_packet(self) -> str | None:
-        """
-        Receive a GDB packet.
+        """Receive a GDB packet.
 
         Packet format: $<data>#<checksum>
         Returns the data portion, or None on disconnect.
         """
-        if not self._client:
+        client = self._client
+        if client is None:
             return None
 
         try:
-            # Wait for packet start
-            while True:
-                c = self._client.recv(1)
-                if not c:
-                    return None
-
-                if c == b"$":
-                    break
-                elif c == b"+":
-                    # ACK - ignore
-                    continue
-                elif c == b"-":
-                    # NACK - would need to resend, but we don't track that
-                    continue
-                elif c == b"\x03":
-                    # Ctrl-C interrupt
-                    self.emu.stop()
-                    return "?"  # Request halt reason
-
-            # Read until #
-            data = b""
-            while True:
-                c = self._client.recv(1)
-                if not c:
-                    return None
-                if c == b"#":
-                    break
-                data += c
-
-            # Read checksum (2 hex digits)
-            checksum = self._client.recv(2)
-            if len(checksum) != 2:
+            start = self._await_packet_start(client)
+            if start is None:  # disconnect
                 return None
-
-            # Verify checksum
-            expected = self._checksum(data.decode("latin-1"))
-            received = checksum.decode("latin-1")
-
-            if expected != received:
-                logger.warning("Checksum mismatch: expected %s, got %s", expected, received)
-                if not self._no_ack_mode:
-                    self._client.send(b"-")  # NACK
+            if start:  # Ctrl-C interrupt -> request halt reason
+                return start
+            data = self._read_until_hash(client)
+            if data is None or not self._verify_checksum(client, data):
                 return None
-
-            if not self._no_ack_mode:
-                self._client.send(b"+")  # ACK
-
             return data.decode("latin-1")
-
         except (OSError, ConnectionResetError):
             return None
+
+    def _await_packet_start(self, client: socket.socket) -> str | None:
+        """Read bytes until a packet start.
+
+        Returns "" once a "$" start byte is seen, "?" on a Ctrl-C interrupt, or
+        None on disconnect. ACK/NACK and stray bytes are skipped.
+        """
+        while True:
+            c = client.recv(1)
+            if not c:
+                return None
+            if c == b"$":
+                return ""
+            if c == b"\x03":  # Ctrl-C interrupt
+                self.emu.stop()
+                return "?"
+            # b"+"/b"-" (ACK/NACK) and anything else: keep scanning.
+
+    def _read_until_hash(self, client: socket.socket) -> bytes | None:
+        """Read packet body bytes up to (not including) the "#" terminator."""
+        data = b""
+        while True:
+            c = client.recv(1)
+            if not c:
+                return None
+            if c == b"#":
+                return data
+            data += c
+
+    def _verify_checksum(self, client: socket.socket, data: bytes) -> bool:
+        """Read the 2-digit checksum, verify it, and send the ACK/NACK."""
+        checksum = client.recv(2)
+        if len(checksum) != 2:
+            return False
+
+        expected = self._checksum(data.decode("latin-1"))
+        received = checksum.decode("latin-1")
+        if expected != received:
+            logger.warning("Checksum mismatch: expected %s, got %s", expected, received)
+            if not self._no_ack_mode:
+                client.send(b"-")  # NACK
+            return False
+
+        if not self._no_ack_mode:
+            client.send(b"+")  # ACK
+        return True
 
     def _send_packet(self, data: str) -> None:
         """Send a GDB packet."""
@@ -220,101 +264,50 @@ class GDBServer:
     # =========================================================================
 
     def _handle_command(self, cmd: str) -> str | None:
-        """
-        Handle a GDB command.
+        """Handle a GDB command.
 
-        Returns response string, or None for no response.
+        Dispatches on the command's leading character via ``self._handlers``.
+        Returns the response string, or None for no response.
         """
         if not cmd:
             return ""
 
-        # Query commands
-        if cmd.startswith("qSupported"):
-            return self._cmd_query_supported(cmd)
-        elif cmd.startswith("qAttached"):
-            return "1"  # Attached to existing process
-        elif cmd.startswith("qC"):
-            return "QC1"  # Current thread ID
-        elif cmd.startswith("qfThreadInfo"):
-            return "m1"  # Thread list
-        elif cmd.startswith("qsThreadInfo"):
-            return "l"  # End of thread list
-        elif cmd.startswith("qOffsets"):
-            return "Text=0;Data=0;Bss=0"
-        elif cmd.startswith("qSymbol"):
-            return "OK"
-
-        # Halt reason
-        elif cmd == "?":
-            return self._cmd_halt_reason()
-
-        # Register access
-        elif cmd == "g":
-            return self._cmd_read_registers()
-        elif cmd.startswith("G"):
-            return self._cmd_write_registers(cmd[1:])
-        elif cmd.startswith("p"):
-            return self._cmd_read_register(cmd[1:])
-        elif cmd.startswith("P"):
-            return self._cmd_write_register(cmd[1:])
-
-        # Memory access
-        elif cmd.startswith("m"):
-            return self._cmd_read_memory(cmd[1:])
-        elif cmd.startswith("M"):
-            return self._cmd_write_memory(cmd[1:])
-        elif cmd.startswith("X"):
-            return self._cmd_write_memory_binary(cmd[1:])
-
-        # Execution control
-        elif cmd == "c" or cmd.startswith("c"):
-            return self._cmd_continue(cmd)
-        elif cmd == "s" or cmd.startswith("s"):
-            return self._cmd_step(cmd)
-        elif cmd.startswith("vCont"):
-            return self._cmd_vcont(cmd)
-
-        # Breakpoints
-        elif cmd.startswith("Z"):
-            return self._cmd_set_breakpoint(cmd[1:])
-        elif cmd.startswith("z"):
-            return self._cmd_clear_breakpoint(cmd[1:])
-
-        # Kill/detach
-        elif cmd == "D":
-            return self._cmd_detach()
-        elif cmd == "k":
-            return self._cmd_kill()
-
-        # Set commands
-        elif cmd.startswith("QStartNoAckMode"):
-            self._no_ack_mode = True
-            return "OK"
-
-        # Unknown command - return empty response
-        else:
+        handler = self._handlers.get(cmd[0])
+        if handler is None:
             logger.debug("Unknown GDB command: %s", cmd)
             return ""
+        return handler(cmd)
 
-    def _cmd_query_supported(self, cmd: str) -> str:
-        """Handle qSupported query."""
-        # Advertise watchpoint support (hwbreak for hw breakpoints which we emulate as sw)
-        return "PacketSize=4096;QStartNoAckMode+;hwbreak+"
+    def _handle_query(self, cmd: str) -> str:
+        """Handle the q* family of query commands."""
+        if cmd.startswith("qSupported"):
+            # Advertise watchpoints (hwbreak for hw breakpoints we emulate as sw).
+            return "PacketSize=4096;QStartNoAckMode+;hwbreak+"
+        for prefix, reply in self._STATIC_QUERY_REPLIES.items():
+            if cmd.startswith(prefix):
+                return reply
+        return ""
+
+    def _handle_set(self, cmd: str) -> str:
+        """Handle the Q* family of set commands."""
+        if cmd.startswith("QStartNoAckMode"):
+            self._no_ack_mode = True
+            return "OK"
+        return ""
 
     def _cmd_halt_reason(self) -> str:
         """Return halt reason (? command)."""
         state = self.emu.state
         if state == EmulatorState.BREAKPOINT:
             return "S05"  # SIGTRAP
-        elif state == EmulatorState.WATCHPOINT:
+        if state == EmulatorState.WATCHPOINT:
             # Return stop reply with watchpoint info
             return self._watchpoint_stop_reply()
-        elif state == EmulatorState.HALTED:
+        if state == EmulatorState.HALTED:
             return "S00"  # No signal
-        elif state == EmulatorState.FAULT:
+        if state == EmulatorState.FAULT:
             return "S0B"  # SIGSEGV
-        else:
-            return "S05"  # SIGTRAP (default halt)
+        return "S05"  # SIGTRAP (default halt)
 
     def _cmd_read_registers(self) -> str:
         """Read all registers (g command)."""
@@ -325,13 +318,13 @@ class GDBServer:
             val = self.emu.get_reg(i)
             result += self._to_le_hex(val)
 
-        # SP (R13)
+        # Stack pointer, register 13
         result += self._to_le_hex(self.emu.sp)
 
-        # LR (R14)
+        # Link register, register 14
         result += self._to_le_hex(self.emu.lr)
 
-        # PC (R15)
+        # Program counter, register 15
         result += self._to_le_hex(self.emu.pc)
 
         # xPSR (CPSR in GDB parlance)
@@ -365,11 +358,11 @@ class GDBServer:
             # xPSR
             if offset + 8 <= len(data):
                 self.emu.status = self._from_le_hex(data[offset : offset + 8])
-
-            return "OK"
-        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
-            logger.error("Error writing registers: %s", e)
+        except Exception:
+            logger.exception("Error writing registers")
             return "E01"
+        else:
+            return "OK"
 
     def _cmd_read_register(self, args: str) -> str:
         """Read single register (p command)."""
@@ -394,8 +387,8 @@ class GDBServer:
                 return "E01"
 
             return self._to_le_hex(val)
-        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
-            logger.error("Error reading register %s: %s", args, e)
+        except Exception:
+            logger.exception("Error reading register %s", args)
             return "E01"
 
     def _cmd_write_register(self, args: str) -> str:
@@ -421,11 +414,11 @@ class GDBServer:
                 self.emu.fpscr = val
             else:
                 return "E01"
-
-            return "OK"
-        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
-            logger.error("Error writing register %s: %s", args, e)
+        except Exception:
+            logger.exception("Error writing register %s", args)
             return "E01"
+        else:
+            return "OK"
 
     def _cmd_read_memory(self, args: str) -> str:
         """Read memory (m command)."""
@@ -438,8 +431,8 @@ class GDBServer:
 
             # Convert to hex
             return data.hex()
-        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
-            logger.error("Error reading memory %s: %s", args, e)
+        except Exception:
+            logger.exception("Error reading memory %s", args)
             return "E01"
 
     def _cmd_write_memory(self, args: str) -> str:
@@ -457,11 +450,11 @@ class GDBServer:
             written = self.emu.write_bytes(addr, data)
             if written != length:
                 return "E01"
-
-            return "OK"
-        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
-            logger.error("Error writing memory %s: %s", args, e)
+        except Exception:
+            logger.exception("Error writing memory %s", args)
             return "E01"
+        else:
+            return "OK"
 
     def _cmd_write_memory_binary(self, args: str) -> str:
         """Write memory with binary data (X command)."""
@@ -484,11 +477,11 @@ class GDBServer:
             written = self.emu.write_bytes(addr, binary_data)
             if written != length:
                 return "E01"
-
-            return "OK"
-        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
-            logger.error("Error writing binary memory: %s", e)
+        except Exception:
+            logger.exception("Error writing binary memory")
             return "E01"
+        else:
+            return "OK"
 
     def _cmd_continue(self, cmd: str) -> str:
         """Continue execution (c command)."""
@@ -520,7 +513,7 @@ class GDBServer:
             action = cmd[6:]
             if action.startswith("c"):
                 return self._cmd_continue("c")
-            elif action.startswith("s"):
+            if action.startswith("s"):
                 return self._cmd_step("s")
 
         return ""
@@ -528,58 +521,43 @@ class GDBServer:
     def _cmd_set_breakpoint(self, args: str) -> str:
         """Set breakpoint or watchpoint (Z command)."""
         try:
-            parts = args.split(",")
-            bp_type = int(parts[0])
-            addr = int(parts[1], 16)
-            size = int(parts[2], 16) if len(parts) > 2 else 4
-
-            if bp_type == 0:  # Software breakpoint
+            bp_type, addr, size = self._parse_breakpoint_args(args)
+            if bp_type in (0, 1):  # Software or (sw-emulated) hardware breakpoint
                 self.emu.add_breakpoint(addr)
-                return "OK"
-            elif bp_type == 1:  # Hardware breakpoint
-                # Treat as software breakpoint
-                self.emu.add_breakpoint(addr)
-                return "OK"
-            elif bp_type == 2:  # Write watchpoint
-                self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_WRITE)
-                return "OK"
-            elif bp_type == 3:  # Read watchpoint
-                self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_READ)
-                return "OK"
-            elif bp_type == 4:  # Access watchpoint (read/write)
-                self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_ACCESS)
-                return "OK"
+            elif bp_type in self._WATCHPOINT_TYPES:
+                self.emu.add_watchpoint(addr, size, self._WATCHPOINT_TYPES[bp_type])
             else:
                 return ""  # Unsupported
-        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
-            logger.error("Error setting breakpoint/watchpoint: %s", e)
+        except Exception:
+            logger.exception("Error setting breakpoint/watchpoint")
             return "E01"
+        else:
+            return "OK"
 
     def _cmd_clear_breakpoint(self, args: str) -> str:
         """Clear breakpoint or watchpoint (z command)."""
         try:
-            parts = args.split(",")
-            bp_type = int(parts[0])
-            addr = int(parts[1], 16)
-            size = int(parts[2], 16) if len(parts) > 2 else 4
-
-            if bp_type in (0, 1):  # Software/hardware breakpoint
+            bp_type, addr, size = self._parse_breakpoint_args(args)
+            if bp_type in (0, 1):  # Software or (sw-emulated) hardware breakpoint
                 self.emu.remove_breakpoint(addr)
-                return "OK"
-            elif bp_type == 2:  # Write watchpoint
-                self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_WRITE)
-                return "OK"
-            elif bp_type == 3:  # Read watchpoint
-                self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_READ)
-                return "OK"
-            elif bp_type == 4:  # Access watchpoint (read/write)
-                self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_ACCESS)
-                return "OK"
+            elif bp_type in self._WATCHPOINT_TYPES:
+                self.emu.remove_watchpoint(addr, size, self._WATCHPOINT_TYPES[bp_type])
             else:
-                return ""
-        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
-            logger.error("Error clearing breakpoint/watchpoint: %s", e)
+                return ""  # Unsupported
+        except Exception:
+            logger.exception("Error clearing breakpoint/watchpoint")
             return "E01"
+        else:
+            return "OK"
+
+    @staticmethod
+    def _parse_breakpoint_args(args: str) -> tuple[int, int, int]:
+        """Parse a Z/z packet payload into (type, address, size)."""
+        parts = args.split(",")
+        bp_type = int(parts[0])
+        addr = int(parts[1], 16)
+        size = int(parts[2], 16) if len(parts) > 2 else 4
+        return bp_type, addr, size
 
     def _cmd_detach(self) -> str:
         """Detach from target (D command)."""
@@ -597,14 +575,13 @@ class GDBServer:
         state = self.emu.state
         if state == EmulatorState.BREAKPOINT:
             return "S05"  # SIGTRAP
-        elif state == EmulatorState.WATCHPOINT:
+        if state == EmulatorState.WATCHPOINT:
             return self._watchpoint_stop_reply()
-        elif state == EmulatorState.HALTED:
+        if state == EmulatorState.HALTED:
             return "S00"
-        elif state == EmulatorState.FAULT:
+        if state == EmulatorState.FAULT:
             return "S0B"  # SIGSEGV
-        else:
-            return "S05"
+        return "S05"
 
     def _watchpoint_stop_reply(self) -> str:
         """Generate stop reply for watchpoint hit."""
@@ -614,10 +591,10 @@ class GDBServer:
         # GDB expects: T05watch:<addr>;  or  T05rwatch:<addr>;  or  T05awatch:<addr>;
         if wp_type == cffi.WATCHPOINT_WRITE:
             return f"T05watch:{addr:x};"
-        elif wp_type == cffi.WATCHPOINT_READ:
+        if wp_type == cffi.WATCHPOINT_READ:
             return f"T05rwatch:{addr:x};"
-        else:  # ACCESS
-            return f"T05awatch:{addr:x};"
+        # ACCESS
+        return f"T05awatch:{addr:x};"
 
     # =========================================================================
     # Utilities

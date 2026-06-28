@@ -467,3 +467,39 @@ uint8_t armv8m_mpu_get_attributes(const MPU *mpu, uint32_t addr,
   }
   return (uint8_t)((mpu->mair1 >> ((attr_idx - 4) * 8)) & 0xFF);
 }
+
+int armv8m_mpu_region_for_addr(const MPU *mpu, uint32_t addr) {
+  return find_region(mpu, addr);
+}
+
+void armv8m_mpu_access_bits(const MPU *mpu, int region, bool privileged,
+                            bool *r, bool *rw) {
+  *r = false;
+  *rw = false;
+  if (region < 0 || region >= mpu->num_regions) {
+    return;
+  }
+
+  uint32_t ap =
+      (mpu->regions[region].rbar >> MPU_RBAR_AP_SHIFT) & MPU_RBAR_AP_MASK;
+  switch ((MPUAccessPerm)ap) {
+  case MPU_AP_RW_PRIV: /* Privileged R/W, unprivileged none */
+    *r = privileged;
+    *rw = privileged;
+    break;
+  case MPU_AP_RW_ALL: /* R/W for all */
+    *r = true;
+    *rw = true;
+    break;
+  case MPU_AP_RO_PRIV: /* Privileged RO, unprivileged none */
+    *r = privileged;
+    *rw = false;
+    break;
+  case MPU_AP_RO_ALL: /* RO for all */
+    *r = true;
+    *rw = false;
+    break;
+  default:
+    break;
+  }
+}

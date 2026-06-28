@@ -57,9 +57,10 @@ class TestWatchpointCFFI:
 
             lib = get_lib()
             ffi = get_ffi()
-            return lib, ffi, create_emulator, ARMV8M_OK
         except OSError as e:
             pytest.skip(f"Emulator library not available: {e}")
+        else:
+            return lib, ffi, create_emulator, ARMV8M_OK
 
     def test_cffi_watchpoint_functions_exist(self, cffi_modules):
         """Verify watchpoint C functions are accessible."""
@@ -115,9 +116,10 @@ class TestEmulatorWatchpoints:
             config = ARMv8MConfig()
             emu = ARMv8MEmulator(config)
             emu.add_ram(0x20000000, 0x10000)
-            return emu
         except OSError as e:
             pytest.skip(f"Emulator library not available: {e}")
+        else:
+            return emu
 
     def test_emulator_has_watchpoint_methods(self, emulator):
         """Verify emulator has watchpoint methods."""

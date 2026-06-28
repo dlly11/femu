@@ -214,7 +214,7 @@ void armv8m_nvic_deactivate(NVIC *nvic, int exc);
  * @param size      Access size
  * @return          Register value
  */
-uint32_t armv8m_nvic_read(NVIC *nvic, uint32_t offset, uint8_t size);
+uint32_t armv8m_nvic_read(const NVIC *nvic, uint32_t offset, uint8_t size);
 
 /**
  * Write NVIC register (MMIO access).

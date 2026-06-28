@@ -1089,6 +1089,67 @@ TEST(MemoryAttributes, GetAttributesWithPrivdefena) {
 }
 
 /*============================================================================
+ * Region lookup and permission helpers (used by the TT instruction)
+ *============================================================================*/
+
+TEST_GROUP(RegionHelpers) {
+  MPU mpu;
+
+  void setup() {
+    armv8m_mpu_init(&mpu, 8);
+    armv8m_mpu_configure_region(&mpu, 2, 0x20000000, 0x2000FFFF, MPU_AP_RO_ALL,
+                                false, MPU_SH_NONE, 0, true);
+    armv8m_mpu_enable(&mpu, true, false, false);
+  }
+
+  void teardown() {}
+};
+
+TEST(RegionHelpers, RegionForAddrMatch) {
+  CHECK_EQUAL(2, armv8m_mpu_region_for_addr(&mpu, 0x20001000));
+}
+
+TEST(RegionHelpers, RegionForAddrNoMatch) {
+  CHECK_EQUAL(-1, armv8m_mpu_region_for_addr(&mpu, 0x30000000));
+}
+
+TEST(RegionHelpers, AccessBitsReadOnly) {
+  bool r = false;
+  bool rw = true;
+  armv8m_mpu_access_bits(&mpu, 2, true, &r, &rw);
+  CHECK_TRUE(r);
+  CHECK_FALSE(rw); /* RO_ALL -> read only */
+}
+
+TEST(RegionHelpers, AccessBitsReadWrite) {
+  armv8m_mpu_configure_region(&mpu, 3, 0x40000000, 0x4000FFFF, MPU_AP_RW_ALL,
+                              false, MPU_SH_NONE, 0, true);
+  bool r = false;
+  bool rw = false;
+  armv8m_mpu_access_bits(&mpu, 3, false, &r, &rw);
+  CHECK_TRUE(r);
+  CHECK_TRUE(rw);
+}
+
+TEST(RegionHelpers, AccessBitsPrivilegedOnlyDeniesUnprivileged) {
+  armv8m_mpu_configure_region(&mpu, 4, 0x50000000, 0x5000FFFF, MPU_AP_RW_PRIV,
+                              false, MPU_SH_NONE, 0, true);
+  bool r = true;
+  bool rw = true;
+  armv8m_mpu_access_bits(&mpu, 4, false, &r, &rw); /* unprivileged */
+  CHECK_FALSE(r);
+  CHECK_FALSE(rw);
+}
+
+TEST(RegionHelpers, AccessBitsInvalidRegion) {
+  bool r = true;
+  bool rw = true;
+  armv8m_mpu_access_bits(&mpu, -1, true, &r, &rw);
+  CHECK_FALSE(r);
+  CHECK_FALSE(rw);
+}
+
+/*============================================================================
  * Test Runner
  *============================================================================*/
 
