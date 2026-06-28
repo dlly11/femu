@@ -176,7 +176,7 @@ def _c_log_callback(
         filename = _ffi.string(file_ptr).decode("utf-8") if file_ptr else "unknown"
         func = _ffi.string(func_ptr).decode("utf-8") if func_ptr else "unknown"
         message = _ffi.string(msg_ptr).decode("utf-8") if msg_ptr else ""
-    except Exception:
+    except Exception:  # noqa: BLE001 - C log callback must not raise into C
         return  # Silently ignore decode errors
 
     # Get the appropriate logger

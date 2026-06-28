@@ -261,7 +261,12 @@ static inline void fast_write_ram(const EmuPageEntry *entry, uint64_t addr,
  * Public API
  *============================================================================*/
 
-void emu_mem_init(EmuMemorySystem *mem) { memset(mem, 0, sizeof(*mem)); }
+void emu_mem_init(EmuMemorySystem *mem) {
+  if (mem == NULL) {
+    return;
+  }
+  memset(mem, 0, sizeof(*mem));
+}
 
 int emu_mem_add_region(EmuMemorySystem *mem, const EmuMemRegion *region) {
   if (mem->num_regions >= EMU_MEM_MAX_REGIONS) {

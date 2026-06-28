@@ -107,13 +107,13 @@ if(CPPCHECK)
             --suppress=unusedFunction
             --suppress=constVariablePointer  # Style only
             --suppress=constVariable  # Style only
+            --suppress=constParameterPointer  # Style only
             --suppress=constParameterCallback  # Style only
             --suppress=staticFunction  # Style only - internal linkage choice
             --suppress=unusedVariable  # Test code often has unused vars
             --suppress=unreadVariable  # May be used for debugging
             --suppress=unusedLabelConfiguration  # Labels for computed goto
             --suppress=variableScope  # Style only
-            --suppress=duplicateCondition  # Code clarity choice
             --suppress=knownConditionTrueFalse  # Defensive coding
             --suppress=shiftTooManyBitsSigned  # False positive for ASR instructions
             --suppress=assignBoolToPointer  # False positive for GCC computed goto
@@ -132,17 +132,55 @@ else()
 endif()
 
 # Add clang-tidy target (requires compile_commands.json)
-# Note: For best results, configure with CC=clang CXX=clang++ so that
-# compile_commands.json has clang-compatible flags and system paths.
-# We prefer run-clang-tidy as it handles system includes properly.
+#
+# In a Nix dev shell the standalone clang-tidy binary cannot find the system
+# headers on its own (the cc-wrapper injects them via the environment), and it
+# rejects GCC-only warning flags recorded in compile_commands.json. To make it
+# work regardless of whether the build uses GCC or Clang, we:
+#   1. ask the active C compiler for its include search paths and forward them
+#      to clang-tidy as -isystem flags, and
+#   2. tell clang to ignore unknown -W options (e.g. -Wlogical-op).
+# These are collected once here into CLANG_TIDY_EXTRA_ARGS.
+if(CLANG_TIDY OR RUN_CLANG_TIDY)
+    # Single-dash form is accepted by both clang-tidy (LLVM option parser) and
+    # run-clang-tidy (argparse), so one list works for either target below.
+    set(CLANG_TIDY_EXTRA_ARGS -extra-arg-before=-Wno-unknown-warning-option)
+    execute_process(
+        COMMAND ${CMAKE_C_COMPILER} -E -v -xc /dev/null
+        OUTPUT_QUIET
+        ERROR_VARIABLE _cc_verbose
+        RESULT_VARIABLE _cc_verbose_rc
+    )
+    if(_cc_verbose_rc EQUAL 0)
+        string(REGEX MATCH "search starts here:(.*)End of search list" _inc_block "${_cc_verbose}")
+        string(REPLACE "\n" ";" _inc_lines "${CMAKE_MATCH_1}")
+        foreach(_line IN LISTS _inc_lines)
+            string(STRIP "${_line}" _dir)
+            if(_dir AND IS_DIRECTORY "${_dir}")
+                list(APPEND CLANG_TIDY_EXTRA_ARGS "-extra-arg-before=-isystem${_dir}")
+            endif()
+        endforeach()
+    else()
+        message(WARNING "Could not query ${CMAKE_C_COMPILER} include paths; "
+                        "clang-tidy may fail to find system headers")
+    endif()
+endif()
+
+# Source files to analyze (first-party C only; src/emu was previously missed)
+set(CLANG_TIDY_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/emu/*.c
+    ${CMAKE_SOURCE_DIR}/src/core/*/*.c
+    ${CMAKE_SOURCE_DIR}/src/arch/*/*.c
+    ${CMAKE_SOURCE_DIR}/src/arch/*/*/*.c
+)
+
 if(RUN_CLANG_TIDY)
     add_custom_target(clang-tidy
         COMMAND ${RUN_CLANG_TIDY}
             -p ${CMAKE_BINARY_DIR}
             -config-file=${CMAKE_SOURCE_DIR}/.clang-tidy
-            ${CMAKE_SOURCE_DIR}/src/core/*/*.c
-            ${CMAKE_SOURCE_DIR}/src/arch/*/*.c
-            ${CMAKE_SOURCE_DIR}/src/arch/*/*/*.c
+            ${CLANG_TIDY_EXTRA_ARGS}
+            ${CLANG_TIDY_SOURCES}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running clang-tidy static analysis"
     )
@@ -151,9 +189,8 @@ elseif(CLANG_TIDY)
         COMMAND ${CLANG_TIDY}
             -p ${CMAKE_BINARY_DIR}
             --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy
-            ${CMAKE_SOURCE_DIR}/src/core/*/*.c
-            ${CMAKE_SOURCE_DIR}/src/arch/*/*.c
-            ${CMAKE_SOURCE_DIR}/src/arch/*/*/*.c
+            ${CLANG_TIDY_EXTRA_ARGS}
+            ${CLANG_TIDY_SOURCES}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running clang-tidy static analysis"
     )

@@ -59,7 +59,7 @@ Key files:
 | Component         | Location                          |
 | ----------------- | --------------------------------- |
 | CLI               | `python/femu/cli.py`              |
-| GDB Server        | `python/femu/gdb/`                |
+| GDB Server        | `python/femu/gdb_server.py`       |
 | Machine           | `python/femu/machine.py`          |
 | Peripheral Base   | `python/femu/peripheral.py`       |
 | ARMv8M Emulator   | `python/femu/arch/armv8m.py`      |

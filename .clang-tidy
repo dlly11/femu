@@ -1,5 +1,13 @@
 # FEMU clang-tidy configuration
 # Run with: cmake --build build --target clang-tidy
+#
+# readability-function-size and readability-function-cognitive-complexity are
+# enabled at default thresholds as guardrails for new code. A handful of
+# established functions that are genuinely *flat opcode/register dispatch
+# switches* (e.g. exec_mrs/exec_msr/exec_hint, decode_multiply) carry a
+# localized NOLINTNEXTLINE because their score is a false positive. Functions
+# that are flagged for genuine nested complexity are intentionally left
+# reported (the checks are report-only; WarningsAsErrors is empty).
 
 Checks: >
   -*,
@@ -18,15 +26,14 @@ Checks: >
   -readability-braces-around-statements,
   -readability-isolate-declaration,
   -readability-uppercase-literal-suffix,
-  -readability-function-cognitive-complexity,
-  -readability-function-size,
   -readability-else-after-return,
   -readability-math-missing-parentheses,
   -bugprone-branch-clone,
   -misc-no-recursion,
   -misc-include-cleaner,
   -bugprone-easily-swappable-parameters,
-  -clang-diagnostic-error
+  -clang-diagnostic-error,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
 
 WarningsAsErrors: ''
 

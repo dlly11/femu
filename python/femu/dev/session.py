@@ -183,8 +183,8 @@ def _show_module_context(name: str, module: ModuleInfo) -> None:
 
     console.print("[bold]READ THESE FILES:[/bold]\n")
 
-    console.print("  1. docs/ARCHITECTURE.md")
-    console.print("     [dim](Focus on: Part 5, Part 9)[/dim]\n")
+    console.print("  1. docs/architecture/overview.md")
+    console.print("     [dim](Focus on: System Layers, C Simulation Core)[/dim]\n")
 
     header_lines = get_file_lines(module["header"])
     status = "ok" if file_exists(module["header"]) else "MISSING"
@@ -227,9 +227,9 @@ def _show_peripheral_context(name: str, periph: PeripheralInfo) -> None:
     console.print()
 
     console.print("[bold]READ THESE FILES:[/bold]\n")
-    console.print("  1. docs/ARCHITECTURE.md")
-    console.print("     [dim](Focus on: Part 8)[/dim]\n")
-    console.print("  2. docs/PLUGINS.md")
+    console.print("  1. docs/architecture/overview.md")
+    console.print("     [dim](Focus on: Peripheral Access data flow)[/dim]\n")
+    console.print("  2. docs/developer/writing-peripherals.md")
     console.print("     [dim]Peripheral development guide[/dim]\n")
 
     for i, dep in enumerate(periph["deps"], start=3):

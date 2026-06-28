@@ -255,7 +255,7 @@ class TestSimpleTimer:
 
 ## C Peripherals
 
-For performance-critical peripherals, you can implement in C. See `docs/PLUGINS.md` for the full C peripheral interface.
+For performance-critical peripherals, you can implement in C. The key interface is the `EmuPeripheralVTable` shown below.
 
 The key structure is `EmuPeripheralVTable`:
 
@@ -272,7 +272,7 @@ typedef struct {
 
 ## Plugin Peripherals
 
-Plugins are shared libraries that export peripheral factories. See `docs/PLUGINS.md` for details on:
+Plugins are shared libraries that export peripheral factories. Key topics:
 
 - Plugin structure and entry point
 - Building plugins for different platforms

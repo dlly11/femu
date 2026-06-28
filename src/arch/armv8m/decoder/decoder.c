@@ -37,6 +37,9 @@ static inline uint16_t read_hw(const uint8_t *mem) {
  *============================================================================*/
 
 void armv8m_decode_init(DecodedInsn *insn) {
+  if (insn == NULL) {
+    return;
+  }
   memset(insn, 0, sizeof(*insn));
 
   /* Set default register values to "not used" */

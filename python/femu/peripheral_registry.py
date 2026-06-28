@@ -35,7 +35,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .logging import LogCategory, get_logger
 from .peripheral import CPeripheral, Peripheral, PeripheralBase, PluginPeripheral
+
+logger = get_logger(LogCategory.PERIPHERAL)
 
 
 @dataclass
@@ -229,9 +232,9 @@ class PeripheralRegistry:
             try:
                 types = cls.load_plugin(plugin_file)
                 results[str(plugin_file)] = types
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - one bad plugin must not abort the rest
                 # Log warning but continue loading other plugins
-                print(f"Warning: Failed to load plugin {plugin_file}: {e}")
+                logger.warning("Failed to load plugin %s: %s", plugin_file, e)
 
         return results
 

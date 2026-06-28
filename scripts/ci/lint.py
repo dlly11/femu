@@ -15,16 +15,18 @@ os.chdir(PROJECT_ROOT)
 def main() -> None:
     results = []
 
-    # C/C++ static analysis (cppcheck only - doesn't need compile_commands.json)
+    # C/C++ static analysis. clang-tidy needs compile_commands.json, which the
+    # CMake configure step generates in the build directory.
     from femu.build import configure, run_analysis
 
     build_dir = PROJECT_ROOT / "build"
     if not build_dir.exists():
         configure()
 
-    # Run cppcheck only (clang-tidy has issues with Nix system headers)
-    analysis_passed = run_analysis(tool="cppcheck")
-    results.append(0 if analysis_passed else 1)
+    # cppcheck and clang-tidy. The CMake clang-tidy target injects the compiler's
+    # system include paths so it works inside the Nix dev shell (see CMakeLists.txt).
+    results.append(0 if run_analysis(tool="cppcheck") else 1)
+    results.append(0 if run_analysis(tool="clang-tidy") else 1)
 
     # Python linting
     results.append(subprocess.call(["ruff", "check", "python/"]))

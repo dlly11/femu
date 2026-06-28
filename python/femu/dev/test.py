@@ -73,7 +73,7 @@ def run_python_tests(verbose: bool = False, expression: str | None = None) -> bo
             env={**os.environ, **env},
         )
         success = result.returncode == 0
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         console.print(f"[red]Error running pytest: {e}[/red]")
         success = False
 

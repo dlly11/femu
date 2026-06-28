@@ -97,7 +97,7 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4"]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "BLE", "T20", "G", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/firmware/test_emulator.py" = ["E402"]

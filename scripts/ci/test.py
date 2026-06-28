@@ -153,7 +153,17 @@ def main() -> None:
     print("Running Python Tests (pytest) with ASan")
     print("=" * 60 + "\n")
     py_result = subprocess.call(
-        ["python", "-m", "pytest", str(PROJECT_ROOT / "python" / "tests"), "-v"],
+        [
+            "python",
+            "-m",
+            "pytest",
+            str(PROJECT_ROOT / "python" / "tests"),
+            "-v",
+            "--cov=femu",
+            "--cov-report=term-missing",
+            "--cov-report=xml",
+            "--cov-fail-under=50",
+        ],
         env=asan_env,
     )
     py_passed = py_result == 0

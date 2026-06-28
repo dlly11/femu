@@ -298,6 +298,9 @@ static void set_exception_active(NVIC *nvic, int exc, bool active) {
  *============================================================================*/
 
 void armv8m_nvic_init(NVIC *nvic, int num_irqs) {
+  if (nvic == NULL) {
+    return;
+  }
   memset(nvic, 0, sizeof(*nvic));
 
   if (num_irqs > NVIC_MAX_EXTERNAL_IRQS) {
@@ -474,6 +477,75 @@ void armv8m_nvic_set_exception_priority(NVIC *nvic, int exc, uint8_t priority) {
   nvic->need_rescan = true;
 }
 
+/* Scan pending system exceptions (2-15), updating the best (exc, pri). */
+static void nvic_scan_system_exceptions(NVIC *nvic, uint8_t basepri,
+                                        int current_pri, int *best_exc,
+                                        int *best_pri) {
+  for (int exc = 2; exc <= 15; exc++) {
+    /* Skip reserved exception numbers */
+    if (exc == 8 || exc == 9 || exc == 10 || exc == 13) {
+      continue;
+    }
+
+    if (!is_exception_pending(nvic, exc)) {
+      continue;
+    }
+
+    int pri = get_exception_priority(nvic, exc);
+
+    /* Check BASEPRI masking for configurable priority exceptions */
+    if (pri >= 0 && basepri != 0 && (uint8_t)pri >= basepri) {
+      continue;
+    }
+
+    /* Check if can preempt current priority - use group priority for preemption
+     */
+    int group_pri = (pri >= 0) ? get_group_priority(nvic, pri) : pri;
+    if (group_pri >= current_pri) {
+      continue;
+    }
+
+    if (pri < *best_pri) {
+      *best_exc = exc;
+      *best_pri = pri;
+    }
+  }
+}
+
+/* Scan pending external interrupts, updating the best (exc, pri). */
+static void nvic_scan_external_irqs(NVIC *nvic, uint8_t basepri,
+                                    int current_pri, int *best_exc,
+                                    int *best_pri) {
+  for (int irq = 0; irq < nvic->num_irqs; irq++) {
+    if (!is_irq_enabled(nvic, irq)) {
+      continue;
+    }
+
+    if ((nvic->pending[irq_reg(irq)] & (1u << irq_bit(irq))) == 0) {
+      continue;
+    }
+
+    int pri = (int)nvic->priority[irq];
+
+    /* Check BASEPRI masking */
+    if (basepri != 0 && (uint8_t)pri >= basepri) {
+      continue;
+    }
+
+    /* Check if can preempt current priority - use group priority for preemption
+     */
+    int group_pri = get_group_priority(nvic, pri);
+    if (group_pri >= current_pri) {
+      continue;
+    }
+
+    if (pri < *best_pri) {
+      *best_exc = ARMV8M_EXC_EXTERNAL_BASE + irq;
+      *best_pri = pri;
+    }
+  }
+}
+
 int armv8m_nvic_get_pending_exception(NVIC *nvic, uint8_t basepri,
                                       uint8_t primask, uint8_t faultmask,
                                       int current_pri) {
@@ -507,66 +579,9 @@ int armv8m_nvic_get_pending_exception(NVIC *nvic, uint8_t basepri,
     return -1;
   }
 
-  /* Check system exceptions (2-15) */
-  for (int exc = 2; exc <= 15; exc++) {
-    /* Skip reserved exception numbers */
-    if (exc == 8 || exc == 9 || exc == 10 || exc == 13) {
-      continue;
-    }
-
-    if (!is_exception_pending(nvic, exc)) {
-      continue;
-    }
-
-    int pri = get_exception_priority(nvic, exc);
-
-    /* Check BASEPRI masking for configurable priority exceptions */
-    if (pri >= 0 && basepri != 0 && (uint8_t)pri >= basepri) {
-      continue;
-    }
-
-    /* Check if can preempt current priority - use group priority for preemption
-     */
-    int group_pri = (pri >= 0) ? get_group_priority(nvic, pri) : pri;
-    if (group_pri >= current_pri) {
-      continue;
-    }
-
-    if (pri < best_pri) {
-      best_exc = exc;
-      best_pri = pri;
-    }
-  }
-
-  /* Check external interrupts */
-  for (int irq = 0; irq < nvic->num_irqs; irq++) {
-    if (!is_irq_enabled(nvic, irq)) {
-      continue;
-    }
-
-    if ((nvic->pending[irq_reg(irq)] & (1u << irq_bit(irq))) == 0) {
-      continue;
-    }
-
-    int pri = (int)nvic->priority[irq];
-
-    /* Check BASEPRI masking */
-    if (basepri != 0 && (uint8_t)pri >= basepri) {
-      continue;
-    }
-
-    /* Check if can preempt current priority - use group priority for preemption
-     */
-    int group_pri = get_group_priority(nvic, pri);
-    if (group_pri >= current_pri) {
-      continue;
-    }
-
-    if (pri < best_pri) {
-      best_exc = ARMV8M_EXC_EXTERNAL_BASE + irq;
-      best_pri = pri;
-    }
-  }
+  /* Check pending system exceptions (2-15) and external interrupts */
+  nvic_scan_system_exceptions(nvic, basepri, current_pri, &best_exc, &best_pri);
+  nvic_scan_external_irqs(nvic, basepri, current_pri, &best_exc, &best_pri);
 
   nvic->highest_pending = best_exc;
   return best_exc;
@@ -628,109 +643,112 @@ void armv8m_nvic_deactivate(NVIC *nvic, int exc) {
  * NVIC Register Access (MMIO)
  *============================================================================*/
 
-uint32_t armv8m_nvic_read(NVIC *nvic, uint32_t offset, uint8_t size) {
-  uint32_t value = 0;
+/* Read one 32-bit register from a banked NVIC array (ISER/ICER/ISPR/...). */
+static uint32_t nvic_read_bank(const uint32_t *bank, uint32_t off_in_bank) {
+  int idx = (int)(off_in_bank >> 2);
+  return (idx < 8) ? bank[idx] : 0;
+}
 
+/* Read an IPR (interrupt priority) register, byte- or word-accessible. */
+static uint32_t nvic_read_ipr(const NVIC *nvic, uint32_t offset, uint8_t size) {
+  int base_irq = (int)(offset - NVIC_IPR_BASE);
+  if (size == 1) {
+    return (base_irq < nvic->num_irqs) ? nvic->priority[base_irq] : 0;
+  }
+  /* Word access - pack 4 priorities */
+  uint32_t value = 0;
+  for (int i = 0; i < 4; i++) {
+    int irq = base_irq + i;
+    if (irq < nvic->num_irqs) {
+      value |= (uint32_t)nvic->priority[irq] << (i * 8);
+    }
+  }
+  return value;
+}
+
+uint32_t armv8m_nvic_read(NVIC *nvic, uint32_t offset, uint8_t size) {
   if (offset < NVIC_ISER_BASE + 0x20) {
     /* ISER0-7: Interrupt Set Enable */
-    int idx = (int)offset >> 2;
-    if (idx < 8) {
-      value = nvic->enabled[idx];
-    }
-  } else if (offset >= NVIC_ICER_BASE && offset < NVIC_ICER_BASE + 0x20) {
+    return nvic_read_bank(nvic->enabled, offset);
+  }
+  if (offset >= NVIC_ICER_BASE && offset < NVIC_ICER_BASE + 0x20) {
     /* ICER0-7: Interrupt Clear Enable (reads as ISER) */
-    int idx = (int)(offset - NVIC_ICER_BASE) >> 2;
-    if (idx < 8) {
-      value = nvic->enabled[idx];
-    }
-  } else if (offset >= NVIC_ISPR_BASE && offset < NVIC_ISPR_BASE + 0x20) {
+    return nvic_read_bank(nvic->enabled, offset - NVIC_ICER_BASE);
+  }
+  if (offset >= NVIC_ISPR_BASE && offset < NVIC_ISPR_BASE + 0x20) {
     /* ISPR0-7: Interrupt Set Pending */
-    int idx = (int)(offset - NVIC_ISPR_BASE) >> 2;
-    if (idx < 8) {
-      value = nvic->pending[idx];
-    }
-  } else if (offset >= NVIC_ICPR_BASE && offset < NVIC_ICPR_BASE + 0x20) {
+    return nvic_read_bank(nvic->pending, offset - NVIC_ISPR_BASE);
+  }
+  if (offset >= NVIC_ICPR_BASE && offset < NVIC_ICPR_BASE + 0x20) {
     /* ICPR0-7: Interrupt Clear Pending (reads as ISPR) */
-    int idx = (int)(offset - NVIC_ICPR_BASE) >> 2;
-    if (idx < 8) {
-      value = nvic->pending[idx];
-    }
-  } else if (offset >= NVIC_IABR_BASE && offset < NVIC_IABR_BASE + 0x20) {
+    return nvic_read_bank(nvic->pending, offset - NVIC_ICPR_BASE);
+  }
+  if (offset >= NVIC_IABR_BASE && offset < NVIC_IABR_BASE + 0x20) {
     /* IABR0-7: Interrupt Active Bit (read-only) */
-    int idx = (int)(offset - NVIC_IABR_BASE) >> 2;
-    if (idx < 8) {
-      value = nvic->active[idx];
-    }
-  } else if (offset >= NVIC_IPR_BASE && offset < NVIC_IPR_BASE + 0xF0) {
+    return nvic_read_bank(nvic->active, offset - NVIC_IABR_BASE);
+  }
+  if (offset >= NVIC_IPR_BASE && offset < NVIC_IPR_BASE + 0xF0) {
     /* IPR0-59: Interrupt Priority (byte accessible) */
-    int base_irq = (int)(offset - NVIC_IPR_BASE);
-    if (size == 1) {
-      if (base_irq < nvic->num_irqs) {
-        value = nvic->priority[base_irq];
-      }
+    return nvic_read_ipr(nvic, offset, size);
+  }
+  return 0;
+}
+
+/* Write one 32-bit register in a banked NVIC array. `set` ORs the value (ISER/
+ * ISPR); otherwise it clears the set bits (ICER/ICPR). */
+static void nvic_write_bank(uint32_t *bank, uint32_t off_in_bank,
+                            uint32_t value, bool set, bool *need_rescan) {
+  int idx = (int)(off_in_bank >> 2);
+  if (idx < 8) {
+    if (set) {
+      bank[idx] |= value;
     } else {
-      /* Word access - pack 4 priorities */
-      value = 0;
-      for (int i = 0; i < 4; i++) {
-        int irq = base_irq + i;
-        if (irq < nvic->num_irqs) {
-          value |= (uint32_t)nvic->priority[irq] << (i * 8);
-        }
+      bank[idx] &= ~value;
+    }
+    *need_rescan = true;
+  }
+}
+
+/* Write an IPR (interrupt priority) register, byte- or word-accessible. */
+static void nvic_write_ipr(NVIC *nvic, uint32_t offset, uint32_t value,
+                           uint8_t size) {
+  int base_irq = (int)(offset - NVIC_IPR_BASE);
+  if (size == 1) {
+    if (base_irq < nvic->num_irqs) {
+      nvic->priority[base_irq] = (uint8_t)(value & PRIORITY_MASK);
+    }
+  } else {
+    /* Word access - unpack 4 priorities */
+    for (int i = 0; i < 4; i++) {
+      int irq = base_irq + i;
+      if (irq < nvic->num_irqs) {
+        nvic->priority[irq] = (uint8_t)((value >> (i * 8)) & PRIORITY_MASK);
       }
     }
   }
-
-  return value;
+  nvic->need_rescan = true;
 }
 
 void armv8m_nvic_write(NVIC *nvic, uint32_t offset, uint32_t value,
                        uint8_t size) {
-
   if (offset < NVIC_ISER_BASE + 0x20) {
     /* ISER0-7: Interrupt Set Enable (write 1 to set) */
-    int idx = (int)offset >> 2;
-    if (idx < 8) {
-      nvic->enabled[idx] |= value;
-      nvic->need_rescan = true;
-    }
+    nvic_write_bank(nvic->enabled, offset, value, true, &nvic->need_rescan);
   } else if (offset >= NVIC_ICER_BASE && offset < NVIC_ICER_BASE + 0x20) {
     /* ICER0-7: Interrupt Clear Enable (write 1 to clear) */
-    int idx = (int)(offset - NVIC_ICER_BASE) >> 2;
-    if (idx < 8) {
-      nvic->enabled[idx] &= ~value;
-      nvic->need_rescan = true;
-    }
+    nvic_write_bank(nvic->enabled, offset - NVIC_ICER_BASE, value, false,
+                    &nvic->need_rescan);
   } else if (offset >= NVIC_ISPR_BASE && offset < NVIC_ISPR_BASE + 0x20) {
     /* ISPR0-7: Interrupt Set Pending (write 1 to set) */
-    int idx = (int)(offset - NVIC_ISPR_BASE) >> 2;
-    if (idx < 8) {
-      nvic->pending[idx] |= value;
-      nvic->need_rescan = true;
-    }
+    nvic_write_bank(nvic->pending, offset - NVIC_ISPR_BASE, value, true,
+                    &nvic->need_rescan);
   } else if (offset >= NVIC_ICPR_BASE && offset < NVIC_ICPR_BASE + 0x20) {
     /* ICPR0-7: Interrupt Clear Pending (write 1 to clear) */
-    int idx = (int)(offset - NVIC_ICPR_BASE) >> 2;
-    if (idx < 8) {
-      nvic->pending[idx] &= ~value;
-      nvic->need_rescan = true;
-    }
+    nvic_write_bank(nvic->pending, offset - NVIC_ICPR_BASE, value, false,
+                    &nvic->need_rescan);
   } else if (offset >= NVIC_IPR_BASE && offset < NVIC_IPR_BASE + 0xF0) {
     /* IPR0-59: Interrupt Priority (byte accessible) */
-    int base_irq = (int)(offset - NVIC_IPR_BASE);
-    if (size == 1) {
-      if (base_irq < nvic->num_irqs) {
-        nvic->priority[base_irq] = (uint8_t)(value & PRIORITY_MASK);
-      }
-    } else {
-      /* Word access - unpack 4 priorities */
-      for (int i = 0; i < 4; i++) {
-        int irq = base_irq + i;
-        if (irq < nvic->num_irqs) {
-          nvic->priority[irq] = (uint8_t)((value >> (i * 8)) & PRIORITY_MASK);
-        }
-      }
-    }
-    nvic->need_rescan = true;
+    nvic_write_ipr(nvic, offset, value, size);
   }
   /* IABR is read-only, writes ignored */
 }

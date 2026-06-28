@@ -120,88 +120,61 @@ int decode_load_store_single(uint16_t hw1, uint16_t hw2, DecodedInsn *out) {
  * Load/Store Dual/Exclusive
  *============================================================================*/
 
-int decode_load_store_dual(uint16_t hw1, uint16_t hw2, DecodedInsn *out) {
-  uint32_t op1 = EXTRACT(hw1, 7, 2);
-  uint32_t op2 = EXTRACT(hw1, 4, 2);
-  uint8_t rn = (uint8_t)EXTRACT(hw1, 0, 4);
-  uint8_t rt = (uint8_t)EXTRACT(hw2, 12, 4);
-  uint8_t rt2 = (uint8_t)EXTRACT(hw2, 8, 4);
+/**
+ * Decode Load-Acquire/Store-Release (LDA/STL and exclusive variants).
+ * Returns 0 if decoded, 1 to fall through to the remaining encodings.
+ */
+static int decode_lda_stl(uint16_t hw1, uint16_t hw2, DecodedInsn *out,
+                          uint8_t rt2) {
+  uint8_t variant = (uint8_t)EXTRACT(hw2, 4, 4);
+  if (rt2 == 0xF && variant >= 0x8) {
+    bool is_load = BIT(hw1, 4) != 0;
+    bool is_exclusive = (variant >= 0xC);
 
-  out->rt = rt;
-  out->rt2 = rt2;
-  out->rn = rn;
-  out->access_size = ACCESS_WORD;
+    if (is_load) {
+      out->type = INSN_LOAD_ACQUIRE;
+    } else {
+      out->type = INSN_STORE_RELEASE;
+    }
 
-  /* Table branch: TBB/TBH
-   * Encoding: hw1 = 0xE8D0 | Rn, hw2 = 0xF000 | (H << 4) | Rm
-   * op1 (bits[8:7]) = 01, op2 (bits[5:4]) = 01
-   * Key: hw2[15:12] = 0xF distinguishes TBB/TBH from LDREXB/LDREXH */
-  if (op1 == 0x1 && op2 == 0x1 && rt == 0xF) {
-    uint8_t rm = (uint8_t)EXTRACT(hw2, 0, 4);
-    bool is_tbh = BIT(hw2, 4) != 0;
+    /* Decode size from variant */
+    switch (variant) {
+    case 0x8: /* LDAB/STLB */
+    case 0xC: /* LDAEXB/STLEXB */
+      out->access_size = ACCESS_BYTE;
+      break;
+    case 0x9: /* LDAH/STLH */
+    case 0xD: /* LDAEXH/STLEXH */
+      out->access_size = ACCESS_HALF;
+      break;
+    case 0xA: /* LDA/STL */
+    case 0xE: /* LDAEX/STLEX */
+    default:
+      out->access_size = ACCESS_WORD;
+      break;
+    }
 
-    out->type = INSN_TABLE_BRANCH;
-    out->rm = rm;
-    out->access_size = is_tbh ? ACCESS_HALF : ACCESS_BYTE;
+    /* Use 'op' field to indicate exclusive (1) vs non-exclusive (0) */
+    out->op = is_exclusive ? 1 : 0;
+
+    /* For exclusive stores, Rd (status) is in hw2[3:0] */
+    if (!is_load && is_exclusive) {
+      out->rd = (uint8_t)EXTRACT(hw2, 0, 4);
+    }
+
+    out->imm = 0; /* No offset for LDA/STL */
+    out->add = true;
     return 0;
   }
+  return 1;
+}
 
-  /* Load-Acquire / Store-Release (LDA, STL, LDAB, STLB, LDAH, STLH)
-   * and exclusive variants (LDAEX, STLEX, LDAEXB, STLEXB, LDAEXH, STLEXH)
-   * These are distinguished by:
-   *   - hw2[11:8] = 0xF (rt2 field = 15)
-   *   - hw2[7:4] >= 0x8 (distinguishes from LDREXB/H at 0x4/0x5)
-   * hw2[7:4] encodes the variant:
-   *   0x8 = byte, 0x9 = halfword, 0xA = word (non-exclusive)
-   *   0xC = exclusive byte, 0xD = exclusive halfword, 0xE = exclusive word
-   */
-  {
-    uint8_t variant = (uint8_t)EXTRACT(hw2, 4, 4);
-    if (rt2 == 0xF && variant >= 0x8) {
-      bool is_load = BIT(hw1, 4) != 0;
-      bool is_exclusive = (variant >= 0xC);
-
-      if (is_load) {
-        out->type = INSN_LOAD_ACQUIRE;
-      } else {
-        out->type = INSN_STORE_RELEASE;
-      }
-
-      /* Decode size from variant */
-      switch (variant) {
-      case 0x8: /* LDAB/STLB */
-      case 0xC: /* LDAEXB/STLEXB */
-        out->access_size = ACCESS_BYTE;
-        break;
-      case 0x9: /* LDAH/STLH */
-      case 0xD: /* LDAEXH/STLEXH */
-        out->access_size = ACCESS_HALF;
-        break;
-      case 0xA: /* LDA/STL */
-      case 0xE: /* LDAEX/STLEX */
-      default:
-        out->access_size = ACCESS_WORD;
-        break;
-      }
-
-      /* Use 'op' field to indicate exclusive (1) vs non-exclusive (0) */
-      out->op = is_exclusive ? 1 : 0;
-
-      /* For exclusive stores, Rd (status) is in hw2[3:0] */
-      if (!is_load && is_exclusive) {
-        out->rd = (uint8_t)EXTRACT(hw2, 0, 4);
-      }
-
-      out->imm = 0; /* No offset for LDA/STL */
-      out->add = true;
-      return 0;
-    }
-  }
-
-  /* Load/store exclusive (word, byte, halfword)
-   * Encoding distinction is based on hw1[7] (U bit in op1):
-   * - hw1[7]=0: LDREX/STREX (word) with imm8 offset, Rd at hw2[11:8]
-   * - hw1[7]=1: LDREXB/STREXB or LDREXH/STREXH, Rd at hw2[3:0] */
+/**
+ * Decode load/store exclusive (LDREX/STREX and byte/half variants).
+ * Returns 0 if decoded, 1 to fall through to LDRD/STRD.
+ */
+static int decode_ldrex_strex(uint16_t hw1, uint16_t hw2, DecodedInsn *out,
+                              uint8_t rt2, uint32_t op1, uint32_t op2) {
   if ((op1 & 0x2) == 0x0 && (op2 & 0x2) == 0x0) {
     bool is_load = BIT(hw1, 4) != 0;
     uint8_t imm8 = (uint8_t)EXTRACT(hw2, 0, 8);
@@ -237,6 +210,52 @@ int decode_load_store_dual(uint16_t hw1, uint16_t hw2, DecodedInsn *out) {
       }
     }
     out->add = true;
+    return 0;
+  }
+  return 1;
+}
+
+int decode_load_store_dual(uint16_t hw1, uint16_t hw2, DecodedInsn *out) {
+  uint32_t op1 = EXTRACT(hw1, 7, 2);
+  uint32_t op2 = EXTRACT(hw1, 4, 2);
+  uint8_t rn = (uint8_t)EXTRACT(hw1, 0, 4);
+  uint8_t rt = (uint8_t)EXTRACT(hw2, 12, 4);
+  uint8_t rt2 = (uint8_t)EXTRACT(hw2, 8, 4);
+
+  out->rt = rt;
+  out->rt2 = rt2;
+  out->rn = rn;
+  out->access_size = ACCESS_WORD;
+
+  /* Table branch: TBB/TBH
+   * Encoding: hw1 = 0xE8D0 | Rn, hw2 = 0xF000 | (H << 4) | Rm
+   * op1 (bits[8:7]) = 01, op2 (bits[5:4]) = 01
+   * Key: hw2[15:12] = 0xF distinguishes TBB/TBH from LDREXB/LDREXH */
+  if (op1 == 0x1 && op2 == 0x1 && rt == 0xF) {
+    uint8_t rm = (uint8_t)EXTRACT(hw2, 0, 4);
+    bool is_tbh = BIT(hw2, 4) != 0;
+
+    out->type = INSN_TABLE_BRANCH;
+    out->rm = rm;
+    out->access_size = is_tbh ? ACCESS_HALF : ACCESS_BYTE;
+    return 0;
+  }
+
+  /* Load-Acquire / Store-Release (LDA, STL, LDAB, STLB, LDAH, STLH)
+   * and exclusive variants (LDAEX, STLEX, LDAEXB, STLEXB, LDAEXH, STLEXH)
+   * These are distinguished by:
+   *   - hw2[11:8] = 0xF (rt2 field = 15)
+   *   - hw2[7:4] >= 0x8 (distinguishes from LDREXB/H at 0x4/0x5)
+   * hw2[7:4] encodes the variant:
+   *   0x8 = byte, 0x9 = halfword, 0xA = word (non-exclusive)
+   *   0xC = exclusive byte, 0xD = exclusive halfword, 0xE = exclusive word
+   */
+  if (decode_lda_stl(hw1, hw2, out, rt2) == 0) {
+    return 0;
+  }
+
+  /* Load/store exclusive (LDREX/STREX and byte/half variants) */
+  if (decode_ldrex_strex(hw1, hw2, out, rt2, op1, op2) == 0) {
     return 0;
   }
 

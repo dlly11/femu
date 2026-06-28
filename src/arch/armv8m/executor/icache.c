@@ -26,6 +26,9 @@ static inline uint32_t cache_index(uint32_t pc) {
  *============================================================================*/
 
 void armv8m_icache_init(InsnCache *cache) {
+  if (cache == NULL) {
+    return;
+  }
   memset(cache, 0, sizeof(InsnCache));
   cache->generation = 1; /* Start at 1 so 0 is always invalid */
 }

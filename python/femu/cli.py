@@ -427,7 +427,7 @@ def run_emulator(
     except FileNotFoundError as e:
         console.print(f"[red]File not found:[/red] {e}")
         raise SystemExit(1) from None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - top-level CLI handler reports and exits
         console.print(f"[red]Error:[/red] {e}")
         if verbose:
             import traceback

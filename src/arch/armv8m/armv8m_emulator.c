@@ -551,6 +551,51 @@ int armv8m_emu_step(Emulator *emu) {
   return result;
 }
 
+/* What armv8m_emu_run should do after classifying a step's result. */
+typedef enum {
+  EMU_STEP_CONTINUE,
+  EMU_STEP_BREAK,
+  EMU_STEP_FAULT
+} EmuStepAction;
+
+/* Classify the outcome of one execution step, updating emu->state (and
+ * last_error on fault). */
+static EmuStepAction emu_classify_step(Emulator *emu, int result) {
+  /* Watchpoint hit is signalled via emu->state during the step. */
+  if (emu->state == EMU_STATE_WATCHPOINT) {
+    EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Hit watchpoint at addr=0x%08X",
+                  emu->watchpoint_hit_addr);
+    return EMU_STEP_BREAK;
+  }
+  if (result == ARMV8M_ERR_BREAKPOINT) {
+    emu->state = EMU_STATE_BREAKPOINT;
+    return EMU_STEP_BREAK;
+  }
+  if (result == ARMV8M_ERR_HALTED) {
+    EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "CPU halted");
+    emu->state = EMU_STATE_HALTED;
+    return EMU_STEP_BREAK;
+  }
+  if (result != ARMV8M_OK) {
+    EMU_LOG_ERROR(EMU_LOG_CAT_EMULATOR,
+                  "Execution fault at PC=0x%08X: error=%d",
+                  emu->exec.cpu.r[ARMV8M_REG_PC], result);
+    emu->state = EMU_STATE_FAULT;
+    emu->last_error = result;
+    return EMU_STEP_FAULT;
+  }
+  return EMU_STEP_CONTINUE;
+}
+
+/* Advance all attached peripherals by one tick. */
+static void emu_tick_peripherals(Emulator *emu) {
+  for (int i = 0; i < emu->num_peripherals; i++) {
+    if (emu->peripherals[i] && emu->peripherals[i]->vtable.tick) {
+      emu->peripherals[i]->vtable.tick(emu->peripherals[i]->context, 1);
+    }
+  }
+}
+
 int64_t armv8m_emu_run(Emulator *emu, uint64_t max_cycles) {
   if (!emu)
     return ARMV8M_ERR_INVALID_PARAM;
@@ -578,35 +623,15 @@ int64_t armv8m_emu_run(Emulator *emu, uint64_t max_cycles) {
     /* Execute one instruction */
     int result = armv8m_exec_step(&emu->exec);
 
-    /* Check if a watchpoint was hit during execution */
-    if (emu->state == EMU_STATE_WATCHPOINT) {
-      EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "Hit watchpoint at addr=0x%08X",
-                    emu->watchpoint_hit_addr);
+    EmuStepAction action = emu_classify_step(emu, result);
+    if (action == EMU_STEP_FAULT) {
+      return -(int64_t)emu->last_error;
+    }
+    if (action == EMU_STEP_BREAK) {
       break;
     }
 
-    if (result == ARMV8M_ERR_BREAKPOINT) {
-      emu->state = EMU_STATE_BREAKPOINT;
-      break;
-    } else if (result == ARMV8M_ERR_HALTED) {
-      EMU_LOG_DEBUG(EMU_LOG_CAT_EMULATOR, "CPU halted");
-      emu->state = EMU_STATE_HALTED;
-      break;
-    } else if (result != ARMV8M_OK) {
-      EMU_LOG_ERROR(EMU_LOG_CAT_EMULATOR,
-                    "Execution fault at PC=0x%08X: error=%d",
-                    emu->exec.cpu.r[ARMV8M_REG_PC], result);
-      emu->state = EMU_STATE_FAULT;
-      emu->last_error = result;
-      return -(int64_t)result;
-    }
-
-    /* Tick peripherals */
-    for (int i = 0; i < emu->num_peripherals; i++) {
-      if (emu->peripherals[i] && emu->peripherals[i]->vtable.tick) {
-        emu->peripherals[i]->vtable.tick(emu->peripherals[i]->context, 1);
-      }
-    }
+    emu_tick_peripherals(emu);
   }
 
   if (emu->stop_requested) {

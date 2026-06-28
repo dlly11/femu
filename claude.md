@@ -140,11 +140,11 @@ femu/
 ├── Doxyfile                  # Doxygen configuration
 ├── flake.nix                 # Nix development environment
 ├── docs/
-│   ├── ARCHITECTURE.md       # System design (READ FIRST)
-│   ├── AI_DEVELOPMENT.md     # AI workflow guide
-│   ├── PLUGINS.md            # Peripheral development
-│   ├── MACHINES.md           # Machine configuration
-│   └── DEBUGGING.md          # GDB debugging guide
+│   ├── architecture/overview.md          # System design (READ FIRST)
+│   ├── developer/ai-development.md        # AI workflow guide
+│   ├── developer/writing-peripherals.md  # Peripheral development
+│   ├── user/machine-configuration.md     # Machine configuration
+│   └── user/gdb-debugging.md             # GDB debugging guide
 ├── include/
 │   ├── emu/                  # Architecture-agnostic interfaces
 │   │   ├── emu_types.h       # Core type definitions
@@ -223,7 +223,7 @@ Each module is implementable in a single AI session without requiring context fr
 
 2. **Read the required files** (in order):
 
-   - `docs/ARCHITECTURE.md` (Parts 5 and 9)
+   - `docs/architecture/overview.md` (System Layers, C Simulation Core)
    - `include/arch/armv8m/armv8m_<module>.h` (interface)
    - `src/arch/armv8m/<module>/README.md` (guidance)
    - `include/arch/armv8m/armv8m_types.h` (shared types)

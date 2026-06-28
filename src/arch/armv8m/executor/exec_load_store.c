@@ -5,6 +5,7 @@
  * Implements LDR, STR, LDM, STM, PUSH, POP with all addressing modes.
  */
 
+#include "arch/armv8m/armv8m_exec_regs.h"
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
@@ -66,28 +67,17 @@ static void mem_write(Executor *exec, uint32_t addr, uint32_t value,
   }
 }
 
-/**
- * Get register value, handling SP specially.
+/*
+ * Register access for load/store instructions. These read the raw PC; the
+ * pipeline offset for PC-relative addressing is applied at the call site (see
+ * the LDR-literal path). Shared implementations live in armv8m_exec_regs.h.
  */
-static uint32_t get_reg(const Executor *exec, uint8_t reg) {
-  if (reg == ARMV8M_REG_SP) {
-    return armv8m_get_sp(&exec->cpu);
-  }
-  return exec->cpu.r[reg];
+static inline uint32_t get_reg(const Executor *exec, uint8_t reg) {
+  return armv8m_exec_get_reg(exec, reg);
 }
 
-/**
- * Set register value, handling SP specially.
- */
-static void set_reg(Executor *exec, uint8_t reg, uint32_t value) {
-  if (reg == ARMV8M_REG_SP) {
-    armv8m_set_sp(&exec->cpu, value);
-    exec->cpu.r[ARMV8M_REG_SP] = armv8m_get_sp(&exec->cpu);
-  } else if (reg == ARMV8M_REG_PC) {
-    exec->cpu.r[ARMV8M_REG_PC] = value & ~1u;
-  } else {
-    exec->cpu.r[reg] = value;
-  }
+static inline void set_reg(Executor *exec, uint8_t reg, uint32_t value) {
+  armv8m_exec_set_reg(exec, reg, value);
 }
 
 /**

@@ -5,6 +5,7 @@
  * Implements VLDR, VSTR, VMOV, VADD, VSUB, VMUL, VDIV, VCMP, VCVT, etc.
  */
 
+#include "arch/armv8m/armv8m_exec_regs.h"
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
@@ -100,28 +101,16 @@ static inline void set_d(CPUState *cpu, uint8_t reg, double val) {
   cpu->s[s_base + 1] = (uint32_t)(u.i >> 32);
 }
 
-/**
- * Get ARM register value.
+/*
+ * ARM register access for FPU instructions. Reads the raw PC; shared
+ * implementations live in armv8m_exec_regs.h.
  */
-static uint32_t get_reg(const Executor *exec, uint8_t reg) {
-  if (reg == ARMV8M_REG_SP) {
-    return armv8m_get_sp(&exec->cpu);
-  }
-  return exec->cpu.r[reg];
+static inline uint32_t get_reg(const Executor *exec, uint8_t reg) {
+  return armv8m_exec_get_reg(exec, reg);
 }
 
-/**
- * Set ARM register value.
- */
-static void set_reg(Executor *exec, uint8_t reg, uint32_t value) {
-  if (reg == ARMV8M_REG_SP) {
-    armv8m_set_sp(&exec->cpu, value);
-    exec->cpu.r[ARMV8M_REG_SP] = armv8m_get_sp(&exec->cpu);
-  } else if (reg == ARMV8M_REG_PC) {
-    exec->cpu.r[ARMV8M_REG_PC] = value & ~1U;
-  } else {
-    exec->cpu.r[reg] = value;
-  }
+static inline void set_reg(Executor *exec, uint8_t reg, uint32_t value) {
+  armv8m_exec_set_reg(exec, reg, value);
 }
 
 /**
@@ -281,20 +270,29 @@ static int check_lazy_preservation(Executor *exec) {
  * FPU Load/Store Instructions
  *============================================================================*/
 
-int exec_fpu_load(Executor *exec, const DecodedInsn *insn) {
+/**
+ * Common FPU instruction prologue: require the FPU to be enabled, run any
+ * pending lazy state preservation, and mark the FP context active. Returns
+ * ARMV8M_OK, or a fault code the caller should propagate.
+ */
+static int fpu_prologue(Executor *exec) {
   if (!is_fpu_enabled(exec)) {
-    EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "VLDR: FPU not enabled - NOCP");
     exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
     return ARMV8M_ERR_USAGE_FAULT;
   }
-
-  /* Trigger lazy preservation if pending */
   int lazy_result = check_lazy_preservation(exec);
   if (lazy_result != ARMV8M_OK) {
     return lazy_result;
   }
-
   mark_fp_active(exec);
+  return ARMV8M_OK;
+}
+
+int exec_fpu_load(Executor *exec, const DecodedInsn *insn) {
+  int prologue = fpu_prologue(exec);
+  if (prologue != ARMV8M_OK) {
+    return prologue;
+  }
 
   uint32_t base = get_reg(exec, insn->rn);
   uint32_t addr = insn->add ? (base + insn->imm) : (base - insn->imm);
@@ -329,19 +327,10 @@ int exec_fpu_load(Executor *exec, const DecodedInsn *insn) {
 }
 
 int exec_fpu_store(Executor *exec, const DecodedInsn *insn) {
-  if (!is_fpu_enabled(exec)) {
-    EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "VSTR: FPU not enabled - NOCP");
-    exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
-    return ARMV8M_ERR_USAGE_FAULT;
+  int prologue = fpu_prologue(exec);
+  if (prologue != ARMV8M_OK) {
+    return prologue;
   }
-
-  /* Trigger lazy preservation if pending */
-  int lazy_result = check_lazy_preservation(exec);
-  if (lazy_result != ARMV8M_OK) {
-    return lazy_result;
-  }
-
-  mark_fp_active(exec);
 
   uint32_t base = get_reg(exec, insn->rn);
   uint32_t addr = insn->add ? (base + insn->imm) : (base - insn->imm);
@@ -375,26 +364,58 @@ int exec_fpu_store(Executor *exec, const DecodedInsn *insn) {
  * FPU Multiple Load/Store (VLDM, VSTM, VPUSH, VPOP)
  *============================================================================*/
 
+/**
+ * Load or store a single word S-register slot at addr. Returns true on fault.
+ */
+static bool fpu_xfer_word(Executor *exec, uint32_t addr, uint32_t *slot,
+                          bool is_load) {
+  bool fault = false;
+  if (is_load) {
+    *slot = mem_read(exec, addr, ACCESS_WORD, &fault);
+  } else {
+    mem_write(exec, addr, *slot, ACCESS_WORD, &fault);
+  }
+  return fault;
+}
+
+/**
+ * Transfer one register for a VLDM/VSTM/VPUSH/VPOP at *addr, advancing *addr.
+ * Returns true on a bus fault (the caller aborts the transfer).
+ */
+static bool fpu_multi_xfer_one(Executor *exec, const DecodedInsn *insn,
+                               uint32_t i, uint8_t start_reg, uint32_t *addr,
+                               bool is_load) {
+  if (insn->is_double) {
+    uint8_t s_base = (uint8_t)(((start_reg + i) & 15) * 2);
+    if (insn->add || !insn->pre_index) {
+      /* Load ascending or store descending */
+      if (fpu_xfer_word(exec, *addr, &exec->cpu.s[s_base], is_load) ||
+          fpu_xfer_word(exec, *addr + 4, &exec->cpu.s[s_base + 1], is_load)) {
+        return true;
+      }
+    }
+    *addr += 8;
+  } else {
+    uint8_t s_reg = (uint8_t)((start_reg + i) & 31);
+    if (fpu_xfer_word(exec, *addr, &exec->cpu.s[s_reg], is_load)) {
+      return true;
+    }
+    *addr += 4;
+  }
+  return false;
+}
+
 int exec_fpu_multi(Executor *exec, const DecodedInsn *insn) {
-  if (!is_fpu_enabled(exec)) {
-    exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
-    return ARMV8M_ERR_USAGE_FAULT;
+  int prologue = fpu_prologue(exec);
+  if (prologue != ARMV8M_OK) {
+    return prologue;
   }
-
-  /* Trigger lazy preservation if pending */
-  int lazy_result = check_lazy_preservation(exec);
-  if (lazy_result != ARMV8M_OK) {
-    return lazy_result;
-  }
-
-  mark_fp_active(exec);
 
   uint32_t base = get_reg(exec, insn->rn);
   uint32_t count =
       insn->imm; /* Number of words (for single) or doublewords (for double) */
   uint32_t regs;
   uint32_t bytes;
-  bool fault = false;
   bool is_load =
       (insn->op == 1); /* op: 0=store (VSTM/VPUSH), 1=load (VLDM/VPOP) */
 
@@ -418,43 +439,8 @@ int exec_fpu_multi(Executor *exec, const DecodedInsn *insn) {
   uint8_t start_reg = insn->is_double ? insn->dd : insn->sd;
 
   for (uint32_t i = 0; i < regs; i++) {
-    if (insn->is_double) {
-      uint8_t s_base = (uint8_t)(((start_reg + i) & 15) * 2);
-
-      if (insn->add || !insn->pre_index) {
-        /* Load ascending or store descending */
-        if (is_load) {
-          exec->cpu.s[s_base] = mem_read(exec, addr, ACCESS_WORD, &fault);
-          if (fault)
-            return ARMV8M_ERR_BUS_FAULT;
-          exec->cpu.s[s_base + 1] =
-              mem_read(exec, addr + 4, ACCESS_WORD, &fault);
-          if (fault)
-            return ARMV8M_ERR_BUS_FAULT;
-        } else {
-          mem_write(exec, addr, exec->cpu.s[s_base], ACCESS_WORD, &fault);
-          if (fault)
-            return ARMV8M_ERR_BUS_FAULT;
-          mem_write(exec, addr + 4, exec->cpu.s[s_base + 1], ACCESS_WORD,
-                    &fault);
-          if (fault)
-            return ARMV8M_ERR_BUS_FAULT;
-        }
-      }
-      addr += 8;
-    } else {
-      uint8_t s_reg = (uint8_t)((start_reg + i) & 31);
-
-      if (is_load) {
-        exec->cpu.s[s_reg] = mem_read(exec, addr, ACCESS_WORD, &fault);
-        if (fault)
-          return ARMV8M_ERR_BUS_FAULT;
-      } else {
-        mem_write(exec, addr, exec->cpu.s[s_reg], ACCESS_WORD, &fault);
-        if (fault)
-          return ARMV8M_ERR_BUS_FAULT;
-      }
-      addr += 4;
+    if (fpu_multi_xfer_one(exec, insn, i, start_reg, &addr, is_load)) {
+      return ARMV8M_ERR_BUS_FAULT;
     }
   }
 
@@ -471,55 +457,79 @@ int exec_fpu_multi(Executor *exec, const DecodedInsn *insn) {
  * FPU Move Instructions
  *============================================================================*/
 
+static void fpu_vmov_imm(CPUState *cpu, const DecodedInsn *insn) {
+  /* VMOV (immediate) - expand imm8 to float */
+  uint8_t a = (uint8_t)((insn->imm >> 7) & 1);
+  uint8_t b = (uint8_t)((insn->imm >> 6) & 1);
+  uint8_t bcdefgh = (uint8_t)(insn->imm & 0x3F);
+
+  if (insn->is_double) {
+    /* F64: aBbbbbbb bbcdefgh 00000000 00000000 00000000 00000000 00000000
+     * 00000000 */
+    uint64_t exp = b ? 0x3FCULL : 0x400ULL;
+    exp |= (uint64_t)(b ? 0U : 3U) << 8;
+    uint64_t imm64 =
+        ((uint64_t)a << 63) | (exp << 52) | ((uint64_t)bcdefgh << 48);
+    union {
+      uint64_t i;
+      double f;
+    } u;
+    u.i = imm64;
+    set_d(cpu, insn->dd, u.f);
+  } else {
+    /* F32: aBbbbbbc defgh000 00000000 00000000 */
+    uint32_t exp = b ? 0x7C : 0x80;
+    uint32_t imm32 =
+        ((uint32_t)a << 31) | ((uint32_t)exp << 23) | ((uint32_t)bcdefgh << 19);
+    union {
+      uint32_t i;
+      float f;
+    } u;
+    u.i = imm32;
+    set_s(cpu, insn->sd, u.f);
+  }
+}
+
+static void fpu_vmov_arm(Executor *exec, const DecodedInsn *insn) {
+  CPUState *cpu = &exec->cpu;
+  /* VMOV (between ARM and single FPU reg) or VMRS/VMSR */
+  if (insn->sysreg == 0x80) {
+    /* VMRS/VMSR - transfer FPSCR */
+    if (insn->add) {
+      /* VMRS: to ARM register */
+      if (insn->rd == 15) {
+        /* Transfer FPSCR flags to APSR */
+        cpu->xpsr = (cpu->xpsr & 0x0FFFFFFF) | (cpu->fpscr & 0xF0000000);
+      } else {
+        set_reg(exec, insn->rd, cpu->fpscr);
+      }
+    } else {
+      /* VMSR: from ARM register */
+      cpu->fpscr = get_reg(exec, insn->rd);
+    }
+  } else {
+    /* VMOV between ARM reg and FPU Sn */
+    if (insn->add) {
+      /* From FPU to ARM */
+      set_reg(exec, insn->rd, cpu->s[insn->sn & 31]);
+    } else {
+      /* From ARM to FPU */
+      cpu->s[insn->sn & 31] = get_reg(exec, insn->rd);
+    }
+  }
+}
+
 int exec_fpu_move(Executor *exec, const DecodedInsn *insn) {
-  if (!is_fpu_enabled(exec)) {
-    exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
-    return ARMV8M_ERR_USAGE_FAULT;
+  int prologue = fpu_prologue(exec);
+  if (prologue != ARMV8M_OK) {
+    return prologue;
   }
-
-  /* Trigger lazy preservation if pending */
-  int lazy_result = check_lazy_preservation(exec);
-  if (lazy_result != ARMV8M_OK) {
-    return lazy_result;
-  }
-
-  mark_fp_active(exec);
   CPUState *cpu = &exec->cpu;
 
   switch (insn->op) {
-  case VFP_VMOV_IMM: {
-    /* VMOV (immediate) - expand imm8 to float */
-    uint8_t a = (uint8_t)((insn->imm >> 7) & 1);
-    uint8_t b = (uint8_t)((insn->imm >> 6) & 1);
-    uint8_t bcdefgh = (uint8_t)(insn->imm & 0x3F);
-
-    if (insn->is_double) {
-      /* F64: aBbbbbbb bbcdefgh 00000000 00000000 00000000 00000000 00000000
-       * 00000000 */
-      uint64_t exp = b ? 0x3FCULL : 0x400ULL;
-      exp |= (uint64_t)(b ? 0U : 3U) << 8;
-      uint64_t imm64 =
-          ((uint64_t)a << 63) | (exp << 52) | ((uint64_t)bcdefgh << 48);
-      union {
-        uint64_t i;
-        double f;
-      } u;
-      u.i = imm64;
-      set_d(cpu, insn->dd, u.f);
-    } else {
-      /* F32: aBbbbbbc defgh000 00000000 00000000 */
-      uint32_t exp = b ? 0x7C : 0x80;
-      uint32_t imm32 = ((uint32_t)a << 31) | ((uint32_t)exp << 23) |
-                       ((uint32_t)bcdefgh << 19);
-      union {
-        uint32_t i;
-        float f;
-      } u;
-      u.i = imm32;
-      set_s(cpu, insn->sd, u.f);
-    }
+  case VFP_VMOV_IMM:
+    fpu_vmov_imm(cpu, insn);
     break;
-  }
 
   case VFP_VMOV_REG:
     /* VMOV (register) */
@@ -531,31 +541,7 @@ int exec_fpu_move(Executor *exec, const DecodedInsn *insn) {
     break;
 
   case VFP_VMOV_ARM:
-    /* VMOV (between ARM and single FPU reg) or VMRS/VMSR */
-    if (insn->sysreg == 0x80) {
-      /* VMRS/VMSR - transfer FPSCR */
-      if (insn->add) {
-        /* VMRS: to ARM register */
-        if (insn->rd == 15) {
-          /* Transfer FPSCR flags to APSR */
-          cpu->xpsr = (cpu->xpsr & 0x0FFFFFFF) | (cpu->fpscr & 0xF0000000);
-        } else {
-          set_reg(exec, insn->rd, cpu->fpscr);
-        }
-      } else {
-        /* VMSR: from ARM register */
-        cpu->fpscr = get_reg(exec, insn->rd);
-      }
-    } else {
-      /* VMOV between ARM reg and FPU Sn */
-      if (insn->add) {
-        /* From FPU to ARM */
-        set_reg(exec, insn->rd, cpu->s[insn->sn & 31]);
-      } else {
-        /* From ARM to FPU */
-        cpu->s[insn->sn & 31] = get_reg(exec, insn->rd);
-      }
-    }
+    fpu_vmov_arm(exec, insn);
     break;
 
   case VFP_VMOV_2ARM:
@@ -585,18 +571,10 @@ int exec_fpu_move(Executor *exec, const DecodedInsn *insn) {
  *============================================================================*/
 
 int exec_fpu_arith(Executor *exec, const DecodedInsn *insn) {
-  if (!is_fpu_enabled(exec)) {
-    exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
-    return ARMV8M_ERR_USAGE_FAULT;
+  int prologue = fpu_prologue(exec);
+  if (prologue != ARMV8M_OK) {
+    return prologue;
   }
-
-  /* Trigger lazy preservation if pending */
-  int lazy_result = check_lazy_preservation(exec);
-  if (lazy_result != ARMV8M_OK) {
-    return lazy_result;
-  }
-
-  mark_fp_active(exec);
   CPUState *cpu = &exec->cpu;
 
   /* Apply FPSCR rounding mode for operations that use it */
@@ -735,18 +713,10 @@ int exec_fpu_arith(Executor *exec, const DecodedInsn *insn) {
  *============================================================================*/
 
 int exec_fpu_cmp(Executor *exec, const DecodedInsn *insn) {
-  if (!is_fpu_enabled(exec)) {
-    exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
-    return ARMV8M_ERR_USAGE_FAULT;
+  int prologue = fpu_prologue(exec);
+  if (prologue != ARMV8M_OK) {
+    return prologue;
   }
-
-  /* Trigger lazy preservation if pending */
-  int lazy_result = check_lazy_preservation(exec);
-  if (lazy_result != ARMV8M_OK) {
-    return lazy_result;
-  }
-
-  mark_fp_active(exec);
   CPUState *cpu = &exec->cpu;
 
   bool is_nan = false;
@@ -791,19 +761,147 @@ int exec_fpu_cmp(Executor *exec, const DecodedInsn *insn) {
  * FPU Conversion Instructions
  *============================================================================*/
 
+static void fpu_cvt_to_int(CPUState *cpu, const DecodedInsn *insn) {
+  bool to_signed = ((insn->op & 0x1) == 0);
+  bool truncate = ((insn->op & 0x8) != 0);
+  int32_t result;
+
+  if (truncate) {
+    /* VCVT: Round toward zero (truncation) - C cast does this */
+  } else {
+    /* VCVTR: Use FPSCR rounding mode */
+    set_rounding_mode(cpu->fpscr);
+  }
+
+  if (insn->is_double) {
+    double dm = get_d(cpu, insn->dm);
+#if HAVE_FENV
+    if (!truncate) {
+      dm = nearbyint(dm); /* Round according to FPSCR mode */
+    }
+#endif
+    if (to_signed) {
+      result = (int32_t)dm;
+    } else {
+      result = (int32_t)(uint32_t)dm;
+    }
+  } else {
+    float sm = get_s(cpu, insn->sm);
+#if HAVE_FENV
+    if (!truncate) {
+      sm = nearbyintf(sm); /* Round according to FPSCR mode */
+    }
+#endif
+    if (to_signed) {
+      result = (int32_t)sm;
+    } else {
+      result = (int32_t)(uint32_t)sm;
+    }
+  }
+  cpu->s[insn->sd & 31] = (uint32_t)result;
+
+  if (!truncate) {
+    restore_rounding_mode();
+  }
+}
+
+static void fpu_cvt_to_float(CPUState *cpu, const DecodedInsn *insn) {
+  bool from_signed = ((insn->op & 0x1) == 0);
+  uint32_t sm_raw = cpu->s[insn->sm & 31];
+
+  if (insn->is_double) {
+    double result;
+    if (from_signed) {
+      result = (double)(int32_t)sm_raw;
+    } else {
+      result = (double)sm_raw;
+    }
+    set_d(cpu, insn->dd, result);
+  } else {
+    float result;
+    if (from_signed) {
+      result = (float)(int32_t)sm_raw;
+    } else {
+      result = (float)sm_raw;
+    }
+    set_s(cpu, insn->sd, result);
+  }
+}
+
+static void fpu_cvt_fixed_to_float(CPUState *cpu, const DecodedInsn *insn) {
+  /* The imm field contains the number of fraction bits (fbits).
+   * For VCVT with <fbits> encoded as (32 - imm).
+   * Value = integer / 2^fbits */
+  uint8_t fbits = (uint8_t)(32 - insn->imm);
+  if (fbits == 0 || fbits > 32) {
+    fbits = 16; /* Default fallback */
+  }
+  uint32_t raw = cpu->s[insn->sm & 31];
+  float scale = (float)(1U << fbits);
+
+  /* Apply rounding mode for this conversion */
+  set_rounding_mode(cpu->fpscr);
+
+  if (insn->is_double) {
+    double result;
+    if (insn->is_signed) {
+      result = (double)(int32_t)raw / (double)(1U << fbits);
+    } else {
+      result = (double)raw / (double)(1U << fbits);
+    }
+    set_d(cpu, insn->dd, result);
+  } else {
+    float result;
+    if (insn->is_signed) {
+      result = (float)(int32_t)raw / scale;
+    } else {
+      result = (float)raw / scale;
+    }
+    set_s(cpu, insn->sd, result);
+  }
+
+  restore_rounding_mode();
+}
+
+static void fpu_cvt_to_fixed(CPUState *cpu, const DecodedInsn *insn) {
+  /* The imm field contains the number of fraction bits (fbits).
+   * Result = integer part of (float_value * 2^fbits) */
+  uint8_t fbits = (uint8_t)(32 - insn->imm);
+  if (fbits == 0 || fbits > 32) {
+    fbits = 16; /* Default fallback */
+  }
+
+  /* Apply rounding mode for this conversion */
+  set_rounding_mode(cpu->fpscr);
+
+  int32_t result;
+  if (insn->is_double) {
+    double dm = get_d(cpu, insn->dm);
+    double scaled = dm * (double)(1U << fbits);
+    if (insn->is_signed) {
+      result = (int32_t)scaled;
+    } else {
+      result = (int32_t)(uint32_t)scaled;
+    }
+  } else {
+    float sm = get_s(cpu, insn->sm);
+    float scaled = sm * (float)(1U << fbits);
+    if (insn->is_signed) {
+      result = (int32_t)scaled;
+    } else {
+      result = (int32_t)(uint32_t)scaled;
+    }
+  }
+  cpu->s[insn->sd & 31] = (uint32_t)result;
+
+  restore_rounding_mode();
+}
+
 int exec_fpu_cvt(Executor *exec, const DecodedInsn *insn) {
-  if (!is_fpu_enabled(exec)) {
-    exec->cpu.cfsr |= ARMV8M_UFSR_NOCP;
-    return ARMV8M_ERR_USAGE_FAULT;
+  int prologue = fpu_prologue(exec);
+  if (prologue != ARMV8M_OK) {
+    return prologue;
   }
-
-  /* Trigger lazy preservation if pending */
-  int lazy_result = check_lazy_preservation(exec);
-  if (lazy_result != ARMV8M_OK) {
-    return lazy_result;
-  }
-
-  mark_fp_active(exec);
   CPUState *cpu = &exec->cpu;
 
   /* The op field encodes the conversion type */
@@ -820,153 +918,25 @@ int exec_fpu_cvt(Executor *exec, const DecodedInsn *insn) {
     }
     break;
 
-  case 2:  /* VCVTR.S32.F32/F64: Float to signed int (FPSCR rounding) */
-  case 3:  /* VCVTR.U32.F32/F64: Float to unsigned int (FPSCR rounding) */
-  case 10: /* VCVT.S32.F32/F64: Float to signed int (truncate) */
-  case 11: /* VCVT.U32.F32/F64: Float to unsigned int (truncate) */
-  {
-    bool to_signed = ((insn->op & 0x1) == 0);
-    bool truncate = ((insn->op & 0x8) != 0);
-    int32_t result;
-
-    if (truncate) {
-      /* VCVT: Round toward zero (truncation) - C cast does this */
-    } else {
-      /* VCVTR: Use FPSCR rounding mode */
-      set_rounding_mode(cpu->fpscr);
-    }
-
-    if (insn->is_double) {
-      double dm = get_d(cpu, insn->dm);
-#if HAVE_FENV
-      if (!truncate) {
-        dm = nearbyint(dm); /* Round according to FPSCR mode */
-      }
-#endif
-      if (to_signed) {
-        result = (int32_t)dm;
-      } else {
-        result = (int32_t)(uint32_t)dm;
-      }
-    } else {
-      float sm = get_s(cpu, insn->sm);
-#if HAVE_FENV
-      if (!truncate) {
-        sm = nearbyintf(sm); /* Round according to FPSCR mode */
-      }
-#endif
-      if (to_signed) {
-        result = (int32_t)sm;
-      } else {
-        result = (int32_t)(uint32_t)sm;
-      }
-    }
-    cpu->s[insn->sd & 31] = (uint32_t)result;
-
-    if (!truncate) {
-      restore_rounding_mode();
-    }
+  case 2:  /* VCVTR.S32: Float to signed int (FPSCR rounding) */
+  case 3:  /* VCVTR.U32: Float to unsigned int (FPSCR rounding) */
+  case 10: /* VCVT.S32: Float to signed int (truncate) */
+  case 11: /* VCVT.U32: Float to unsigned int (truncate) */
+    fpu_cvt_to_int(cpu, insn);
     break;
-  }
 
   case 4: /* VCVT.F32/F64.S32: Signed int to float */
   case 5: /* VCVT.F32/F64.U32: Unsigned int to float */
-  {
-    bool from_signed = ((insn->op & 0x1) == 0);
-    uint32_t sm_raw = cpu->s[insn->sm & 31];
-
-    if (insn->is_double) {
-      double result;
-      if (from_signed) {
-        result = (double)(int32_t)sm_raw;
-      } else {
-        result = (double)sm_raw;
-      }
-      set_d(cpu, insn->dd, result);
-    } else {
-      float result;
-      if (from_signed) {
-        result = (float)(int32_t)sm_raw;
-      } else {
-        result = (float)sm_raw;
-      }
-      set_s(cpu, insn->sd, result);
-    }
+    fpu_cvt_to_float(cpu, insn);
     break;
-  }
 
   case 6: /* VCVT.F32.FX / VCVT.F64.FX: Fixed-point to float */
-  {
-    /* The imm field contains the number of fraction bits (fbits).
-     * For VCVT with <fbits> encoded as (32 - imm).
-     * Value = integer / 2^fbits */
-    uint8_t fbits = (uint8_t)(32 - insn->imm);
-    if (fbits == 0 || fbits > 32) {
-      fbits = 16; /* Default fallback */
-    }
-    uint32_t raw = cpu->s[insn->sm & 31];
-    float scale = (float)(1U << fbits);
-
-    /* Apply rounding mode for this conversion */
-    set_rounding_mode(cpu->fpscr);
-
-    if (insn->is_double) {
-      double result;
-      if (insn->is_signed) {
-        result = (double)(int32_t)raw / (double)(1U << fbits);
-      } else {
-        result = (double)raw / (double)(1U << fbits);
-      }
-      set_d(cpu, insn->dd, result);
-    } else {
-      float result;
-      if (insn->is_signed) {
-        result = (float)(int32_t)raw / scale;
-      } else {
-        result = (float)raw / scale;
-      }
-      set_s(cpu, insn->sd, result);
-    }
-
-    restore_rounding_mode();
+    fpu_cvt_fixed_to_float(cpu, insn);
     break;
-  }
 
   case 7: /* VCVT.FX.F32 / VCVT.FX.F64: Float to fixed-point */
-  {
-    /* The imm field contains the number of fraction bits (fbits).
-     * Result = integer part of (float_value * 2^fbits) */
-    uint8_t fbits = (uint8_t)(32 - insn->imm);
-    if (fbits == 0 || fbits > 32) {
-      fbits = 16; /* Default fallback */
-    }
-
-    /* Apply rounding mode for this conversion */
-    set_rounding_mode(cpu->fpscr);
-
-    int32_t result;
-    if (insn->is_double) {
-      double dm = get_d(cpu, insn->dm);
-      double scaled = dm * (double)(1U << fbits);
-      if (insn->is_signed) {
-        result = (int32_t)scaled;
-      } else {
-        result = (int32_t)(uint32_t)scaled;
-      }
-    } else {
-      float sm = get_s(cpu, insn->sm);
-      float scaled = sm * (float)(1U << fbits);
-      if (insn->is_signed) {
-        result = (int32_t)scaled;
-      } else {
-        result = (int32_t)(uint32_t)scaled;
-      }
-    }
-    cpu->s[insn->sd & 31] = (uint32_t)result;
-
-    restore_rounding_mode();
+    fpu_cvt_to_fixed(cpu, insn);
     break;
-  }
 
   default:
     return ARMV8M_ERR_UNDEFINED_INSN;

@@ -9,6 +9,9 @@ _build/
 *.elf
 *.lst
 
+# Symlink into build/ created by some editor/LSP setups
+compile_commands.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -46,3 +49,6 @@ result
 *.log
 test_results/
 *_output.txt
+.coverage
+coverage.xml
+.pytest_cache/

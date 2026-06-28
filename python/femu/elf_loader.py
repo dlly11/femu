@@ -366,9 +366,8 @@ def suggest_memory_config(elf: ElfInfo) -> dict[str, int]:
         if seg.is_executable and len(seg.data) >= 4:
             initial_sp = int.from_bytes(seg.data[:4], "little")
             # If initial SP is in RAM region, extend RAM to cover it
-            if ram_base is not None and initial_sp > ram_base:
-                if initial_sp > ram_end:
-                    ram_end = initial_sp
+            if ram_base is not None and initial_sp > ram_base and initial_sp > ram_end:
+                ram_end = initial_sp
             break
 
     # Round up sizes to power of 2 for convenience

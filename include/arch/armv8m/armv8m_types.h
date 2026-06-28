@@ -53,6 +53,12 @@ extern "C" {
 #define ARMV8M_XPSR_GE_MASK (0xFU << 16) /* GE[3:0] flags for parallel ops */
 #define ARMV8M_XPSR_GE_SHIFT 16
 
+/* Extract a single condition flag from xPSR as 0 or 1. */
+#define ARMV8M_GET_N(xpsr) (((xpsr) >> 31) & 1U)
+#define ARMV8M_GET_Z(xpsr) (((xpsr) >> 30) & 1U)
+#define ARMV8M_GET_C(xpsr) (((xpsr) >> 29) & 1U)
+#define ARMV8M_GET_V(xpsr) (((xpsr) >> 28) & 1U)
+
 /* CONTROL register bits */
 #define ARMV8M_CONTROL_NPRIV (1U << 0) /* Thread mode privilege */
 #define ARMV8M_CONTROL_SPSEL (1U << 1) /* Stack pointer select */
@@ -63,9 +69,10 @@ extern "C" {
 #define ARMV8M_CCR_UNALIGN_TRP (1U << 3) /* Unaligned access trap */
 #define ARMV8M_CCR_DIV_0_TRP (1U << 4)   /* Divide by zero trap */
 #define ARMV8M_CCR_BFHFNMIGN                                                   \
-  (1U << 8)                           /* Ignore BusFault during HardFault/NMI */
-#define ARMV8M_CCR_STKALIGN (1U << 9) /* Stack 8-byte alignment on exception   \
-                                       */
+  (1U << 8) /* Ignore BusFault during HardFault/NMI */
+#define ARMV8M_CCR_STKALIGN                                                    \
+  (1U << 9) /* Stack 8-byte alignment on exception                             \
+             */
 
 /* CFSR (Configurable Fault Status Register) - combines MMFSR, BFSR, UFSR */
 /* MMFSR bits [7:0] */

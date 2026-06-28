@@ -186,6 +186,78 @@ static int validate_exc_return(const Executor *exec, uint32_t exc_return) {
  * Exception Entry
  *============================================================================*/
 
+/**
+ * Build the EXC_RETURN value placed in LR on exception entry, encoding the
+ * frame type, prior mode, stack selection, and (with TrustZone) security state.
+ */
+static uint32_t build_exc_return(const Executor *exec, bool use_extended_frame,
+                                 bool use_psp) {
+  const CPUState *cpu = &exec->cpu;
+  uint32_t exc_return = EXC_RETURN_PREFIX;
+
+  /* FTYPE: 1 = basic frame (no FP), 0 = extended frame (FP) */
+  if (!use_extended_frame) {
+    exc_return |= EXC_RETURN_FTYPE;
+  }
+  if (cpu->mode == MODE_THREAD) {
+    exc_return |= EXC_RETURN_MODE; /* Was in Thread mode */
+  }
+  if (use_psp) {
+    exc_return |= EXC_RETURN_SPSEL; /* Was using PSP */
+  }
+
+  /* TrustZone: S = secure stack used, ES = exception taken to secure state */
+  if (exec->has_trustzone && cpu->security == SECURITY_SECURE) {
+    exc_return |= EXC_RETURN_S | EXC_RETURN_ES;
+  }
+  return exc_return;
+}
+
+static int escalate_to_hardfault(Executor *exec, int exception);
+
+/**
+ * Preserve FPU context on exception entry (lazy reservation or eager save).
+ * Returns true if entry must abort, with *result set to the value to return.
+ */
+static bool preserve_fpu_on_entry(Executor *exec, uint32_t frameptr,
+                                  bool use_extended_frame, bool lazy_stacking,
+                                  int exception, int *result) {
+  if (!use_extended_frame) {
+    return false;
+  }
+  CPUState *cpu = &exec->cpu;
+  if (lazy_stacking) {
+    /* Lazy stacking: reserve space but don't save yet */
+    cpu->fpccr |= ARMV8M_FPCCR_LSPACT;
+    cpu->fpcar = frameptr; /* Store frame pointer for later */
+    return false;
+  }
+
+  /* Eager stacking: save FPU registers now */
+  bool fault = false;
+  if (save_fpu_context(exec, frameptr, &fault) != ARMV8M_OK) {
+    if (exception != ARMV8M_EXC_HARDFAULT && exception != ARMV8M_EXC_NMI) {
+      cpu->cfsr |= ARMV8M_MMFSR_MLSPERR;
+    }
+    *result = escalate_to_hardfault(exec, exception);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Escalate a failed exception entry to HardFault. If already in HardFault/NMI
+ * this is an unrecoverable lockup (halt). Returns the result to propagate.
+ */
+static int escalate_to_hardfault(Executor *exec, int exception) {
+  if (exception != ARMV8M_EXC_HARDFAULT && exception != ARMV8M_EXC_NMI) {
+    return armv8m_exception_entry(exec, ARMV8M_EXC_HARDFAULT);
+  }
+  /* Already in HardFault/NMI - lockup */
+  exec->cpu.halted = true;
+  return ARMV8M_ERR_HARD_FAULT;
+}
+
 int armv8m_exception_entry(Executor *exec, int exception) {
   CPUState *cpu = &exec->cpu;
   bool fault = false;
@@ -223,12 +295,7 @@ int armv8m_exception_entry(Executor *exec, int exception) {
   if (armv8m_check_stack_limit(cpu, frameptr)) {
     /* Stack overflow during exception entry */
     cpu->cfsr |= ARMV8M_UFSR_STKOF;
-    if (exception != ARMV8M_EXC_HARDFAULT && exception != ARMV8M_EXC_NMI) {
-      return armv8m_exception_entry(exec, ARMV8M_EXC_HARDFAULT);
-    }
-    /* Already in HardFault/NMI - lockup */
-    cpu->halted = true;
-    return ARMV8M_ERR_HARD_FAULT;
+    return escalate_to_hardfault(exec, exception);
   }
 
   /* 5. Push context: R0, R1, R2, R3, R12, LR, PC, xPSR */
@@ -259,32 +326,14 @@ int armv8m_exception_entry(Executor *exec, int exception) {
 
   if (fault) {
     /* Stack push failed - escalate to HardFault */
-    if (exception != ARMV8M_EXC_HARDFAULT && exception != ARMV8M_EXC_NMI) {
-      return armv8m_exception_entry(exec, ARMV8M_EXC_HARDFAULT);
-    }
-    /* Already in HardFault/NMI - lockup */
-    cpu->halted = true;
-    return ARMV8M_ERR_HARD_FAULT;
+    return escalate_to_hardfault(exec, exception);
   }
 
   /* 5. Handle FPU context preservation */
-  if (use_extended_frame) {
-    if (lazy_stacking) {
-      /* Lazy stacking: reserve space but don't save yet */
-      cpu->fpccr |= ARMV8M_FPCCR_LSPACT;
-      cpu->fpcar = frameptr; /* Store frame pointer for later */
-    } else {
-      /* Eager stacking: save FPU registers now */
-      int fpu_result = save_fpu_context(exec, frameptr, &fault);
-      if (fpu_result != ARMV8M_OK) {
-        if (exception != ARMV8M_EXC_HARDFAULT && exception != ARMV8M_EXC_NMI) {
-          cpu->cfsr |= ARMV8M_MMFSR_MLSPERR;
-          return armv8m_exception_entry(exec, ARMV8M_EXC_HARDFAULT);
-        }
-        cpu->halted = true;
-        return ARMV8M_ERR_HARD_FAULT;
-      }
-    }
+  int fpu_escalation;
+  if (preserve_fpu_on_entry(exec, frameptr, use_extended_frame, lazy_stacking,
+                            exception, &fpu_escalation)) {
+    return fpu_escalation;
   }
 
   /* 6. Update SP */
@@ -295,33 +344,7 @@ int armv8m_exception_entry(Executor *exec, int exception) {
   }
 
   /* 7. Generate EXC_RETURN value for LR */
-  uint32_t exc_return = EXC_RETURN_PREFIX;
-
-  /* Set FTYPE: 1 = basic frame (no FP), 0 = extended frame (FP) */
-  if (!use_extended_frame) {
-    exc_return |= EXC_RETURN_FTYPE;
-  }
-
-  if (cpu->mode == MODE_THREAD) {
-    exc_return |= EXC_RETURN_MODE; /* Was in Thread mode */
-  }
-  if (use_psp) {
-    exc_return |= EXC_RETURN_SPSEL; /* Was using PSP */
-  }
-
-  /* TrustZone bits */
-  if (exec->has_trustzone) {
-    /* S bit: which stack was used (secure or non-secure) */
-    if (cpu->security == SECURITY_SECURE) {
-      exc_return |= EXC_RETURN_S;
-    }
-    /* ES bit: exception taken to secure state */
-    if (cpu->security == SECURITY_SECURE) {
-      exc_return |= EXC_RETURN_ES;
-    }
-  }
-
-  cpu->r[ARMV8M_REG_LR] = exc_return;
+  cpu->r[ARMV8M_REG_LR] = build_exc_return(exec, use_extended_frame, use_psp);
 
   /* 7. Load vector address */
   uint32_t vtor = get_vtor(exec);
@@ -354,6 +377,45 @@ int armv8m_exception_entry(Executor *exec, int exception) {
 /*============================================================================
  * Exception Return
  *============================================================================*/
+
+/* Apply TrustZone security/stack switching on exception return. Returns the
+ * (possibly NS-banked) stack pointer to install. */
+static uint32_t exc_return_apply_trustzone(Executor *exec, uint32_t exc_return,
+                                           bool return_to_psp,
+                                           bool return_to_thread,
+                                           uint32_t new_sp) {
+  if (!exec->has_trustzone) {
+    return new_sp;
+  }
+  bool return_to_secure = (exc_return & EXC_RETURN_ES) != 0;
+  exec->cpu.security = return_to_secure ? SECURITY_SECURE : SECURITY_NONSECURE;
+  if (!return_to_secure) {
+    /* Use non-secure banked stack pointers */
+    new_sp = (return_to_psp && return_to_thread) ? exec->tz_regs.psp_ns
+                                                 : exec->tz_regs.msp_ns;
+  }
+  return new_sp;
+}
+
+/* Restore mode, current_exception, and SP on exception return. */
+static void exc_return_restore_mode(CPUState *cpu, bool return_to_thread,
+                                    bool return_to_psp, uint32_t new_sp) {
+  if (return_to_thread) {
+    cpu->mode = MODE_THREAD;
+    cpu->current_exception = 0;
+    if (return_to_psp) {
+      cpu->sp_process = new_sp;
+    } else {
+      cpu->sp_main = new_sp;
+    }
+  } else {
+    /* Returning to Handler mode (tail-chaining or nested exception return).
+     * current_exception is set by the caller or NVIC. */
+    cpu->mode = MODE_HANDLER;
+    cpu->sp_main = new_sp;
+  }
+  cpu->r[ARMV8M_REG_SP] = new_sp;
+}
 
 int armv8m_exception_return(Executor *exec, uint32_t exc_return) {
   CPUState *cpu = &exec->cpu;
@@ -430,46 +492,11 @@ int armv8m_exception_return(Executor *exec, uint32_t exc_return) {
   }
 
   /* Handle TrustZone security state switching */
-  if (exec->has_trustzone) {
-    bool return_to_secure = (exc_return & EXC_RETURN_ES) != 0;
-
-    if (return_to_secure && cpu->security == SECURITY_NONSECURE) {
-      /* Transitioning from non-secure to secure on exception return */
-      /* This should have been validated, but double-check */
-    }
-
-    cpu->security = return_to_secure ? SECURITY_SECURE : SECURITY_NONSECURE;
-
-    /* If returning to non-secure, select the appropriate banked registers */
-    if (!return_to_secure) {
-      /* Use non-secure stack pointers */
-      if (return_to_psp && return_to_thread) {
-        new_sp = exec->tz_regs.psp_ns;
-      } else {
-        new_sp = exec->tz_regs.msp_ns;
-      }
-    }
-  }
+  new_sp = exc_return_apply_trustzone(exec, exc_return, return_to_psp,
+                                      return_to_thread, new_sp);
 
   /* Update CPU state based on return mode */
-  if (return_to_thread) {
-    cpu->mode = MODE_THREAD;
-    cpu->current_exception = 0;
-
-    if (return_to_psp) {
-      cpu->sp_process = new_sp;
-      cpu->r[ARMV8M_REG_SP] = cpu->sp_process;
-    } else {
-      cpu->sp_main = new_sp;
-      cpu->r[ARMV8M_REG_SP] = cpu->sp_main;
-    }
-  } else {
-    /* Returning to Handler mode (tail-chaining or nested exception return) */
-    cpu->mode = MODE_HANDLER;
-    cpu->sp_main = new_sp;
-    cpu->r[ARMV8M_REG_SP] = cpu->sp_main;
-    /* current_exception should be set by the caller or NVIC */
-  }
+  exc_return_restore_mode(cpu, return_to_thread, return_to_psp, new_sp);
 
   /* Restore IT state from xPSR if present */
   uint8_t it_low = (uint8_t)((xpsr >> 25) & 0x3);

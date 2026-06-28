@@ -20,9 +20,11 @@ Connect with:
 
 from __future__ import annotations
 
+import contextlib
 import socket
 from typing import TYPE_CHECKING
 
+from . import _emulator_cffi as cffi
 from .emulator import EmulatorState
 from .logging import LogCategory, get_logger
 
@@ -79,13 +81,14 @@ class GDBServer:
             self._socket.bind((self.host, self.port))
             self._socket.listen(1)
 
-            logger.info(f"GDB server listening on {self.host}:{self.port}")
-            print(f"GDB server listening on port {self.port}")
-            print(f"Connect with: arm-none-eabi-gdb -ex 'target remote :{self.port}'")
+            logger.info("GDB server listening on %s:%d", self.host, self.port)
+            print(f"GDB server listening on port {self.port}")  # noqa: T201 - CLI output
+            connect_hint = f"Connect with: arm-none-eabi-gdb -ex 'target remote :{self.port}'"
+            print(connect_hint)  # noqa: T201 - CLI output
 
             self._client, addr = self._socket.accept()
-            logger.info(f"GDB client connected from {addr}")
-            print(f"GDB client connected from {addr}")
+            logger.info("GDB client connected from %s", addr)
+            print(f"GDB client connected from {addr}")  # noqa: T201 - CLI output
 
             self._running = True
             self._main_loop()
@@ -103,17 +106,13 @@ class GDBServer:
     def _cleanup(self) -> None:
         """Clean up sockets."""
         if self._client:
-            try:
+            with contextlib.suppress(OSError):
                 self._client.close()
-            except Exception:
-                pass
             self._client = None
 
         if self._socket:
-            try:
+            with contextlib.suppress(OSError):
                 self._socket.close()
-            except Exception:
-                pass
             self._socket = None
 
     def _main_loop(self) -> None:
@@ -123,12 +122,12 @@ class GDBServer:
             if packet is None:
                 break
 
-            logger.debug(f"GDB <- {packet}")
+            logger.debug("GDB <- %s", packet)
 
             response = self._handle_command(packet)
 
             if response is not None:
-                logger.debug(f"GDB -> {response}")
+                logger.debug("GDB -> %s", response)
                 self._send_packet(response)
 
     # =========================================================================
@@ -185,7 +184,7 @@ class GDBServer:
             received = checksum.decode("latin-1")
 
             if expected != received:
-                logger.warning(f"Checksum mismatch: expected {expected}, got {received}")
+                logger.warning("Checksum mismatch: expected %s, got %s", expected, received)
                 if not self._no_ack_mode:
                     self._client.send(b"-")  # NACK
                 return None
@@ -294,7 +293,7 @@ class GDBServer:
 
         # Unknown command - return empty response
         else:
-            logger.debug(f"Unknown GDB command: {cmd}")
+            logger.debug("Unknown GDB command: %s", cmd)
             return ""
 
     def _cmd_query_supported(self, cmd: str) -> str:
@@ -368,8 +367,8 @@ class GDBServer:
                 self.emu.status = self._from_le_hex(data[offset : offset + 8])
 
             return "OK"
-        except Exception as e:
-            logger.error(f"Error writing registers: {e}")
+        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
+            logger.error("Error writing registers: %s", e)
             return "E01"
 
     def _cmd_read_register(self, args: str) -> str:
@@ -395,8 +394,8 @@ class GDBServer:
                 return "E01"
 
             return self._to_le_hex(val)
-        except Exception as e:
-            logger.error(f"Error reading register {args}: {e}")
+        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
+            logger.error("Error reading register %s: %s", args, e)
             return "E01"
 
     def _cmd_write_register(self, args: str) -> str:
@@ -424,8 +423,8 @@ class GDBServer:
                 return "E01"
 
             return "OK"
-        except Exception as e:
-            logger.error(f"Error writing register {args}: {e}")
+        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
+            logger.error("Error writing register %s: %s", args, e)
             return "E01"
 
     def _cmd_read_memory(self, args: str) -> str:
@@ -439,8 +438,8 @@ class GDBServer:
 
             # Convert to hex
             return data.hex()
-        except Exception as e:
-            logger.error(f"Error reading memory {args}: {e}")
+        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
+            logger.error("Error reading memory %s: %s", args, e)
             return "E01"
 
     def _cmd_write_memory(self, args: str) -> str:
@@ -460,8 +459,8 @@ class GDBServer:
                 return "E01"
 
             return "OK"
-        except Exception as e:
-            logger.error(f"Error writing memory {args}: {e}")
+        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
+            logger.error("Error writing memory %s: %s", args, e)
             return "E01"
 
     def _cmd_write_memory_binary(self, args: str) -> str:
@@ -487,8 +486,8 @@ class GDBServer:
                 return "E01"
 
             return "OK"
-        except Exception as e:
-            logger.error(f"Error writing binary memory: {e}")
+        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
+            logger.error("Error writing binary memory: %s", e)
             return "E01"
 
     def _cmd_continue(self, cmd: str) -> str:
@@ -542,24 +541,18 @@ class GDBServer:
                 self.emu.add_breakpoint(addr)
                 return "OK"
             elif bp_type == 2:  # Write watchpoint
-                from . import _emulator_cffi as cffi
-
                 self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_WRITE)
                 return "OK"
             elif bp_type == 3:  # Read watchpoint
-                from . import _emulator_cffi as cffi
-
                 self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_READ)
                 return "OK"
             elif bp_type == 4:  # Access watchpoint (read/write)
-                from . import _emulator_cffi as cffi
-
                 self.emu.add_watchpoint(addr, size, cffi.WATCHPOINT_ACCESS)
                 return "OK"
             else:
                 return ""  # Unsupported
-        except Exception as e:
-            logger.error(f"Error setting breakpoint/watchpoint: {e}")
+        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
+            logger.error("Error setting breakpoint/watchpoint: %s", e)
             return "E01"
 
     def _cmd_clear_breakpoint(self, args: str) -> str:
@@ -574,24 +567,18 @@ class GDBServer:
                 self.emu.remove_breakpoint(addr)
                 return "OK"
             elif bp_type == 2:  # Write watchpoint
-                from . import _emulator_cffi as cffi
-
                 self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_WRITE)
                 return "OK"
             elif bp_type == 3:  # Read watchpoint
-                from . import _emulator_cffi as cffi
-
                 self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_READ)
                 return "OK"
             elif bp_type == 4:  # Access watchpoint (read/write)
-                from . import _emulator_cffi as cffi
-
                 self.emu.remove_watchpoint(addr, size, cffi.WATCHPOINT_ACCESS)
                 return "OK"
             else:
                 return ""
-        except Exception as e:
-            logger.error(f"Error clearing breakpoint/watchpoint: {e}")
+        except Exception as e:  # noqa: BLE001 - reply with error, never crash server
+            logger.error("Error clearing breakpoint/watchpoint: %s", e)
             return "E01"
 
     def _cmd_detach(self) -> str:
@@ -621,8 +608,6 @@ class GDBServer:
 
     def _watchpoint_stop_reply(self) -> str:
         """Generate stop reply for watchpoint hit."""
-        from . import _emulator_cffi as cffi
-
         addr = self.emu.watchpoint_hit_addr
         wp_type = self.emu.watchpoint_hit_type
 

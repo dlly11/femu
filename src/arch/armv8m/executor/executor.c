@@ -364,6 +364,9 @@ static void advance_it_state(CPUState *cpu) {
  *============================================================================*/
 
 void armv8m_exec_init(Executor *exec) {
+  if (exec == NULL) {
+    return;
+  }
   memset(exec, 0, sizeof(Executor));
 
   /* Set default CPU state */
@@ -592,123 +595,187 @@ int armv8m_exec_insn(Executor *exec, const DecodedInsn *insn) {
  * Single-Step Execution
  *============================================================================*/
 
+/**
+ * Handle sleep/wake at the top of a step. If sleeping and an interrupt is
+ * pending, clears the sleeping flag. Returns true if the CPU is still sleeping
+ * (the caller should stop stepping).
+ */
+static bool exec_still_sleeping(Executor *exec) {
+  CPUState *cpu = &exec->cpu;
+  if (!cpu->sleeping) {
+    return false;
+  }
+  if (exec->nvic.get_pending && exec->nvic.get_pending(exec->nvic.ctx) >= 0) {
+    cpu->sleeping = false;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * If the instruction's condition is false, perform the skip bookkeeping
+ * (advance PC past the instruction, advance IT state, count the cycle) and
+ * return true. COND_AL always passes.
+ */
+static bool exec_skip_if_cond_failed(CPUState *cpu, ConditionCode cond,
+                                     uint8_t insn_size) {
+  if (cond == COND_AL) {
+    return false;
+  }
+  /* Materialize lazy flags before the condition check */
+  armv8m_materialize_flags(cpu);
+  if (armv8m_check_condition(cpu->xpsr, cond)) {
+    return false;
+  }
+  cpu->r[ARMV8M_REG_PC] += insn_size;
+  advance_it_state(cpu);
+  cpu->cycles++;
+  return true;
+}
+
+/**
+ * If a pending exception has higher priority than the current execution
+ * priority, enter it. Returns the exception-entry result, or ARMV8M_OK when no
+ * exception is taken. When non-NULL, *entered is set to whether an exception
+ * was actually taken (callers that cache blocks must re-fetch on entry).
+ */
+static int exec_take_pending_exception(Executor *exec, bool *entered) {
+  CPUState *cpu = &exec->cpu;
+  if (entered) {
+    *entered = false;
+  }
+  if (!exec->nvic.get_pending) {
+    return ARMV8M_OK;
+  }
+  int pending = exec->nvic.get_pending(exec->nvic.ctx);
+  if (pending < 0) {
+    return ARMV8M_OK;
+  }
+
+  /* Get current execution priority */
+  int current_pri = -1;
+  if (cpu->current_exception > 0 && exec->nvic.get_priority) {
+    current_pri =
+        exec->nvic.get_priority(exec->nvic.ctx, cpu->current_exception);
+  }
+
+  int pending_pri = exec->nvic.get_priority
+                        ? exec->nvic.get_priority(exec->nvic.ctx, pending)
+                        : 0;
+
+  if (pending_pri < current_pri || current_pri < 0) {
+    if (entered) {
+      *entered = true;
+    }
+    return armv8m_exception_entry(exec, pending);
+  }
+  return ARMV8M_OK;
+}
+
+/**
+ * Fetch and decode the instruction at `pc` into *insn, using the instruction
+ * cache when available. Returns ARMV8M_OK on success, a bus fault if the memory
+ * cannot be read, or the decoder's error code.
+ */
+static int exec_fetch_decode(Executor *exec, uint32_t pc, DecodedInsn *insn) {
+  /* Try instruction cache first */
+  const DecodedInsn *cached =
+      exec->icache ? armv8m_icache_lookup(exec->icache, pc) : NULL;
+  if (cached) {
+    *insn = *cached;
+    return ARMV8M_OK;
+  }
+
+  /* Cache miss - fetch and decode */
+  const uint8_t *mem =
+      exec->mem.get_ptr ? exec->mem.get_ptr(exec->mem.ctx, pc, 4) : NULL;
+  if (!mem) {
+    return ARMV8M_ERR_BUS_FAULT;
+  }
+
+  armv8m_decode_init(insn);
+  int decoded = armv8m_decode(mem, pc, insn);
+  if (decoded < 0) {
+    return decoded;
+  }
+
+  if (exec->icache) {
+    armv8m_icache_insert(exec->icache, pc, insn);
+  }
+  return ARMV8M_OK;
+}
+
+/**
+ * Emit the post-execution TRACE log line for an instruction, including the
+ * destination register change when one was captured. No-op when tracing is
+ * disabled.
+ */
+static void exec_trace_result(const Executor *exec, uint32_t old_pc,
+                              const DecodedInsn *insn, int trace_rd,
+                              uint32_t rd_before, int result) {
+  if (!emu_log_is_enabled(EMU_LOG_TRACE, EMU_LOG_CAT_EXECUTOR)) {
+    return;
+  }
+  if (trace_rd >= 0 && result == ARMV8M_OK) {
+    uint32_t rd_after = exec->cpu.r[trace_rd];
+    if (rd_after != rd_before) {
+      EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR,
+                    "0x%08X: insn_type=%d ; R%d: 0x%X -> 0x%X", old_pc,
+                    insn->type, trace_rd, rd_before, rd_after);
+      return;
+    }
+  }
+  EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "0x%08X: insn_type=%d", old_pc,
+                insn->type);
+}
+
 int armv8m_exec_step(Executor *exec) {
   CPUState *cpu = &exec->cpu;
   DecodedInsn insn;
-  const DecodedInsn *cached_insn = NULL;
   int result;
 
   /* Check if halted or sleeping */
   if (cpu->halted) {
     return ARMV8M_ERR_HALTED;
   }
-
-  if (cpu->sleeping) {
-    /* Check for pending interrupts to wake up */
-    if (exec->nvic.get_pending && exec->nvic.get_pending(exec->nvic.ctx) >= 0) {
-      cpu->sleeping = false;
-    } else {
-      return ARMV8M_OK; /* Still sleeping */
-    }
+  if (exec_still_sleeping(exec)) {
+    return ARMV8M_OK; /* Still sleeping */
   }
 
-  /* Fetch instruction from PC */
+  /* Fetch and decode the instruction at PC */
   uint32_t pc = cpu->r[ARMV8M_REG_PC];
-
-  /* Try instruction cache first */
-  if (exec->icache) {
-    cached_insn = armv8m_icache_lookup(exec->icache, pc);
-  }
-
-  if (cached_insn) {
-    /* Cache hit - use cached instruction */
-    insn = *cached_insn;
-  } else {
-    /* Cache miss - fetch and decode */
-    const uint8_t *mem = NULL;
-
-    if (exec->mem.get_ptr) {
-      mem = exec->mem.get_ptr(exec->mem.ctx, pc, 4);
-    }
-
-    if (!mem) {
-      return ARMV8M_ERR_BUS_FAULT;
-    }
-
-    /* Decode instruction */
-    armv8m_decode_init(&insn);
-    result = armv8m_decode(mem, pc, &insn);
-
-    if (result < 0) {
-      return result;
-    }
-
-    /* Insert into cache */
-    if (exec->icache) {
-      armv8m_icache_insert(exec->icache, pc, &insn);
-    }
+  result = exec_fetch_decode(exec, pc, &insn);
+  if (result != ARMV8M_OK) {
+    return result;
   }
 
   /* Check IT block condition */
-  ConditionCode it_cond = get_it_condition(cpu);
-  if (it_cond != COND_AL) {
-    /* Materialize lazy flags before condition check */
-    armv8m_materialize_flags(cpu);
-    if (!armv8m_check_condition(cpu->xpsr, it_cond)) {
-      /* Condition failed, skip instruction */
-      cpu->r[ARMV8M_REG_PC] += insn.size;
-      advance_it_state(cpu);
-      cpu->cycles++;
-      return ARMV8M_OK;
-    }
+  if (exec_skip_if_cond_failed(cpu, get_it_condition(cpu), insn.size)) {
+    return ARMV8M_OK;
   }
 
   /* Check instruction's own condition (for conditional branches) */
-  if (insn.cond != COND_AL && insn.type == INSN_BRANCH) {
-    /* Materialize lazy flags before condition check */
-    armv8m_materialize_flags(cpu);
-    if (!armv8m_check_condition(cpu->xpsr, insn.cond)) {
-      /* Condition failed, skip instruction */
-      cpu->r[ARMV8M_REG_PC] += insn.size;
-      advance_it_state(cpu);
-      cpu->cycles++;
-      return ARMV8M_OK;
-    }
+  ConditionCode branch_cond = (insn.type == INSN_BRANCH) ? insn.cond : COND_AL;
+  if (exec_skip_if_cond_failed(cpu, branch_cond, insn.size)) {
+    return ARMV8M_OK;
   }
 
   /* Save PC for branch detection */
   uint32_t old_pc = cpu->r[ARMV8M_REG_PC];
 
-  /* TRACE: Log instruction execution with register changes for data operations
-   */
+  /* TRACE: capture destination register value before execution */
   uint32_t rd_before = 0;
   int trace_rd = -1;
-  if (emu_log_is_enabled(EMU_LOG_TRACE, EMU_LOG_CAT_EXECUTOR)) {
-    /* Capture destination register value before execution */
-    if (insn.rd < ARMV8M_NUM_REGS) {
-      trace_rd = (int)insn.rd;
-      rd_before = cpu->r[trace_rd];
-    }
+  if (emu_log_is_enabled(EMU_LOG_TRACE, EMU_LOG_CAT_EXECUTOR) &&
+      insn.rd < ARMV8M_NUM_REGS) {
+    trace_rd = (int)insn.rd;
+    rd_before = cpu->r[trace_rd];
   }
 
   /* Execute instruction */
   result = armv8m_exec_insn(exec, &insn);
 
-  /* TRACE: Log after execution */
-  if (trace_rd >= 0 && result == ARMV8M_OK) {
-    uint32_t rd_after = cpu->r[trace_rd];
-    if (rd_after != rd_before) {
-      EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR,
-                    "0x%08X: insn_type=%d ; R%d: 0x%X -> 0x%X", old_pc,
-                    insn.type, trace_rd, rd_before, rd_after);
-    } else {
-      EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "0x%08X: insn_type=%d", old_pc,
-                    insn.type);
-    }
-  } else if (emu_log_is_enabled(EMU_LOG_TRACE, EMU_LOG_CAT_EXECUTOR)) {
-    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "0x%08X: insn_type=%d", old_pc,
-                  insn.type);
-  }
+  exec_trace_result(exec, old_pc, &insn, trace_rd, rd_before, result);
 
   if (result != ARMV8M_OK) {
     return result;
@@ -729,25 +796,7 @@ int armv8m_exec_step(Executor *exec) {
   cpu->cycles++;
 
   /* Check for pending exceptions */
-  if (exec->nvic.get_pending) {
-    int pending = exec->nvic.get_pending(exec->nvic.ctx);
-    if (pending >= 0) {
-      /* Get current execution priority */
-      int current_pri = -1;
-      if (cpu->current_exception > 0 && exec->nvic.get_priority) {
-        current_pri =
-            exec->nvic.get_priority(exec->nvic.ctx, cpu->current_exception);
-      }
-
-      int pending_pri = exec->nvic.get_priority
-                            ? exec->nvic.get_priority(exec->nvic.ctx, pending)
-                            : 0;
-
-      if (pending_pri < current_pri || current_pri < 0) {
-        result = armv8m_exception_entry(exec, pending);
-      }
-    }
-  }
+  result = exec_take_pending_exception(exec, NULL);
 
   return result;
 }
@@ -934,14 +983,8 @@ int64_t armv8m_exec_run_blocks(Executor *exec, uint64_t max_cycles) {
       result = ARMV8M_ERR_HALTED;
       break;
     }
-
-    if (cpu->sleeping) {
-      if (exec->nvic.get_pending &&
-          exec->nvic.get_pending(exec->nvic.ctx) >= 0) {
-        cpu->sleeping = false;
-      } else {
-        break;
-      }
+    if (exec_still_sleeping(exec)) {
+      break;
     }
 
     /* Get or build basic block at current PC */
@@ -959,23 +1002,8 @@ int64_t armv8m_exec_run_blocks(Executor *exec, uint64_t max_cycles) {
     result = armv8m_exec_block(exec, block);
 
     /* Check for pending exceptions */
-    if (result == ARMV8M_OK && exec->nvic.get_pending) {
-      int pending = exec->nvic.get_pending(exec->nvic.ctx);
-      if (pending >= 0) {
-        int current_pri = -1;
-        if (cpu->current_exception > 0 && exec->nvic.get_priority) {
-          current_pri =
-              exec->nvic.get_priority(exec->nvic.ctx, cpu->current_exception);
-        }
-
-        int pending_pri = exec->nvic.get_priority
-                              ? exec->nvic.get_priority(exec->nvic.ctx, pending)
-                              : 0;
-
-        if (pending_pri < current_pri || current_pri < 0) {
-          result = armv8m_exception_entry(exec, pending);
-        }
-      }
+    if (result == ARMV8M_OK) {
+      result = exec_take_pending_exception(exec, NULL);
     }
 
     if (cpu->sleeping || cpu->halted) {
@@ -1024,6 +1052,43 @@ static bool was_branch_taken(const Executor *exec, const BasicBlock *block) {
   }
 }
 
+/**
+ * Select the next block to execute after `block`, following the cached
+ * taken/not-taken links when they are still valid for the current PC, and
+ * establishing a link for next time on a miss. Returns NULL when no block is
+ * available at the next PC. Shared by the threaded and linked run loops.
+ */
+static BasicBlock *exec_next_linked_block(Executor *exec, BasicBlock *block) {
+  bool taken = was_branch_taken(exec, block);
+  uint32_t pc = exec->cpu.r[ARMV8M_REG_PC];
+
+  BasicBlock *next = NULL;
+  if (taken && block->link_taken &&
+      block->link_taken->generation == exec->blocks->generation &&
+      block->link_taken->start_pc == pc) {
+    next = block->link_taken;
+    exec->blocks->hits++;
+  } else if (!taken && block->link_not_taken &&
+             block->link_not_taken->generation == exec->blocks->generation &&
+             block->link_not_taken->start_pc == pc) {
+    next = block->link_not_taken;
+    exec->blocks->hits++;
+  }
+
+  if (!next) {
+    /* No valid link - lookup or build the block, then link it for next time */
+    next = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+    if (next && next->generation == exec->blocks->generation) {
+      if (taken) {
+        block->link_taken = next;
+      } else {
+        block->link_not_taken = next;
+      }
+    }
+  }
+  return next;
+}
+
 /*============================================================================
  * Threaded Interpretation (Computed Goto)
  *============================================================================*/
@@ -1034,6 +1099,11 @@ static bool was_branch_taken(const Executor *exec, const BasicBlock *block) {
 #define USE_COMPUTED_GOTO 0
 #endif
 
+/* Flat computed-goto threaded interpreter: one trivial dispatch block per
+ * instruction type. The high size/complexity scores come from the ~48 inline
+ * dispatch blocks, which are intentionally not factored out (extracting them
+ * would defeat the threaded-dispatch performance design). */
+// NOLINTNEXTLINE(readability-function-cognitive-complexity,readability-function-size)
 int armv8m_exec_block_threaded(Executor *exec, BasicBlock *block) {
   CPUState *cpu = &exec->cpu;
   int result = ARMV8M_OK;
@@ -1363,14 +1433,8 @@ int64_t armv8m_exec_run_threaded(Executor *exec, uint64_t max_cycles) {
       result = ARMV8M_ERR_HALTED;
       break;
     }
-
-    if (cpu->sleeping) {
-      if (exec->nvic.get_pending &&
-          exec->nvic.get_pending(exec->nvic.ctx) >= 0) {
-        cpu->sleeping = false;
-      } else {
-        break;
-      }
+    if (exec_still_sleeping(exec)) {
+      break;
     }
 
     /* Execute the block using threaded interpretation */
@@ -1382,28 +1446,17 @@ int64_t armv8m_exec_run_threaded(Executor *exec, uint64_t max_cycles) {
 
     /* Periodic interrupt check */
     interrupt_check_counter++;
-    if ((interrupt_check_counter & 0x3F) == 0 && exec->nvic.get_pending) {
-      int pending = exec->nvic.get_pending(exec->nvic.ctx);
-      if (pending >= 0) {
-        int current_pri = -1;
-        if (cpu->current_exception > 0 && exec->nvic.get_priority) {
-          current_pri =
-              exec->nvic.get_priority(exec->nvic.ctx, cpu->current_exception);
-        }
-
-        int pending_pri = exec->nvic.get_priority
-                              ? exec->nvic.get_priority(exec->nvic.ctx, pending)
-                              : 0;
-
-        if (pending_pri < current_pri || current_pri < 0) {
-          result = armv8m_exception_entry(exec, pending);
-          if (result != ARMV8M_OK) {
-            break;
-          }
-          pc = cpu->r[ARMV8M_REG_PC];
-          block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
-          continue;
-        }
+    if ((interrupt_check_counter & 0x3F) == 0) {
+      bool entered = false;
+      result = exec_take_pending_exception(exec, &entered);
+      if (result != ARMV8M_OK) {
+        break;
+      }
+      if (entered) {
+        /* Exception entered: resume from the handler's block */
+        pc = cpu->r[ARMV8M_REG_PC];
+        block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+        continue;
       }
     }
 
@@ -1411,35 +1464,8 @@ int64_t armv8m_exec_run_threaded(Executor *exec, uint64_t max_cycles) {
       break;
     }
 
-    /* Get next block using links */
-    bool taken = was_branch_taken(exec, block);
-    pc = cpu->r[ARMV8M_REG_PC];
-
-    BasicBlock *next = NULL;
-    if (taken && block->link_taken &&
-        block->link_taken->generation == exec->blocks->generation &&
-        block->link_taken->start_pc == pc) {
-      next = block->link_taken;
-      exec->blocks->hits++;
-    } else if (!taken && block->link_not_taken &&
-               block->link_not_taken->generation == exec->blocks->generation &&
-               block->link_not_taken->start_pc == pc) {
-      next = block->link_not_taken;
-      exec->blocks->hits++;
-    }
-
-    if (!next) {
-      next = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
-      if (next && next->generation == exec->blocks->generation) {
-        if (taken) {
-          block->link_taken = next;
-        } else {
-          block->link_not_taken = next;
-        }
-      }
-    }
-
-    block = next;
+    /* Get next block, following cached links where possible */
+    block = exec_next_linked_block(exec, block);
   }
 
   return (int64_t)(cpu->cycles - start_cycles);
@@ -1471,14 +1497,8 @@ int64_t armv8m_exec_run_linked(Executor *exec, uint64_t max_cycles) {
       result = ARMV8M_ERR_HALTED;
       break;
     }
-
-    if (cpu->sleeping) {
-      if (exec->nvic.get_pending &&
-          exec->nvic.get_pending(exec->nvic.ctx) >= 0) {
-        cpu->sleeping = false;
-      } else {
-        break;
-      }
+    if (exec_still_sleeping(exec)) {
+      break;
     }
 
     /* Execute the block */
@@ -1490,29 +1510,17 @@ int64_t armv8m_exec_run_linked(Executor *exec, uint64_t max_cycles) {
 
     /* Periodic interrupt check (every 64 blocks or so) */
     interrupt_check_counter++;
-    if ((interrupt_check_counter & 0x3F) == 0 && exec->nvic.get_pending) {
-      int pending = exec->nvic.get_pending(exec->nvic.ctx);
-      if (pending >= 0) {
-        int current_pri = -1;
-        if (cpu->current_exception > 0 && exec->nvic.get_priority) {
-          current_pri =
-              exec->nvic.get_priority(exec->nvic.ctx, cpu->current_exception);
-        }
-
-        int pending_pri = exec->nvic.get_priority
-                              ? exec->nvic.get_priority(exec->nvic.ctx, pending)
-                              : 0;
-
-        if (pending_pri < current_pri || current_pri < 0) {
-          result = armv8m_exception_entry(exec, pending);
-          if (result != ARMV8M_OK) {
-            break;
-          }
-          /* PC changed due to exception - need fresh block lookup */
-          pc = cpu->r[ARMV8M_REG_PC];
-          block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
-          continue;
-        }
+    if ((interrupt_check_counter & 0x3F) == 0) {
+      bool entered = false;
+      result = exec_take_pending_exception(exec, &entered);
+      if (result != ARMV8M_OK) {
+        break;
+      }
+      if (entered) {
+        /* PC changed due to exception - need fresh block lookup */
+        pc = cpu->r[ARMV8M_REG_PC];
+        block = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
+        continue;
       }
     }
 
@@ -1520,39 +1528,8 @@ int64_t armv8m_exec_run_linked(Executor *exec, uint64_t max_cycles) {
       break;
     }
 
-    /* Get next block using links */
-    bool taken = was_branch_taken(exec, block);
-    pc = cpu->r[ARMV8M_REG_PC];
-
-    /* Try linked block first */
-    BasicBlock *next = NULL;
-    if (taken && block->link_taken &&
-        block->link_taken->generation == exec->blocks->generation &&
-        block->link_taken->start_pc == pc) {
-      next = block->link_taken;
-      exec->blocks->hits++;
-    } else if (!taken && block->link_not_taken &&
-               block->link_not_taken->generation == exec->blocks->generation &&
-               block->link_not_taken->start_pc == pc) {
-      next = block->link_not_taken;
-      exec->blocks->hits++;
-    }
-
-    if (!next) {
-      /* No valid link - lookup or build block */
-      next = armv8m_blocks_get(exec->blocks, pc, block_mem_get_ptr, exec);
-
-      /* Establish link for next time */
-      if (next && next->generation == exec->blocks->generation) {
-        if (taken) {
-          block->link_taken = next;
-        } else {
-          block->link_not_taken = next;
-        }
-      }
-    }
-
-    block = next;
+    /* Get next block, following cached links where possible */
+    block = exec_next_linked_block(exec, block);
   }
 
   return (int64_t)(cpu->cycles - start_cycles);

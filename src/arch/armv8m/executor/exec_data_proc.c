@@ -5,6 +5,7 @@
  * Implements ADD, SUB, MOV, CMP, AND, ORR, EOR, shifts, multiply, divide, etc.
  */
 
+#include "arch/armv8m/armv8m_exec_regs.h"
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
@@ -121,34 +122,17 @@ static uint32_t apply_shift(uint32_t value, ShiftType type, uint8_t amount,
   }
 }
 
-/**
- * Get register value, handling SP and PC specially.
- * Note: Reading PC returns current instruction address + 4 per ARM spec.
+/*
+ * Register access for data-processing instructions. Reading PC yields PC + 4
+ * (the ARM Thumb data-operand value), so use the _pc read variant. See
+ * armv8m_exec_regs.h for the shared implementations.
  */
-static uint32_t get_reg(const Executor *exec, uint8_t reg) {
-  if (reg == ARMV8M_REG_SP) {
-    return armv8m_get_sp(&exec->cpu);
-  }
-  if (reg == ARMV8M_REG_PC) {
-    /* ARM Thumb: reading PC returns current instruction + 4 */
-    return exec->cpu.r[ARMV8M_REG_PC] + 4;
-  }
-  return exec->cpu.r[reg];
+static inline uint32_t get_reg(const Executor *exec, uint8_t reg) {
+  return armv8m_exec_get_reg_pc(exec, reg);
 }
 
-/**
- * Set register value, handling SP specially for R13.
- */
-static void set_reg(Executor *exec, uint8_t reg, uint32_t value) {
-  if (reg == ARMV8M_REG_SP) {
-    armv8m_set_sp(&exec->cpu, value);
-    exec->cpu.r[ARMV8M_REG_SP] = armv8m_get_sp(&exec->cpu);
-  } else if (reg == ARMV8M_REG_PC) {
-    /* PC writes must be aligned and may trigger exception return */
-    exec->cpu.r[ARMV8M_REG_PC] = value & ~1u;
-  } else {
-    exec->cpu.r[reg] = value;
-  }
+static inline void set_reg(Executor *exec, uint8_t reg, uint32_t value) {
+  armv8m_exec_set_reg(exec, reg, value);
 }
 
 /**
@@ -164,7 +148,7 @@ static int exec_dp_operation(Executor *exec, DataProcOp op, uint8_t rd,
   bool write_result = true;
 
   /* Get current carry flag for ADC/SBC */
-  bool c_flag = (cpu->xpsr >> 29) & 1;
+  bool c_flag = ARMV8M_GET_C(cpu->xpsr);
 
   switch (op) {
   case DP_AND:
@@ -288,7 +272,7 @@ static int exec_dp_operation(Executor *exec, DataProcOp op, uint8_t rd,
 
 int exec_data_proc_imm(Executor *exec, const DecodedInsn *insn) {
   uint32_t rn_val = 0;
-  bool shift_carry = (exec->cpu.xpsr >> 29) & 1;
+  bool shift_carry = ARMV8M_GET_C(exec->cpu.xpsr);
   uint32_t imm = insn->imm;
 
   /* For most operations, Rn is a source. For MOV/MVN, it's not used. */
@@ -329,6 +313,10 @@ int exec_data_proc_imm(Executor *exec, const DecodedInsn *insn) {
  * Reverse the bits in a 32-bit word.
  */
 static uint32_t reverse_bits(uint32_t val) {
+  /* Classic parallel bit reversal: swap adjacent 1-bit groups, then 2-bit,
+   * 4-bit, 8-bit, and finally the two 16-bit halves. Each mask pair selects the
+   * odd/even lanes at that granularity (e.g. 0x55555555 = ...0101, its
+   * complement 0xAAAAAAAA = ...1010). */
   val = ((val & 0x55555555) << 1) | ((val & 0xAAAAAAAA) >> 1);
   val = ((val & 0x33333333) << 2) | ((val & 0xCCCCCCCC) >> 2);
   val = ((val & 0x0F0F0F0F) << 4) | ((val & 0xF0F0F0F0) >> 4);
@@ -369,7 +357,7 @@ static uint32_t count_leading_zeros(uint32_t val) {
 int exec_data_proc_reg(Executor *exec, const DecodedInsn *insn) {
   uint32_t rn_val = 0;
   uint32_t rm_val = 0;
-  bool shift_carry = (exec->cpu.xpsr >> 29) & 1;
+  bool shift_carry = ARMV8M_GET_C(exec->cpu.xpsr);
 
   if (insn->rn != ARMV8M_REG_NONE) {
     rn_val = get_reg(exec, insn->rn);
@@ -428,7 +416,7 @@ int exec_data_proc_reg(Executor *exec, const DecodedInsn *insn) {
 int exec_data_proc_shifted(Executor *exec, const DecodedInsn *insn) {
   uint32_t rn_val = 0;
   uint32_t rm_val = 0;
-  bool carry_in = (exec->cpu.xpsr >> 29) & 1;
+  bool carry_in = ARMV8M_GET_C(exec->cpu.xpsr);
   bool shift_carry = carry_in;
 
   if (insn->rn != ARMV8M_REG_NONE) {
@@ -448,14 +436,14 @@ int exec_data_proc_shifted(Executor *exec, const DecodedInsn *insn) {
 }
 
 /**
- * Extract bottom halfword as signed value.
+ * Extract low halfword (bits [15:0]) as a signed value.
  */
-static int16_t get_bottom_half(uint32_t val) { return (int16_t)(val & 0xFFFF); }
+static int16_t get_halfword_lo(uint32_t val) { return (int16_t)(val & 0xFFFF); }
 
 /**
- * Extract top halfword as signed value.
+ * Extract high halfword (bits [31:16]) as a signed value.
  */
-static int16_t get_top_half(uint32_t val) { return (int16_t)(val >> 16); }
+static int16_t get_halfword_hi(uint32_t val) { return (int16_t)(val >> 16); }
 
 /**
  * Saturating add helper - sets Q flag on overflow.
@@ -472,6 +460,16 @@ static int32_t saturate_add_q(CPUState *cpu, int64_t val) {
   return (int32_t)val;
 }
 
+/**
+ * Execute a multiply-family instruction.
+ *
+ * This is an opcode dispatcher: the switch on MultiplyOp is grouped by family
+ * (basic 32-bit, long 64-bit, DSP halfword, halfword x word, most-significant
+ * word, and dual multiplies). Each case computes `result` (32-bit) or
+ * `result64` (64-bit, with is_long set); the shared tail writes the result
+ * back to the destination register(s). Per-family section comments below mark
+ * the groups.
+ */
 int exec_multiply(Executor *exec, const DecodedInsn *insn) {
   CPUState *cpu = &exec->cpu;
   uint32_t rn_val = get_reg(exec, insn->rn);
@@ -480,7 +478,7 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
   uint32_t result = 0;
   uint64_t result64 = 0;
   bool is_long = false;
-  bool carry = (cpu->xpsr >> 29) & 1;
+  bool carry = ARMV8M_GET_C(cpu->xpsr);
 
   switch ((MultiplyOp)insn->op) {
   /* Basic 32-bit multiply */
@@ -526,50 +524,50 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
 
   /* DSP halfword multiply */
   case MUL_SMULBB:
-    result = (uint32_t)((int32_t)get_bottom_half(rn_val) *
-                        (int32_t)get_bottom_half(rm_val));
+    result = (uint32_t)((int32_t)get_halfword_lo(rn_val) *
+                        (int32_t)get_halfword_lo(rm_val));
     break;
 
   case MUL_SMULBT:
-    result = (uint32_t)((int32_t)get_bottom_half(rn_val) *
-                        (int32_t)get_top_half(rm_val));
+    result = (uint32_t)((int32_t)get_halfword_lo(rn_val) *
+                        (int32_t)get_halfword_hi(rm_val));
     break;
 
   case MUL_SMULTB:
-    result = (uint32_t)((int32_t)get_top_half(rn_val) *
-                        (int32_t)get_bottom_half(rm_val));
+    result = (uint32_t)((int32_t)get_halfword_hi(rn_val) *
+                        (int32_t)get_halfword_lo(rm_val));
     break;
 
   case MUL_SMULTT:
-    result = (uint32_t)((int32_t)get_top_half(rn_val) *
-                        (int32_t)get_top_half(rm_val));
+    result = (uint32_t)((int32_t)get_halfword_hi(rn_val) *
+                        (int32_t)get_halfword_hi(rm_val));
     break;
 
   /* DSP halfword multiply-accumulate with Q flag */
   case MUL_SMLABB: {
     int32_t prod =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + prod);
     break;
   }
 
   case MUL_SMLABT: {
     int32_t prod =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + prod);
     break;
   }
 
   case MUL_SMLATB: {
     int32_t prod =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + prod);
     break;
   }
 
   case MUL_SMLATT: {
     int32_t prod =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + prod);
     break;
   }
@@ -577,28 +575,28 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
   /* Signed halfword x word multiply */
   case MUL_SMULWB:
     result = (uint32_t)(((int64_t)(int32_t)rn_val *
-                         (int32_t)get_bottom_half(rm_val)) >>
+                         (int32_t)get_halfword_lo(rm_val)) >>
                         16);
     break;
 
   case MUL_SMULWT:
-    result =
-        (uint32_t)(((int64_t)(int32_t)rn_val * (int32_t)get_top_half(rm_val)) >>
-                   16);
+    result = (uint32_t)(((int64_t)(int32_t)rn_val *
+                         (int32_t)get_halfword_hi(rm_val)) >>
+                        16);
     break;
 
   case MUL_SMLAWB: {
     int32_t prod = (int32_t)(((int64_t)(int32_t)rn_val *
-                              (int32_t)get_bottom_half(rm_val)) >>
+                              (int32_t)get_halfword_lo(rm_val)) >>
                              16);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + prod);
     break;
   }
 
   case MUL_SMLAWT: {
-    int32_t prod =
-        (int32_t)(((int64_t)(int32_t)rn_val * (int32_t)get_top_half(rm_val)) >>
-                  16);
+    int32_t prod = (int32_t)(((int64_t)(int32_t)rn_val *
+                              (int32_t)get_halfword_hi(rm_val)) >>
+                             16);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + prod);
     break;
   }
@@ -606,34 +604,36 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
   /* Dual multiply */
   case MUL_SMUAD: {
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_bottom_half(rm_val);
-    int32_t p2 = (int32_t)get_top_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_lo(rm_val);
+    int32_t p2 =
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)p1 + p2);
     break;
   }
 
   case MUL_SMUADX: {
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_hi(rm_val);
     int32_t p2 =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)p1 + p2);
     break;
   }
 
   case MUL_SMUSD: {
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_bottom_half(rm_val);
-    int32_t p2 = (int32_t)get_top_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_lo(rm_val);
+    int32_t p2 =
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result = (uint32_t)(p1 - p2);
     break;
   }
 
   case MUL_SMUSDX: {
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_hi(rm_val);
     int32_t p2 =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result = (uint32_t)(p1 - p2);
     break;
   }
@@ -641,34 +641,36 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
   /* Dual multiply-accumulate */
   case MUL_SMLAD: {
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_bottom_half(rm_val);
-    int32_t p2 = (int32_t)get_top_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_lo(rm_val);
+    int32_t p2 =
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + p1 + p2);
     break;
   }
 
   case MUL_SMLADX: {
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_hi(rm_val);
     int32_t p2 =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + p1 + p2);
     break;
   }
 
   case MUL_SMLSD: {
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_bottom_half(rm_val);
-    int32_t p2 = (int32_t)get_top_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_lo(rm_val);
+    int32_t p2 =
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + p1 - p2);
     break;
   }
 
   case MUL_SMLSDX: {
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_hi(rm_val);
     int32_t p2 =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result = (uint32_t)saturate_add_q(cpu, (int64_t)(int32_t)ra_val + p1 - p2);
     break;
   }
@@ -678,8 +680,9 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
     int64_t acc = ((int64_t)(int32_t)get_reg(exec, insn->rt) << 32) |
                   get_reg(exec, insn->rd);
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_bottom_half(rm_val);
-    int32_t p2 = (int32_t)get_top_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_lo(rm_val);
+    int32_t p2 =
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result64 = (uint64_t)(acc + p1 + p2);
     is_long = true;
     break;
@@ -689,9 +692,9 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
     int64_t acc = ((int64_t)(int32_t)get_reg(exec, insn->rt) << 32) |
                   get_reg(exec, insn->rd);
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_hi(rm_val);
     int32_t p2 =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result64 = (uint64_t)(acc + p1 + p2);
     is_long = true;
     break;
@@ -701,8 +704,9 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
     int64_t acc = ((int64_t)(int32_t)get_reg(exec, insn->rt) << 32) |
                   get_reg(exec, insn->rd);
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_bottom_half(rm_val);
-    int32_t p2 = (int32_t)get_top_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_lo(rm_val);
+    int32_t p2 =
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result64 = (uint64_t)(acc + p1 - p2);
     is_long = true;
     break;
@@ -712,9 +716,9 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
     int64_t acc = ((int64_t)(int32_t)get_reg(exec, insn->rt) << 32) |
                   get_reg(exec, insn->rd);
     int32_t p1 =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_hi(rm_val);
     int32_t p2 =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result64 = (uint64_t)(acc + p1 - p2);
     is_long = true;
     break;
@@ -788,7 +792,7 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
     int64_t acc = ((int64_t)(int32_t)get_reg(exec, insn->rt) << 32) |
                   get_reg(exec, insn->rd);
     int32_t prod =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result64 = (uint64_t)(acc + prod);
     is_long = true;
     break;
@@ -798,7 +802,7 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
     int64_t acc = ((int64_t)(int32_t)get_reg(exec, insn->rt) << 32) |
                   get_reg(exec, insn->rd);
     int32_t prod =
-        (int32_t)get_bottom_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_lo(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result64 = (uint64_t)(acc + prod);
     is_long = true;
     break;
@@ -808,7 +812,7 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
     int64_t acc = ((int64_t)(int32_t)get_reg(exec, insn->rt) << 32) |
                   get_reg(exec, insn->rd);
     int32_t prod =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_bottom_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_lo(rm_val);
     result64 = (uint64_t)(acc + prod);
     is_long = true;
     break;
@@ -818,7 +822,7 @@ int exec_multiply(Executor *exec, const DecodedInsn *insn) {
     int64_t acc = ((int64_t)(int32_t)get_reg(exec, insn->rt) << 32) |
                   get_reg(exec, insn->rd);
     int32_t prod =
-        (int32_t)get_top_half(rn_val) * (int32_t)get_top_half(rm_val);
+        (int32_t)get_halfword_hi(rn_val) * (int32_t)get_halfword_hi(rm_val);
     result64 = (uint64_t)(acc + prod);
     is_long = true;
     break;
@@ -957,7 +961,8 @@ int exec_bitfield(Executor *exec, const DecodedInsn *insn) {
    * Decoder packs: imm = (width << 8) | lsb */
   uint8_t lsb = insn->imm & 0xFF;
   uint8_t width = (insn->imm >> 8) & 0xFF;
-  uint32_t mask = ((1U << width) - 1);
+  /* width can be 1..32; (1U << 32) is undefined behavior, so special-case it */
+  uint32_t mask = (width >= 32) ? 0xFFFFFFFFU : ((1U << width) - 1U);
 
   uint32_t result;
 
@@ -979,8 +984,10 @@ int exec_bitfield(Executor *exec, const DecodedInsn *insn) {
     if (insn->is_signed) {
       /* SBFX: Signed bitfield extract */
       uint32_t field = (rn_val >> lsb) & mask;
-      /* Sign extend */
-      if (field & (1U << (width - 1))) {
+      /* Sign extend from the field's top bit. Guard the shift: width==0 would
+       * make (width - 1) wrap and (1U << ...) undefined; width==32 needs no
+       * extension since the field already spans the whole word. */
+      if (width >= 1 && width < 32 && (field & (1U << (width - 1)))) {
         field |= ~mask;
       }
       result = field;
@@ -993,6 +1000,44 @@ int exec_bitfield(Executor *exec, const DecodedInsn *insn) {
 
   set_reg(exec, insn->rd, result);
   return ARMV8M_OK;
+}
+
+/**
+ * Saturate a value to a signed (SSAT) or unsigned (USAT) n-bit range. Sets
+ * *saturated when clamping occurred. sat_width is 1..32 for signed, 0..31 for
+ * unsigned.
+ */
+static uint32_t saturate_value(int32_t value, uint8_t sat_width, bool is_signed,
+                               bool *saturated) {
+  *saturated = false;
+  if (is_signed) {
+    /* SSAT range [-2^(n-1), 2^(n-1)-1]. At width 32 the shift 1 << 31 overflows
+     * a signed int (UB), so use the full int32 range directly. */
+    int32_t max_val =
+        (sat_width >= 32) ? INT32_MAX : ((1 << (sat_width - 1)) - 1);
+    int32_t min_val = (sat_width >= 32) ? INT32_MIN : -(1 << (sat_width - 1));
+    if (value > max_val) {
+      *saturated = true;
+      return (uint32_t)max_val;
+    }
+    if (value < min_val) {
+      *saturated = true;
+      return (uint32_t)min_val;
+    }
+    return (uint32_t)value;
+  }
+
+  /* USAT range [0, 2^n-1] */
+  uint32_t max_val = (1U << sat_width) - 1;
+  if (value < 0) {
+    *saturated = true;
+    return 0;
+  }
+  if ((uint32_t)value > max_val) {
+    *saturated = true;
+    return max_val;
+  }
+  return (uint32_t)value;
 }
 
 int exec_saturate(Executor *exec, const DecodedInsn *insn) {
@@ -1016,37 +1061,9 @@ int exec_saturate(Executor *exec, const DecodedInsn *insn) {
   if (insn->is_signed) {
     sat_width += 1; /* SSAT encodes width-1 */
   }
-  uint32_t result;
-  bool saturated = false;
-
-  if (insn->is_signed) {
-    /* SSAT: Saturate to signed n-bit range [-2^(n-1), 2^(n-1)-1] */
-    int32_t max_val = (1 << (sat_width - 1)) - 1;
-    int32_t min_val = -(1 << (sat_width - 1));
-
-    if (value > max_val) {
-      result = (uint32_t)max_val;
-      saturated = true;
-    } else if (value < min_val) {
-      result = (uint32_t)min_val;
-      saturated = true;
-    } else {
-      result = (uint32_t)value;
-    }
-  } else {
-    /* USAT: Saturate signed value to unsigned n-bit range [0, 2^n-1] */
-    uint32_t max_val = (1U << sat_width) - 1;
-
-    if (value < 0) {
-      result = 0;
-      saturated = true;
-    } else if ((uint32_t)value > max_val) {
-      result = max_val;
-      saturated = true;
-    } else {
-      result = (uint32_t)value;
-    }
-  }
+  bool saturated;
+  uint32_t result =
+      saturate_value(value, sat_width, insn->is_signed, &saturated);
 
   /* Set Q flag (sticky) if saturation occurred */
   if (saturated) {
@@ -1206,6 +1223,183 @@ static void set_ge_flags_8(CPUState *cpu, int res0, int res1, int res2,
   cpu->xpsr = (cpu->xpsr & ~ARMV8M_XPSR_GE_MASK) | (ge << ARMV8M_XPSR_GE_SHIFT);
 }
 
+/**
+ * Execute a parallel (SIMD) add/subtract or SEL instruction.
+ *
+ * Handles the byte/halfword parallel arithmetic group (signed/unsigned, with
+ * optional saturation, halving, or GE-flag updates) plus the SEL byte-select
+ * special case. The operation is encoded in insn->op; SEL is flagged with the
+ * sentinel 0xFF and handled up front before the parallel-arithmetic switch.
+ */
+/* SEL: select bytes from Rn/Rm based on the GE flags. */
+static int exec_sel(Executor *exec, const DecodedInsn *insn, uint32_t rn_val,
+                    uint32_t rm_val) {
+  uint32_t ge = (exec->cpu.xpsr >> ARMV8M_XPSR_GE_SHIFT) & 0xF;
+  uint32_t result = 0;
+  result |= (ge & 0x1) ? (rn_val & 0x000000FFU) : (rm_val & 0x000000FFU);
+  result |= (ge & 0x2) ? (rn_val & 0x0000FF00U) : (rm_val & 0x0000FF00U);
+  result |= (ge & 0x4) ? (rn_val & 0x00FF0000U) : (rm_val & 0x00FF0000U);
+  result |= (ge & 0x8) ? (rn_val & 0xFF000000U) : (rm_val & 0xFF000000U);
+  set_reg(exec, insn->rd, result);
+  return ARMV8M_OK;
+}
+
+/* 16-bit parallel add/sub (optional halving/saturating + GE flags). */
+static int parallel_16(CPUState *cpu, uint32_t rn_val, uint32_t rm_val,
+                       uint8_t subop, bool is_unsigned, bool is_halving,
+                       bool is_saturating, uint32_t *result) {
+  /* 16-bit parallel operations */
+  int32_t lo_n = (int16_t)(rn_val & 0xFFFF);
+  int32_t hi_n = (int16_t)((rn_val >> 16) & 0xFFFF);
+  int32_t lo_m = (int16_t)(rm_val & 0xFFFF);
+  int32_t hi_m = (int16_t)((rm_val >> 16) & 0xFFFF);
+
+  if (is_unsigned) {
+    lo_n = (uint16_t)(rn_val & 0xFFFF);
+    hi_n = (uint16_t)((rn_val >> 16) & 0xFFFF);
+    lo_m = (uint16_t)(rm_val & 0xFFFF);
+    hi_m = (uint16_t)((rm_val >> 16) & 0xFFFF);
+  }
+
+  int32_t res_lo, res_hi;
+
+  switch (subop) {
+  case 0: /* ADD16 */
+    res_lo = lo_n + lo_m;
+    res_hi = hi_n + hi_m;
+    break;
+  case 1: /* ASX (Add/Subtract Exchange) */
+    res_lo = lo_n - hi_m;
+    res_hi = hi_n + lo_m;
+    break;
+  case 2: /* SUB16 */
+    res_lo = lo_n - lo_m;
+    res_hi = hi_n - hi_m;
+    break;
+  case 3: /* SAX (Subtract/Add Exchange) */
+    res_lo = lo_n + hi_m;
+    res_hi = hi_n - lo_m;
+    break;
+  default:
+    return ARMV8M_ERR_UNDEFINED_INSN;
+  }
+
+  /* Apply halving or saturating */
+  if (is_halving) {
+    res_lo >>= 1;
+    res_hi >>= 1;
+  } else if (is_saturating) {
+    int32_t min_val = is_unsigned ? 0 : -32768;
+    int32_t max_val = is_unsigned ? 65535 : 32767;
+
+    if (res_lo < min_val)
+      res_lo = min_val;
+    else if (res_lo > max_val)
+      res_lo = max_val;
+
+    if (res_hi < min_val)
+      res_hi = min_val;
+    else if (res_hi > max_val)
+      res_hi = max_val;
+  }
+
+  /* Pack result */
+  *result = ((uint32_t)(res_hi & 0xFFFF) << 16) | (uint32_t)(res_lo & 0xFFFF);
+
+  /* Update GE flags for non-saturating operations */
+  if (!is_saturating) {
+    set_ge_flags_16(cpu, res_lo, res_hi);
+  }
+
+  return ARMV8M_OK;
+}
+
+/* 8-bit parallel add/sub (optional halving/saturating + GE flags). */
+static int parallel_8(CPUState *cpu, uint32_t rn_val, uint32_t rm_val,
+                      uint8_t subop, bool is_unsigned, bool is_halving,
+                      bool is_saturating, uint32_t *result) {
+  /* 8-bit parallel operations */
+  int32_t b0_n, b1_n, b2_n, b3_n;
+  int32_t b0_m, b1_m, b2_m, b3_m;
+
+  if (is_unsigned) {
+    b0_n = (int32_t)((rn_val >> 0) & 0xFFU);
+    b1_n = (int32_t)((rn_val >> 8) & 0xFFU);
+    b2_n = (int32_t)((rn_val >> 16) & 0xFFU);
+    b3_n = (int32_t)((rn_val >> 24) & 0xFFU);
+    b0_m = (int32_t)((rm_val >> 0) & 0xFFU);
+    b1_m = (int32_t)((rm_val >> 8) & 0xFFU);
+    b2_m = (int32_t)((rm_val >> 16) & 0xFFU);
+    b3_m = (int32_t)((rm_val >> 24) & 0xFFU);
+  } else {
+    b0_n = (int32_t)(int8_t)((rn_val >> 0) & 0xFFU);
+    b1_n = (int32_t)(int8_t)((rn_val >> 8) & 0xFFU);
+    b2_n = (int32_t)(int8_t)((rn_val >> 16) & 0xFFU);
+    b3_n = (int32_t)(int8_t)((rn_val >> 24) & 0xFFU);
+    b0_m = (int32_t)(int8_t)((rm_val >> 0) & 0xFFU);
+    b1_m = (int32_t)(int8_t)((rm_val >> 8) & 0xFFU);
+    b2_m = (int32_t)(int8_t)((rm_val >> 16) & 0xFFU);
+    b3_m = (int32_t)(int8_t)((rm_val >> 24) & 0xFFU);
+  }
+
+  int32_t res0, res1, res2, res3;
+
+  if (subop == 0) {
+    /* ADD8 */
+    res0 = b0_n + b0_m;
+    res1 = b1_n + b1_m;
+    res2 = b2_n + b2_m;
+    res3 = b3_n + b3_m;
+  } else {
+    /* SUB8 */
+    res0 = b0_n - b0_m;
+    res1 = b1_n - b1_m;
+    res2 = b2_n - b2_m;
+    res3 = b3_n - b3_m;
+  }
+
+  /* Apply halving or saturating */
+  if (is_halving) {
+    res0 >>= 1;
+    res1 >>= 1;
+    res2 >>= 1;
+    res3 >>= 1;
+  } else if (is_saturating) {
+    int32_t min_val = is_unsigned ? 0 : -128;
+    int32_t max_val = is_unsigned ? 255 : 127;
+
+    if (res0 < min_val)
+      res0 = min_val;
+    else if (res0 > max_val)
+      res0 = max_val;
+
+    if (res1 < min_val)
+      res1 = min_val;
+    else if (res1 > max_val)
+      res1 = max_val;
+
+    if (res2 < min_val)
+      res2 = min_val;
+    else if (res2 > max_val)
+      res2 = max_val;
+
+    if (res3 < min_val)
+      res3 = min_val;
+    else if (res3 > max_val)
+      res3 = max_val;
+  }
+
+  /* Pack result */
+  *result = ((uint32_t)(res3 & 0xFF) << 24) | ((uint32_t)(res2 & 0xFF) << 16) |
+            ((uint32_t)(res1 & 0xFF) << 8) | ((uint32_t)(res0 & 0xFF));
+
+  /* Update GE flags for non-saturating operations */
+  if (!is_saturating) {
+    set_ge_flags_8(cpu, res0, res1, res2, res3);
+  }
+  return ARMV8M_OK;
+}
+
 int exec_parallel(Executor *exec, const DecodedInsn *insn) {
   CPUState *cpu = &exec->cpu;
   uint32_t rn_val = get_reg(exec, insn->rn);
@@ -1214,32 +1408,7 @@ int exec_parallel(Executor *exec, const DecodedInsn *insn) {
 
   /* Check for SEL instruction (special case) */
   if (insn->op == 0xFF) {
-    /* SEL: Select bytes based on GE flags */
-    uint32_t ge = (cpu->xpsr >> ARMV8M_XPSR_GE_SHIFT) & 0xF;
-
-    result = 0;
-    if (ge & 0x1)
-      result |= (rn_val & 0x000000FF);
-    else
-      result |= (rm_val & 0x000000FF);
-
-    if (ge & 0x2)
-      result |= (rn_val & 0x0000FF00);
-    else
-      result |= (rm_val & 0x0000FF00);
-
-    if (ge & 0x4)
-      result |= (rn_val & 0x00FF0000);
-    else
-      result |= (rm_val & 0x00FF0000);
-
-    if (ge & 0x8)
-      result |= (rn_val & 0xFF000000);
-    else
-      result |= (rm_val & 0xFF000000);
-
-    set_reg(exec, insn->rd, result);
-    return ARMV8M_OK;
+    return exec_sel(exec, insn, rn_val, rm_val);
   }
 
   /* Decode operation type from insn->op:
@@ -1266,150 +1435,16 @@ int exec_parallel(Executor *exec, const DecodedInsn *insn) {
   bool is_halving = (type & 0x2) != 0;
   bool is_saturating = ((type & 0x1) != 0) && !is_halving;
 
+  int parallel_result;
   if (is_16bit) {
-    /* 16-bit parallel operations */
-    int32_t lo_n = (int16_t)(rn_val & 0xFFFF);
-    int32_t hi_n = (int16_t)((rn_val >> 16) & 0xFFFF);
-    int32_t lo_m = (int16_t)(rm_val & 0xFFFF);
-    int32_t hi_m = (int16_t)((rm_val >> 16) & 0xFFFF);
-
-    if (is_unsigned) {
-      lo_n = (uint16_t)(rn_val & 0xFFFF);
-      hi_n = (uint16_t)((rn_val >> 16) & 0xFFFF);
-      lo_m = (uint16_t)(rm_val & 0xFFFF);
-      hi_m = (uint16_t)((rm_val >> 16) & 0xFFFF);
-    }
-
-    int32_t res_lo, res_hi;
-
-    switch (subop) {
-    case 0: /* ADD16 */
-      res_lo = lo_n + lo_m;
-      res_hi = hi_n + hi_m;
-      break;
-    case 1: /* ASX (Add/Subtract Exchange) */
-      res_lo = lo_n - hi_m;
-      res_hi = hi_n + lo_m;
-      break;
-    case 2: /* SUB16 */
-      res_lo = lo_n - lo_m;
-      res_hi = hi_n - hi_m;
-      break;
-    case 3: /* SAX (Subtract/Add Exchange) */
-      res_lo = lo_n + hi_m;
-      res_hi = hi_n - lo_m;
-      break;
-    default:
-      return ARMV8M_ERR_UNDEFINED_INSN;
-    }
-
-    /* Apply halving or saturating */
-    if (is_halving) {
-      res_lo >>= 1;
-      res_hi >>= 1;
-    } else if (is_saturating) {
-      int32_t min_val = is_unsigned ? 0 : -32768;
-      int32_t max_val = is_unsigned ? 65535 : 32767;
-
-      if (res_lo < min_val)
-        res_lo = min_val;
-      else if (res_lo > max_val)
-        res_lo = max_val;
-
-      if (res_hi < min_val)
-        res_hi = min_val;
-      else if (res_hi > max_val)
-        res_hi = max_val;
-    }
-
-    /* Pack result */
-    result = ((uint32_t)(res_hi & 0xFFFF) << 16) | (uint32_t)(res_lo & 0xFFFF);
-
-    /* Update GE flags for non-saturating operations */
-    if (!is_saturating) {
-      set_ge_flags_16(cpu, res_lo, res_hi);
-    }
-
+    parallel_result = parallel_16(cpu, rn_val, rm_val, subop, is_unsigned,
+                                  is_halving, is_saturating, &result);
   } else {
-    /* 8-bit parallel operations */
-    int32_t b0_n, b1_n, b2_n, b3_n;
-    int32_t b0_m, b1_m, b2_m, b3_m;
-
-    if (is_unsigned) {
-      b0_n = (int32_t)((rn_val >> 0) & 0xFFU);
-      b1_n = (int32_t)((rn_val >> 8) & 0xFFU);
-      b2_n = (int32_t)((rn_val >> 16) & 0xFFU);
-      b3_n = (int32_t)((rn_val >> 24) & 0xFFU);
-      b0_m = (int32_t)((rm_val >> 0) & 0xFFU);
-      b1_m = (int32_t)((rm_val >> 8) & 0xFFU);
-      b2_m = (int32_t)((rm_val >> 16) & 0xFFU);
-      b3_m = (int32_t)((rm_val >> 24) & 0xFFU);
-    } else {
-      b0_n = (int32_t)(int8_t)((rn_val >> 0) & 0xFFU);
-      b1_n = (int32_t)(int8_t)((rn_val >> 8) & 0xFFU);
-      b2_n = (int32_t)(int8_t)((rn_val >> 16) & 0xFFU);
-      b3_n = (int32_t)(int8_t)((rn_val >> 24) & 0xFFU);
-      b0_m = (int32_t)(int8_t)((rm_val >> 0) & 0xFFU);
-      b1_m = (int32_t)(int8_t)((rm_val >> 8) & 0xFFU);
-      b2_m = (int32_t)(int8_t)((rm_val >> 16) & 0xFFU);
-      b3_m = (int32_t)(int8_t)((rm_val >> 24) & 0xFFU);
-    }
-
-    int32_t res0, res1, res2, res3;
-
-    if (subop == 0) {
-      /* ADD8 */
-      res0 = b0_n + b0_m;
-      res1 = b1_n + b1_m;
-      res2 = b2_n + b2_m;
-      res3 = b3_n + b3_m;
-    } else {
-      /* SUB8 */
-      res0 = b0_n - b0_m;
-      res1 = b1_n - b1_m;
-      res2 = b2_n - b2_m;
-      res3 = b3_n - b3_m;
-    }
-
-    /* Apply halving or saturating */
-    if (is_halving) {
-      res0 >>= 1;
-      res1 >>= 1;
-      res2 >>= 1;
-      res3 >>= 1;
-    } else if (is_saturating) {
-      int32_t min_val = is_unsigned ? 0 : -128;
-      int32_t max_val = is_unsigned ? 255 : 127;
-
-      if (res0 < min_val)
-        res0 = min_val;
-      else if (res0 > max_val)
-        res0 = max_val;
-
-      if (res1 < min_val)
-        res1 = min_val;
-      else if (res1 > max_val)
-        res1 = max_val;
-
-      if (res2 < min_val)
-        res2 = min_val;
-      else if (res2 > max_val)
-        res2 = max_val;
-
-      if (res3 < min_val)
-        res3 = min_val;
-      else if (res3 > max_val)
-        res3 = max_val;
-    }
-
-    /* Pack result */
-    result = ((uint32_t)(res3 & 0xFF) << 24) | ((uint32_t)(res2 & 0xFF) << 16) |
-             ((uint32_t)(res1 & 0xFF) << 8) | ((uint32_t)(res0 & 0xFF));
-
-    /* Update GE flags for non-saturating operations */
-    if (!is_saturating) {
-      set_ge_flags_8(cpu, res0, res1, res2, res3);
-    }
+    parallel_result = parallel_8(cpu, rn_val, rm_val, subop, is_unsigned,
+                                 is_halving, is_saturating, &result);
+  }
+  if (parallel_result != ARMV8M_OK) {
+    return parallel_result;
   }
 
   set_reg(exec, insn->rd, result);

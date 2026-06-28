@@ -232,6 +232,9 @@ int decode_data_proc_plain_imm(uint16_t hw1, uint16_t hw2, DecodedInsn *out) {
  * Data Processing (Shifted Register)
  *============================================================================*/
 
+/* Idiomatic flat dispatch switch (one trivial case per opcode/register); the
+ * high cognitive-complexity score is a false positive, so it is suppressed. */
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 int decode_data_proc_shifted_reg(uint16_t hw1, uint16_t hw2, DecodedInsn *out) {
   uint32_t op = EXTRACT(hw1, 5, 4);
   uint8_t rn = (uint8_t)EXTRACT(hw1, 0, 4);

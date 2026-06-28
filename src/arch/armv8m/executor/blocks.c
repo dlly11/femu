@@ -224,41 +224,42 @@ void armv8m_blocks_invalidate(BlockCache *cache) {
   }
 }
 
+/* Invalidate one block (and stale links) that overlaps [start, end). */
+static void invalidate_block_in_range(BasicBlock *block, uint32_t start,
+                                      uint32_t end) {
+  /* Invalidate the block itself if it overlaps the range */
+  if (block->start_pc < end && block->end_pc > start) {
+    block->generation = 0;
+    block->link_taken = NULL;
+    block->link_not_taken = NULL;
+  }
+
+  /* Clear links that point into the range */
+  if (block->link_taken && block->target_taken >= start &&
+      block->target_taken < end) {
+    block->link_taken = NULL;
+  }
+  if (block->link_not_taken && block->target_not_taken >= start &&
+      block->target_not_taken < end) {
+    block->link_not_taken = NULL;
+  }
+}
+
 void armv8m_blocks_invalidate_range(BlockCache *cache, uint32_t start,
                                     uint32_t size) {
-  uint32_t end = start + size;
+  /* Large range - full invalidation is more efficient */
+  if (size > 256) {
+    armv8m_blocks_invalidate(cache);
+    return;
+  }
 
   /* For small ranges, check individual blocks */
-  if (size <= 256) {
-    for (int i = 0; i < BLOCK_CACHE_SIZE; i++) {
-      BasicBlock *block = &cache->blocks[i];
-
-      if (block->generation == cache->generation) {
-        /* Check if block overlaps with invalidation range */
-        if (block->start_pc < end && block->end_pc > start) {
-          block->generation = 0;
-          block->link_taken = NULL;
-          block->link_not_taken = NULL;
-        }
-
-        /* Also clear links if they point into the range */
-        if (block->link_taken) {
-          uint32_t target = block->target_taken;
-          if (target >= start && target < end) {
-            block->link_taken = NULL;
-          }
-        }
-        if (block->link_not_taken) {
-          uint32_t target = block->target_not_taken;
-          if (target >= start && target < end) {
-            block->link_not_taken = NULL;
-          }
-        }
-      }
+  uint32_t end = start + size;
+  for (int i = 0; i < BLOCK_CACHE_SIZE; i++) {
+    BasicBlock *block = &cache->blocks[i];
+    if (block->generation == cache->generation) {
+      invalidate_block_in_range(block, start, end);
     }
-  } else {
-    /* Large range - full invalidation is more efficient */
-    armv8m_blocks_invalidate(cache);
   }
 }
 

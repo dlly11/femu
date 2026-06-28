@@ -7,6 +7,7 @@ For high-level usage, see emulator.py.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -266,8 +267,9 @@ EMU_LOG_CAT_PERIPHERAL = 5
 EMU_LOG_CAT_GDB = 6
 EMU_LOG_CAT_EMULATOR = 7
 
-# Cache for library instance
+# Cache for library instance (guarded by _lib_lock for thread-safe lazy init)
 _lib: EmulatorLib | None = None
+_lib_lock = threading.Lock()
 
 
 def _find_library() -> Path:
@@ -326,14 +328,18 @@ def get_lib() -> EmulatorLib:
     """
     global _lib
 
+    # Double-checked locking: the fast path avoids the lock once loaded, and the
+    # lock prevents two threads from dlopen-ing the library concurrently.
     if _lib is None:
-        lib_path = _find_library()
-        if not lib_path.exists():
-            raise OSError(
-                f"Emulator library not found at {lib_path}. "
-                "Please build the project first with 'femu build all'."
-            )
-        _lib = cast(EmulatorLib, _ffi.dlopen(str(lib_path)))
+        with _lib_lock:
+            if _lib is None:
+                lib_path = _find_library()
+                if not lib_path.exists():
+                    raise OSError(
+                        f"Emulator library not found at {lib_path}. "
+                        "Please build the project first with 'femu build all'."
+                    )
+                _lib = cast(EmulatorLib, _ffi.dlopen(str(lib_path)))
 
     return _lib
 

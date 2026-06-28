@@ -90,7 +90,7 @@ When starting work on a module, follow this protocol:
 I am implementing the [MODULE] module for an ARMv8-M emulator.
 
 I have read:
-- [ ] docs/ARCHITECTURE.md (Parts 5 and 9)
+- [ ] docs/architecture/overview.md (System Layers, C Simulation Core)
 - [ ] include/arch/armv8m/armv8m_[module].h
 - [ ] src/arch/armv8m/[module]/README.md (if exists)
 - [ ] include/arch/armv8m/armv8m_types.h
@@ -256,6 +256,6 @@ gdb ./build/src/arch/armv8m/decoder/test_decoder
 ## References
 
 - ARMv8-M Architecture Reference Manual
-- `docs/ARCHITECTURE.md` - System design
-- `docs/PLUGINS.md` - Peripheral development
+- `docs/architecture/overview.md` - System design
+- `docs/developer/writing-peripherals.md` - Peripheral development
 - QEMU source (target/arm/) for reference implementations

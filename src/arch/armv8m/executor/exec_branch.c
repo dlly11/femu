@@ -5,6 +5,7 @@
  * Implements B, BL, BX, BLX, CBZ, CBNZ, TBB, TBH.
  */
 
+#include "arch/armv8m/armv8m_exec_regs.h"
 #include "arch/armv8m/armv8m_executor.h"
 #include "arch/armv8m/armv8m_types.h"
 #include "emu/emu_log.h"
@@ -28,19 +29,13 @@ static uint32_t mem_read(Executor *exec, uint32_t addr, uint8_t size,
   return exec->mem.read(exec->mem.ctx, addr, size, fault);
 }
 
-/**
- * Get register value.
- * Note: Reading PC returns current instruction address + 4 per ARM spec.
+/*
+ * Register access for branch instructions. Reading PC yields PC + 4 (the ARM
+ * Thumb data-operand value), so use the _pc read variant. Shared
+ * implementations live in armv8m_exec_regs.h.
  */
-static uint32_t get_reg(const Executor *exec, uint8_t reg) {
-  if (reg == ARMV8M_REG_SP) {
-    return armv8m_get_sp(&exec->cpu);
-  }
-  if (reg == ARMV8M_REG_PC) {
-    /* ARM Thumb: reading PC returns current instruction + 4 */
-    return exec->cpu.r[ARMV8M_REG_PC] + 4;
-  }
-  return exec->cpu.r[reg];
+static inline uint32_t get_reg(const Executor *exec, uint8_t reg) {
+  return armv8m_exec_get_reg_pc(exec, reg);
 }
 
 /**
@@ -245,6 +240,53 @@ static void clear_caller_saved_regs(CPUState *cpu) {
                  ARMV8M_XPSR_Q);
 }
 
+/**
+ * SG security handling: when non-secure and executing from an NSC region,
+ * transition to secure; a NOP (logs) when already secure. Returns ARMV8M_OK or
+ * a SecureFault.
+ */
+static int sg_handle_security(Executor *exec) {
+  if (exec->cpu.security != SECURITY_NONSECURE) {
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "SG (NOP in secure state)");
+    return ARMV8M_OK;
+  }
+  uint32_t pc = exec->cpu.r[ARMV8M_REG_PC];
+  if (armv8m_check_security(exec, pc) != SEC_NSC) {
+    /* SG not in NSC region - SecureFault (INVTRAN) */
+    EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR,
+                    "SG at 0x%08X not in NSC region - SecureFault", pc);
+    return ARMV8M_ERR_SECURE_FAULT;
+  }
+  EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "SG: NS -> S transition at 0x%08X", pc);
+  exec->cpu.security = SECURITY_SECURE;
+  return ARMV8M_OK;
+}
+
+/**
+ * BXNS security handling: when secure, validate the target and drop to
+ * non-secure (clearing caller-saved registers); a no-op (logs) when already
+ * non-secure. Returns ARMV8M_OK or a fault.
+ */
+static int bxns_handle_security(Executor *exec, const DecodedInsn *insn,
+                                uint32_t target_addr) {
+  if (exec->cpu.security != SECURITY_SECURE) {
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "BXNS R%d -> 0x%08X (already NS)",
+                  insn->rm, target_addr);
+    return ARMV8M_OK;
+  }
+  if (armv8m_check_security(exec, target_addr) == SEC_SECURE) {
+    /* Cannot branch to secure memory with BXNS from secure */
+    EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR,
+                    "BXNS to secure address 0x%08X - SecureFault", target_addr);
+    return ARMV8M_ERR_SECURE_FAULT;
+  }
+  clear_caller_saved_regs(&exec->cpu);
+  EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "BXNS: S -> NS transition to 0x%08X",
+               target_addr);
+  exec->cpu.security = SECURITY_NONSECURE;
+  return ARMV8M_OK;
+}
+
 int exec_sg(Executor *exec, const DecodedInsn *insn) {
   (void)insn; /* SG has no operands */
 
@@ -259,26 +301,7 @@ int exec_sg(Executor *exec, const DecodedInsn *insn) {
     return ARMV8M_ERR_UNDEFINED_INSN;
   }
 
-  if (exec->cpu.security == SECURITY_NONSECURE) {
-    /* Calling from non-secure state */
-    uint32_t pc = exec->cpu.r[ARMV8M_REG_PC];
-    SecurityAttr attr = armv8m_check_security(exec, pc);
-
-    if (attr != SEC_NSC) {
-      /* SG not in NSC region - SecureFault (INVTRAN) */
-      EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR,
-                      "SG at 0x%08X not in NSC region - SecureFault", pc);
-      return ARMV8M_ERR_SECURE_FAULT;
-    }
-
-    /* Transition to secure state */
-    EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "SG: NS -> S transition at 0x%08X", pc);
-    exec->cpu.security = SECURITY_SECURE;
-  } else {
-    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "SG (NOP in secure state)");
-  }
-
-  return ARMV8M_OK;
+  return sg_handle_security(exec);
 }
 
 int exec_bxns(Executor *exec, const DecodedInsn *insn) {
@@ -296,29 +319,9 @@ int exec_bxns(Executor *exec, const DecodedInsn *insn) {
   /* The LSB of the target indicates Thumb state, not security */
   uint32_t target_addr = target & ~1U;
 
-  /* Check if target is in non-secure memory */
-  SecurityAttr attr = armv8m_check_security(exec, target_addr);
-
-  if (exec->cpu.security == SECURITY_SECURE) {
-    /* Transitioning from Secure to Non-secure */
-    if (attr == SEC_SECURE) {
-      /* Cannot branch to secure memory with BXNS from secure */
-      EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR,
-                      "BXNS to secure address 0x%08X - SecureFault",
-                      target_addr);
-      return ARMV8M_ERR_SECURE_FAULT;
-    }
-
-    /* Clear caller-saved registers for security compliance */
-    clear_caller_saved_regs(&exec->cpu);
-
-    /* Transition to Non-secure state */
-    EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR, "BXNS: S -> NS transition to 0x%08X",
-                 target_addr);
-    exec->cpu.security = SECURITY_NONSECURE;
-  } else {
-    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR, "BXNS R%d -> 0x%08X (already NS)",
-                  insn->rm, target_addr);
+  int sec = bxns_handle_security(exec, insn, target_addr);
+  if (sec != ARMV8M_OK) {
+    return sec;
   }
 
   /* Check Thumb bit */
@@ -328,6 +331,56 @@ int exec_bxns(Executor *exec, const DecodedInsn *insn) {
   }
 
   exec->cpu.r[ARMV8M_REG_PC] = target_addr;
+  return ARMV8M_OK;
+}
+
+/**
+ * Apply the BLXNS security transition. If running secure, validate the target,
+ * push the return address to the secure stack, switch LR to FNC_RETURN, clear
+ * caller-saved registers, and drop to non-secure. No-op (logs) when already
+ * non-secure. Returns ARMV8M_OK or a fault to propagate.
+ */
+static int blxns_handle_security(Executor *exec, const DecodedInsn *insn,
+                                 uint32_t pc, uint32_t target_addr) {
+  if (exec->cpu.security != SECURITY_SECURE) {
+    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR,
+                  "BLXNS R%d -> 0x%08X (already NS, LR=0x%08X)", insn->rm,
+                  target_addr, exec->cpu.r[ARMV8M_REG_LR]);
+    return ARMV8M_OK;
+  }
+
+  if (armv8m_check_security(exec, target_addr) == SEC_SECURE) {
+    /* Cannot branch to secure memory with BLXNS from secure */
+    EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR,
+                    "BLXNS to secure address 0x%08X - SecureFault",
+                    target_addr);
+    return ARMV8M_ERR_SECURE_FAULT;
+  }
+
+  /* Save return address on secure stack before transitioning (popped on
+   * FNC_RETURN). */
+  exec->tz_regs.msp_s -= 4;
+  bool fault = false;
+  if (exec->mem.write) {
+    exec->mem.write(exec->mem.ctx, exec->tz_regs.msp_s, (pc + insn->size) | 1,
+                    ACCESS_WORD, &fault);
+  }
+  if (fault) {
+    exec->tz_regs.msp_s += 4; /* Restore SP on failure */
+    EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BLXNS stack push fault");
+    return ARMV8M_ERR_BUS_FAULT;
+  }
+
+  /* Set LR to FNC_RETURN value for secure-to-NS function call */
+  exec->cpu.r[ARMV8M_REG_LR] = 0xFEFFFFFFU;
+
+  /* Clear caller-saved registers for security compliance */
+  clear_caller_saved_regs(&exec->cpu);
+
+  /* Transition to non-secure state */
+  EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR,
+               "BLXNS: S -> NS call to 0x%08X (LR=FNC_RETURN)", target_addr);
+  exec->cpu.security = SECURITY_NONSECURE;
   return ARMV8M_OK;
 }
 
@@ -349,46 +402,9 @@ int exec_blxns(Executor *exec, const DecodedInsn *insn) {
   /* For non-secure callable returns, use FNC_RETURN magic value */
   exec->cpu.r[ARMV8M_REG_LR] = (pc + insn->size) | 1;
 
-  /* Check security attributes */
-  SecurityAttr attr = armv8m_check_security(exec, target_addr);
-
-  if (exec->cpu.security == SECURITY_SECURE) {
-    if (attr == SEC_SECURE) {
-      /* Cannot branch to secure memory with BLXNS from secure */
-      EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR,
-                      "BLXNS to secure address 0x%08X - SecureFault",
-                      target_addr);
-      return ARMV8M_ERR_SECURE_FAULT;
-    }
-
-    /* Save return address on secure stack before transitioning.
-     * This will be popped on FNC_RETURN. */
-    exec->tz_regs.msp_s -= 4;
-    bool fault = false;
-    if (exec->mem.write) {
-      exec->mem.write(exec->mem.ctx, exec->tz_regs.msp_s, (pc + insn->size) | 1,
-                      ACCESS_WORD, &fault);
-    }
-    if (fault) {
-      exec->tz_regs.msp_s += 4; /* Restore SP on failure */
-      EMU_LOG_WARNING(EMU_LOG_CAT_EXECUTOR, "BLXNS stack push fault");
-      return ARMV8M_ERR_BUS_FAULT;
-    }
-
-    /* Set LR to FNC_RETURN value for secure-to-NS function call */
-    exec->cpu.r[ARMV8M_REG_LR] = 0xFEFFFFFFU;
-
-    /* Clear caller-saved registers for security compliance */
-    clear_caller_saved_regs(&exec->cpu);
-
-    /* Transition to non-secure state */
-    EMU_LOG_INFO(EMU_LOG_CAT_EXECUTOR,
-                 "BLXNS: S -> NS call to 0x%08X (LR=FNC_RETURN)", target_addr);
-    exec->cpu.security = SECURITY_NONSECURE;
-  } else {
-    EMU_LOG_TRACE(EMU_LOG_CAT_EXECUTOR,
-                  "BLXNS R%d -> 0x%08X (already NS, LR=0x%08X)", insn->rm,
-                  target_addr, exec->cpu.r[ARMV8M_REG_LR]);
+  int sec = blxns_handle_security(exec, insn, pc, target_addr);
+  if (sec != ARMV8M_OK) {
+    return sec;
   }
 
   /* Check Thumb bit */

@@ -378,4 +378,4 @@ peripherals:
 
 - [Machine Configuration](machine-configuration.md) - Full configuration format
 - [Running Firmware](running-firmware.md) - Firmware requirements
-- See `docs/PLUGINS.md` for creating custom peripherals
+- See [Writing Peripherals](../developer/writing-peripherals.md) for creating custom peripherals

@@ -107,7 +107,8 @@ class SimpleUART(Peripheral):
                 char = value & 0xFF
                 self._tx_buffer.append(char)
                 if self._echo:
-                    print(chr(char), end="", flush=True)
+                    # Emulated UART TX echoed to the host console (opt-in)
+                    print(chr(char), end="", flush=True)  # noqa: T201 - device output
 
         elif offset == self.REG_CTRL:
             self._ctrl = value

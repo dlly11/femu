@@ -119,8 +119,12 @@ class Peripheral(PeripheralBase):
                             self.pulse_irq(self._irq)
     """
 
-    # Class-level storage to prevent garbage collection of instances
-    # that have been passed to C code
+    # Class-level storage to prevent garbage collection of instances that have
+    # been passed to C code. NOTE: because these dicts hold a *strong* reference
+    # to every peripheral, instances are intentionally kept alive for the life
+    # of the process and are not reclaimed by GC (so __del__ below does not run
+    # while an entry exists). This is deliberate for C-handle safety; there is
+    # currently no per-instance release path.
     _instances: dict[int, Peripheral] = {}
     _handles: dict[int, CData] = {}
 
@@ -304,7 +308,7 @@ def _py_periph_read(ctx: CData, offset: int, size: int) -> int:
         periph: Peripheral = _ffi.from_handle(ctx)
         result = periph.read(offset, size)
         return result & 0xFFFFFFFF
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
         logger.error("Peripheral read error at offset 0x%x: %s", offset, e)
         return 0
 
@@ -315,7 +319,7 @@ def _py_periph_write(ctx: CData, offset: int, value: int, size: int) -> None:
     try:
         periph: Peripheral = _ffi.from_handle(ctx)
         periph.write(offset, value, size)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
         logger.error("Peripheral write error at offset 0x%x: %s", offset, e)
 
 
@@ -325,7 +329,7 @@ def _py_periph_reset(ctx: CData) -> None:
     try:
         periph: Peripheral = _ffi.from_handle(ctx)
         periph.reset()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
         logger.error("Peripheral reset error: %s", e)
 
 
@@ -335,7 +339,7 @@ def _py_periph_tick(ctx: CData, cycles: int) -> None:
     try:
         periph: Peripheral = _ffi.from_handle(ctx)
         periph.tick(cycles)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
         logger.error("Peripheral tick error: %s", e)
 
 
@@ -347,7 +351,7 @@ def _py_periph_set_irq_callback(ctx: CData, callback: CData, emu_ctx: CData) -> 
         # Store the callback and context for later use
         periph._c_irq_callback = callback
         periph._c_emu_ctx = emu_ctx
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - CFFI callback must not raise into C
         logger.error("Peripheral set_irq_callback error: %s", e)
 
 
@@ -526,8 +530,8 @@ class PluginPeripheral(PeripheralBase):
             try:
                 # CFFI function pointer is callable at runtime
                 self._destroy_fn(self._c_periph)  # type: ignore[operator]
-            except Exception:
-                pass  # Ignore errors during cleanup
+            except Exception as e:  # noqa: BLE001 - cleanup must not raise during GC/shutdown
+                logger.warning("Plugin destroy callback failed: %s", e)
             self._destroyed = True
 
     @classmethod
@@ -592,10 +596,13 @@ class PluginPeripheral(PeripheralBase):
                 ),
             }
 
-        # Extract peripheral types (NULL-terminated array)
+        # Extract peripheral types (NULL-terminated array). Bound the scan so a
+        # plugin with a malformed (non-terminated) array can't drive an
+        # unbounded read past the end of the array into a segfault.
+        MAX_PLUGIN_TYPES = 1024
         types_dict = {}
         i = 0
-        while types_ptr[i].type_name != ffi.NULL:
+        while i < MAX_PLUGIN_TYPES and types_ptr[i].type_name != ffi.NULL:
             type_def = types_ptr[i]
             type_name = ffi.string(type_def.type_name).decode("utf-8")
             types_dict[type_name] = {

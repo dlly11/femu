@@ -48,8 +48,10 @@ class TestWatchpointCFFI:
     """Test CFFI watchpoint bindings directly."""
 
     @pytest.fixture
-    def cffi_modules(self):
+    def cffi_modules(self, emulator_lib_available):
         """Get CFFI modules, skip if library not available."""
+        if not emulator_lib_available:
+            pytest.skip("emulator library not loadable in this environment")
         try:
             from femu._emulator_cffi import ARMV8M_OK, create_emulator, get_ffi, get_lib
 
@@ -103,8 +105,10 @@ class TestEmulatorWatchpoints:
     """Test watchpoint methods on ARMv8MEmulator class."""
 
     @pytest.fixture
-    def emulator(self):
+    def emulator(self, emulator_lib_available):
         """Create an emulator instance, skip if library not available."""
+        if not emulator_lib_available:
+            pytest.skip("emulator library not loadable in this environment")
         try:
             from femu.arch.armv8m import ARMv8MConfig, ARMv8MEmulator
 
