@@ -221,14 +221,18 @@ int decode_thumb32(uint16_t hw1, uint16_t hw2, uint32_t pc, DecodedInsn *out) {
     return 0;
   }
 
-  /* Check for TT/TTT/TTA/TTAT (Test Target) - hw1[15:4] = 0xE84, hw2[5:0] =
-   * 0x3F This distinguishes TT from STREX which shares the same hw1[15:4]
-   * pattern */
-  if ((hw1 & 0xFFF0) == 0xE840 && (hw2 & 0x3F) == 0x3F) {
+  /* Check for TT/TTT/TTA/TTAT (Test Target). The encoding is
+   *   hw1 = 1110 1000 0100 Rn         (0xE84n)
+   *   hw2 = 1111 Rd A T 00 0000
+   * so hw2[15:12] == 0b1111 (the reserved Rt value that distinguishes TT from
+   * STREX, which shares hw1[15:4]) and hw2[5:0] == 0. */
+  if ((hw1 & 0xFFF0) == 0xE840 && (hw2 & 0xF000) == 0xF000 &&
+      (hw2 & 0x3F) == 0) {
     out->type = INSN_TT;
     out->rn = (uint8_t)(hw1 & 0xF);
     out->rd = (uint8_t)EXTRACT(hw2, 8, 4);
-    /* bits[7:6] of hw2 encode variant: 00=TT, 01=TTT, 10=TTA, 11=TTAT */
+    /* bits[7:6] of hw2 encode variant: bit7=A, bit6=T ->
+     * 00=TT, 01=TTT, 10=TTA, 11=TTAT */
     out->op = (uint8_t)EXTRACT(hw2, 6, 2);
     return 0;
   }

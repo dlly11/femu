@@ -17,7 +17,7 @@ set(EXECUTOR_SOURCES
 )
 
 # Add optional source files if they exist
-foreach(SRC exec_data_proc.c exec_load_store.c exec_branch.c exec_system.c exec_exception.c exec_fpu.c blocks.c icache.c)
+foreach(SRC exec_data_proc.c exec_load_store.c exec_branch.c exec_system.c exec_exception.c exec_fpu.c blocks.c icache.c sau.c)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${SRC})
         list(APPEND EXECUTOR_SOURCES ${SRC})
     endif()

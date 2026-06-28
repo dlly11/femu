@@ -993,27 +993,35 @@ def test_nvic_basic():
 
 
 def test_tt_insn():
-    """Test TT instruction variants.
+    """Test TT/TTA/TTT/TTAT against a SAU programmed from firmware.
 
-    Note: Without SAU configured, TT returns 0 for all addresses
-    (no matching SAU region). This tests that TT instructions execute
-    correctly; full TT behavior would require SAU configuration.
+    The firmware programs three SAU regions via the SAU MMIO registers
+    (0xE000EDD0+) - an NSC region, non-secure flash, and non-secure RAM -
+    then queries security attributes. Result format: bit16=S, bits[15:8]=
+    SREGION, bit7=SRVALID, bit6=NSC, bit5=NS, bit1=RW, bit0=R.
     """
     config = ARMv8MConfig(has_trustzone=True)
     assert run_test(
         "TT Instruction",
         SCRIPT_DIR / "test_tt_insn.elf",
         {
-            # Without SAU configured, TT returns 0 (no region match)
-            # This verifies TT instruction execution without SAU setup
-            0x20000000: 0x00000000,  # TT: no SAU region configured
-            0x20000004: 0x00000000,  # TT: no SAU region configured
-            0x20000008: 0x00000000,  # TT: no SAU region configured
-            0x2000000C: 0x00000000,  # TT: no SAU region configured
-            0x20000010: 0x00000000,  # TT: no SAU region configured
-            0x20000014: 0x00000000,  # TTA: no SAU region configured
-            0x20000018: 0x00000000,  # TTT: NS view = no access
-            0x2000001C: 0x00000000,  # TTAT: NS view = no access
+            # TT secure flash: S + R + RW
+            0x20000000: 0x00010003,
+            # TT NSC region: NSC | NS | SRVALID | R | RW (SREGION 0)
+            0x20000004: 0x000000E3,
+            # TT non-secure flash: NS | SREGION 1 | SRVALID | R | RW
+            0x20000008: 0x000001A3,
+            # TT secure RAM: S + R + RW
+            0x2000000C: 0x00010003,
+            # TT non-secure RAM: NS | SREGION 2 | SRVALID | R | RW
+            0x20000010: 0x000002A3,
+            # TTA secure flash (Non-secure view): S set, R/RW cleared because
+            # the Non-secure domain cannot access Secure memory
+            0x20000014: 0x00010000,
+            # TTT secure flash (Secure privileged view): S + R + RW
+            0x20000018: 0x00010003,
+            # TTAT secure flash (Non-secure privileged view): R/RW cleared
+            0x2000001C: 0x00010000,
             0x20000020: 0xC0FFEE42,  # Done marker
         },
         config=config,

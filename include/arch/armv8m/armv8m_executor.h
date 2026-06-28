@@ -149,6 +149,34 @@ typedef struct {
   SAURegion regions[ARMV8M_SAU_REGIONS_MAX];
 } SAUState;
 
+/* SAU memory-mapped register offsets (relative to 0xE000EDD0). */
+#define ARMV8M_SAU_REG_CTRL 0x00 /**< SAU_CTRL */
+#define ARMV8M_SAU_REG_TYPE 0x04 /**< SAU_TYPE (read-only) */
+#define ARMV8M_SAU_REG_RNR 0x08  /**< SAU_RNR (region number) */
+#define ARMV8M_SAU_REG_RBAR 0x0C /**< SAU_RBAR (region base) */
+#define ARMV8M_SAU_REG_RLAR 0x10 /**< SAU_RLAR (region limit) */
+
+/**
+ * Read a memory-mapped SAU register.
+ *
+ * @param sau     SAU state.
+ * @param offset  Register offset (ARMV8M_SAU_REG_*).
+ * @param size    Access size in bytes (SAU registers are word-sized).
+ * @return        Register value (0 for unimplemented offsets).
+ */
+uint32_t armv8m_sau_read(const SAUState *sau, uint32_t offset, uint8_t size);
+
+/**
+ * Write a memory-mapped SAU register.
+ *
+ * @param sau     SAU state.
+ * @param offset  Register offset (ARMV8M_SAU_REG_*).
+ * @param value   Value to write.
+ * @param size    Access size in bytes (SAU registers are word-sized).
+ */
+void armv8m_sau_write(SAUState *sau, uint32_t offset, uint32_t value,
+                      uint8_t size);
+
 /**
  * IDAU (Implementation Defined Attribution Unit) state.
  *

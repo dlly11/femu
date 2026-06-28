@@ -285,6 +285,23 @@ static void mpu_mmio_write(void *ctx, uint64_t offset, uint64_t value,
   armv8m_mpu_write(&emu->mpu, (uint32_t)offset, (uint32_t)value, size);
 }
 
+/**
+ * SAU MMIO read callback (0xE000EDD0). SAU state lives in the executor.
+ */
+static uint64_t sau_mmio_read(void *ctx, uint64_t offset, uint8_t size) {
+  Emulator *emu = (Emulator *)ctx;
+  return armv8m_sau_read(&emu->exec.sau, (uint32_t)offset, size);
+}
+
+/**
+ * SAU MMIO write callback.
+ */
+static void sau_mmio_write(void *ctx, uint64_t offset, uint64_t value,
+                           uint8_t size) {
+  Emulator *emu = (Emulator *)ctx;
+  armv8m_sau_write(&emu->exec.sau, (uint32_t)offset, (uint32_t)value, size);
+}
+
 /*============================================================================
  * Lifecycle API
  *============================================================================*/
@@ -376,6 +393,10 @@ int armv8m_emu_init(Emulator *emu, const EmulatorConfig *config) {
   /* MPU registers: 0xE000ED90 - 0xE000EDBF */
   emu_mem_add_mmio(&emu->mem, 0xE000ED90, 0x0030, emu, mpu_mmio_read,
                    mpu_mmio_write);
+
+  /* SAU registers: 0xE000EDD0 - 0xE000EDEF */
+  emu_mem_add_mmio(&emu->mem, 0xE000EDD0, 0x0020, emu, sau_mmio_read,
+                   sau_mmio_write);
 
   emu->state = EMU_STATE_STOPPED;
 

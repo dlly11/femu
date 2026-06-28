@@ -2391,6 +2391,30 @@ TEST(Thumb32Coverage, Strex) {
   CHECK_EQUAL(4, result);
 }
 
+TEST(Thumb32Coverage, TestTarget) {
+  // TT R1, [R0] - hw1=0xE840 (Rn=0), hw2=0xF100 (Rd=1, A=0, T=0)
+  const uint8_t code[] = THUMB32_BYTES(0xE840, 0xF100);
+
+  int result = armv8m_decode(code, TEST_PC, &insn);
+
+  CHECK_EQUAL(4, result);
+  CHECK_EQUAL(INSN_TT, insn.type);
+  CHECK_EQUAL(0, insn.rn);
+  CHECK_EQUAL(1, insn.rd);
+  CHECK_EQUAL(0, insn.op); // TT variant
+}
+
+TEST(Thumb32Coverage, TestTargetAlternateUnpriv) {
+  // TTAT R1, [R0] - hw2=0xF1C0 (Rd=1, A=1, T=1) -> op=3
+  const uint8_t code[] = THUMB32_BYTES(0xE840, 0xF1C0);
+
+  int result = armv8m_decode(code, TEST_PC, &insn);
+
+  CHECK_EQUAL(4, result);
+  CHECK_EQUAL(INSN_TT, insn.type);
+  CHECK_EQUAL(3, insn.op); // TTAT variant
+}
+
 // LDRD (load register dual)
 TEST(Thumb32Coverage, LdrdPreIndex) {
   // LDRD R0, R1, [R2, #8]! - Load double with pre-index
